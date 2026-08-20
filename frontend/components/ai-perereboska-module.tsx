@@ -35,7 +35,7 @@ type AnalyzeResult = {
     amountsFound?: Array<{ amount: number; role: string; quote?: string | null }>;
     /** AI bergan summani backend tuzatganmi */
     amountCorrected?: boolean;
-    applicantName: string | null; applicantNameReadable?: boolean;
+    applicantName: string | null; applicantNameSource?: 'handwritten' | 'printed' | null;
     applicantMatchesHolder: boolean | null; confidence: string | null; notes: string | null; date: string;
   };
   balanceEnough: boolean;
@@ -358,11 +358,23 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 <MdText>{result.extracted.notes}</MdText>
               </div>
             )}
-            {result.extracted.applicantName
-              ? <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>
-              : result.extracted.applicantNameReadable === false
-                ? <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: <span className="italic">qo'lyozma o'qilmadi — o'zingiz tekshiring</span></div>
-                : null}
+            {result.extracted.applicantName ? (
+              <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                <span>👤 Arizachi: {result.extracted.applicantName}</span>
+                {result.extracted.applicantNameSource === 'printed' && (
+                  <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px]">arizadagi bosma matndan</span>
+                )}
+                {result.extracted.applicantMatchesHolder === true && (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
+                    ✓ shartnoma egasi bilan mos
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">
+                👤 Arizachi: <span className="italic">arizadan o'qilmadi — o'zingiz tekshiring</span>
+              </div>
+            )}
 
             {/* Arizada topilgan summalar — noto'g'ri tanlangan bo'lsa bir bosishda almashtiriladi */}
             {(result.extracted.amountsFound?.length || 0) > 1 && (

@@ -109,9 +109,131 @@ export function parseAmountWords(text: string | null | undefined): number | null
   return total + current;
 }
 
-// ─────────────── O'tkazma summasini tanlash ───────────────
+// ─────────────── Rolni JUMLADAN aniqlash ───────────────
+//
+// Model matnni to'g'ri ko'chiradi, lekin hukmni (qaysi summa nima) chalkashtiradi
+// (2026-08: 70 944 290 ni "qaytarilgan", 34 942 710 ni "o'tkazma" deb belgilagan —
+// arizada esa aksi). Shuning uchun rolni MODEL EMAS, jumladagi kalit so'z belgilaydi.
 
 export type AmountRole = 'transfer' | 'refunded' | 'repay' | 'contract_total' | 'other';
+
+/** Rol → o'sha bandga xos kalit so'zlar (o'zbek kirill/lotin + rus) */
+const ROLE_KEYWORDS: Array<{ role: AmountRole; words: string[] }> = [
+  {
+    role: 'refunded',
+    words: ['қайтарилган', 'қайтариб берилган', 'qaytarilgan', 'qaytarib berilgan', 'возвращен', 'возврат'],
+  },
+  {
+    role: 'repay',
+    words: [
+      'қайта тўлаш', 'қайта тўлаб', 'мажбуриятини оламан', 'банк куни ичида',
+      'qayta tolash', "qayta to'lash", 'majburiyatini olaman', 'bank kuni ichida',
+      'обязуюсь', 'банковских дней',
+    ],
+  },
+  {
+    role: 'transfer',
+    words: [
+      'қабул қилиш', 'қабул қилишингизни', 'тўлов ҳисобида', 'ҳисобига ўтказ', 'ўтказишингизни',
+      'qabul qilish', 'qabul qilishingizni', 'tolov hisobida', "to'lov hisobida", 'hisobiga otkaz',
+      'в счет оплаты', 'в счёт оплаты', 'зачесть', 'принять в счет', 'перевести',
+    ],
+  },
+  {
+    role: 'contract_total',
+    words: ['шартнома қиймати', 'умумий қиймат', 'shartnoma qiymati', 'umumiy qiymat', 'стоимость договора'],
+  },
+];
+
+function normText(s: string | null | undefined): string {
+  return String(s || '').toLowerCase().replace(/[''`ʻʼ’‘]/g, '');
+}
+
+/**
+ * Iqtibosdagi summaga ENG YAQIN kalit so'z bo'yicha rol.
+ * Bitta jumlada bir nechta summa bo'lishi mumkin ("...qaytarilgan 34 942 710 sum.
+ * Yangi Shartnoma 12 922 910 bo'yicha 3 bank kuni ichida qayta to'lash...") —
+ * shuning uchun masofa bo'yicha eng yaqini olinadi.
+ */
+export function classifyRoleFromQuote(quote: string | null | undefined, amount: number): AmountRole | null {
+  const q = normText(quote);
+  if (!q) return null;
+
+  // Summa raqamini bo'shliq/nuqta/vergul bilan ajratilgan holda ham topamiz: "70 944 290"
+  const digits = String(Math.round(Math.abs(amount)));
+  const pattern = digits.split('').join('[\\s.,\\u00a0]*');
+  let pos = -1;
+  try {
+    const m = q.match(new RegExp(pattern));
+    pos = m?.index ?? -1;
+  } catch { pos = -1; }
+
+  let best: { role: AmountRole; dist: number } | null = null;
+  const rolesSeen = new Set<AmountRole>();
+  for (const { role, words } of ROLE_KEYWORDS) {
+    for (const w of words) {
+      let idx = q.indexOf(w);
+      while (idx !== -1) {
+        rolesSeen.add(role);
+        const dist = pos < 0 ? 0 : Math.abs(idx - pos);
+        if (!best || dist < best.dist) best = { role, dist };
+        idx = q.indexOf(w, idx + 1);
+      }
+    }
+  }
+  // Summa iqtibosda topilmasa va bir nechta xil rol uchrasa — taxmin qilmaymiz
+  if (pos < 0 && rolesSeen.size > 1) return null;
+  return best?.role ?? null;
+}
+
+/**
+ * Matndan pul summalarini ajratish. Shartnoma raqamlari (24SRH24EF, №4105SRH26RL)
+ * va sana/band raqamlari tushib qolishi uchun: harfga yopishgan raqamlar OLINMAYDI,
+ * faqat guruhlangan (70 944 290) yoki 6+ xonali raqamlar olinadi.
+ */
+export function extractAmountsFromText(text: string | null | undefined): number[] {
+  const s = String(text || '');
+  const out: number[] = [];
+  const re = /(?<![\p{L}\d])(\d{1,3}(?:[\s., ]\d{3})+|\d{6,})(?![\p{L}\d])/gu;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    const n = Number(m[1].replace(/[\s., ]/g, ''));
+    if (isFinite(n) && n > 0) out.push(n);
+  }
+  return out;
+}
+
+// ─────────────── Ism solishtirish (kirill ↔ lotin) ───────────────
+
+const TRANSLIT: Record<string, string> = {
+  А: 'A', Б: 'B', В: 'V', Г: 'G', Д: 'D', Е: 'E', Ё: 'E', Ж: 'J', З: 'Z', И: 'I',
+  Й: 'Y', К: 'K', Л: 'L', М: 'M', Н: 'N', О: 'O', П: 'P', Р: 'R', С: 'S', Т: 'T',
+  У: 'U', Ф: 'F', Х: 'X', Ц: 'S', Ч: 'C', Ш: 'S', Щ: 'S', Ъ: '', Ы: 'I', Ь: '',
+  Э: 'E', Ю: 'U', Я: 'A', Ў: 'O', Қ: 'Q', Ғ: 'G', Ҳ: 'H',
+};
+
+/** "Ахмедова Анбар" → "AXMEDOVA ANBAR" (lotin bilan solishtirish uchun) */
+export function translitName(s: string | null | undefined): string {
+  let out = '';
+  for (const ch of String(s || '').toUpperCase()) out += TRANSLIT[ch] !== undefined ? TRANSLIT[ch] : ch;
+  return out.replace(/[^A-Z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Ikki ism mohiyatan bir odammi (kirill/lotin, tartib farqi hisobga olinadi).
+ * Kamida 2 ta umumiy bo'lak (familya+ism) kerak; bo'laklardan biri bitta bo'lsa — 1 ta yetadi.
+ */
+export function namesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ta = translitName(a).split(' ').filter((t) => t.length >= 4);
+  const tb = translitName(b).split(' ').filter((t) => t.length >= 4);
+  if (!ta.length || !tb.length) return false;
+  // "AXMEDOVA" ↔ "AHMEDOVA": X/H farqini yumshatamiz
+  const soft = (t: string) => t.replace(/X/g, 'H');
+  const sa = ta.map(soft);
+  const sb = tb.map(soft);
+  const common = sa.filter((t) => sb.includes(t)).length;
+  return common >= Math.min(sa.length, sb.length, 2);
+}
 
 export interface FoundAmount {
   amount: number;
@@ -154,19 +276,67 @@ export function decideTransferAmount(
   aiAmount: number,
   found: FoundAmount[] | null | undefined,
   sourceBalance: number | null,
+  /** Arizadagi o'tkazmani so'ragan JUMLA (model verbatim ko'chiradi) */
+  transferQuote?: string | null,
 ): AmountDecision {
   const warnings: string[] = [];
   const list = (Array.isArray(found) ? found : [])
-    .map((f) => ({
-      amount: Number(f?.amount) || 0,
-      words: f?.amountWords ?? null,
-      role: String(f?.role || 'other'),
-      quote: f?.quote ?? null,
-    }))
+    .map((f) => {
+      const amount = Number(f?.amount) || 0;
+      const modelRole = String(f?.role || 'other');
+      // ROLNI MODEL EMAS, IQTIBOS BELGILAYDI — model rollarni almashtirib yuborishi aniqlangan
+      const quoteRole = classifyRoleFromQuote(f?.quote, amount);
+      return {
+        amount,
+        words: f?.amountWords ?? null,
+        role: (quoteRole || modelRole) as string,
+        modelRole,
+        roleFromQuote: !!quoteRole,
+        quote: f?.quote ?? null,
+      };
+    })
     .filter((f) => f.amount > 0);
 
   let amount = Number(aiAmount) || 0;
   let corrected = false;
+
+  // ── 0) Eng ishonchli manba: o'tkazmani so'ragan JUMLADAGI summa ──
+  // Model rollarni chalkashtirsa ham, jumla matni yolg'on gapirmaydi.
+  let quoteAmount: number | null = null;
+  const fromQuotes = list.filter((f) => f.roleFromQuote && f.role === 'transfer');
+  if (fromQuotes.length === 1) {
+    quoteAmount = fromQuotes[0].amount;
+  } else if (transferQuote) {
+    const inQuote = extractAmountsFromText(transferQuote).filter((n) => n >= 10_000);
+    // Ro'yxatda ham bor summalarni afzal ko'ramiz (tasodifiy raqamlar chiqib ketsin)
+    const known = inQuote.filter((n) => list.some((f) => Math.abs(f.amount - n) <= 0.5));
+    const pick = known.length ? known : inQuote;
+    const uniq = Array.from(new Set(pick));
+    // Jumla haqiqatan o'tkazma haqidami — kalit so'z bilan tekshiramiz
+    if (uniq.length === 1 && classifyRoleFromQuote(transferQuote, uniq[0]) === 'transfer') {
+      quoteAmount = uniq[0];
+    }
+  }
+
+  if (quoteAmount != null && Math.abs(quoteAmount - amount) > 0.5) {
+    const src = fromQuotes.length === 1 ? fromQuotes[0].quote : transferQuote;
+    warnings.push(
+      `O'tkazma summasi tuzatildi: agent ${money(amount)} bergan edi, arizada esa ` +
+      `o'tkaziladigan summa ${money(quoteAmount)}` +
+      (src ? ` — "${String(src).slice(0, 90)}"` : ''),
+    );
+    amount = quoteAmount;
+    corrected = true;
+  }
+
+  // Model rolni chalkashtirgan bo'lsa — buni ochiq aytamiz (operator bilib tursin)
+  const swapped = list.filter((f) => f.roleFromQuote && f.modelRole !== f.role && f.modelRole !== 'other');
+  if (swapped.length > 0) {
+    warnings.push(
+      "Agent summa rollarini noto'g'ri belgilagan, ariza matni bo'yicha tuzatildi: " +
+      swapped.map((f) => `${money(f.amount)} → ${ROLE_LABEL[f.role] || f.role}`).join(', '),
+    );
+  }
 
   // ── 1) Raqam ↔ so'z mosligi (hujjatda summa so'z bilan ham yoziladi) ──
   for (const f of list) {
@@ -179,9 +349,9 @@ export function decideTransferAmount(
     }
   }
 
-  // ── 2) AI o'zi "o'tkazma" deb belgilagan summani olganmi? ──
+  // ── 2) ZAXIRA: iqtibos hal qilmagan bo'lsa — "transfer" rolli summa bo'yicha ──
   const transfers = list.filter((f) => f.role === 'transfer');
-  if (transfers.length === 1 && Math.abs(transfers[0].amount - amount) > 0.5) {
+  if (quoteAmount == null && transfers.length === 1 && Math.abs(transfers[0].amount - amount) > 0.5) {
     warnings.push(
       `O'tkazma summasi tuzatildi: agent ${money(amount)} bergan edi, arizada esa ` +
       `o'tkaziladigan summa ${money(transfers[0].amount)}` +
