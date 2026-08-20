@@ -1311,12 +1311,20 @@ export default function TransactionsPage() {
                           {/* 2) Sana / Vaqt */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="text-[13px] font-medium tabular-nums">{formatDate(it.txnDate)}</div>
-                            <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
+                            {/* Faqat BANK vaqti: operation_time → settlement_time.
+                                Tooltip'da bankdan kelgan uchala vaqt ko'rinadi —
+                                qaysi qiymat qayerdan kelgani darrov bilinsin. */}
+                            <div
+                              className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums"
+                              title={[
+                                `Operatsiya (time): ${it.operationTime || '—'}`,
+                                `Hisob-kitob (stime): ${it.settlementTime || '—'}`,
+                                `Kiritilgan (input): ${it.inputAt ? new Date(it.inputAt).toLocaleString('uz-UZ') : '—'}`,
+                              ].join('\n')}
+                            >
                               {it.operationTime
                                 ? it.operationTime.slice(0, 5)
-                                : (it.inputAt
-                                    ? new Date(it.inputAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
-                                    : '—')}
+                                : (it.settlementTime ? it.settlementTime.slice(0, 5) : '—')}
                             </div>
                           </td>
                           {/* 3) Hisob nomi (raw fromName/toName) */}

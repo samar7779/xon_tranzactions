@@ -678,8 +678,16 @@ export class SyncService implements OnModuleInit {
     const externalId = this.makeCompositeId(item, accountNo, bankCode);
 
     // Sanalar (oldindan — dedup ichida ham kerak)
-    const txnDate = this.parseKbDate(item.ddate) || new Date();
-    const valueDate = this.parseKbDate(item.vdate);
+    // txnDate = bank sanasi + BANK VAQTI (time → stime → input_time).
+    // Ilgari faqat ddate olinardi va vaqt 00:00 bo'lib qolardi (server mintaqasida),
+    // shu sababli kun ichida saralash bank vaqti bo'yicha emas, yozuv qo'shilish
+    // tartibi (id) bo'yicha ketardi. Endi vaqt ham saqlanadi va +05:00 (Toshkent)
+    // mintaqasida quriladi — ro'yxat filtri ham shu chegaralar bilan ishlaydi.
+    const txnDate = this.buildTxnDateTime(item.ddate, item.time, item.stime, item.input_time)
+      || this.parseKbDate(item.ddate)
+      || new Date();
+    // valueDate — @db.Date ustuni: UTC peshin bilan (TZ siljishi kun almashtirib yubormasin)
+    const valueDate = this.parseKbDateOnly(item.vdate);
     const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
 
     // Mavjudligini tekshirish — FAQAT shu account doirasida
@@ -866,26 +874,61 @@ export class SyncService implements OnModuleInit {
     return true;
   }
 
-  /** "dd.MM.yyyy" → Date */
+  /**
+   * "dd.MM.yyyy" → Date (00:00 Toshkent).
+   * Ilgari `parse(s, 'dd.MM.yyyy', new Date())` ishlatilardi — u 00:00 ni SERVER
+   * mintaqasida berardi, ya'ni saqlanadigan lahza server TZ'iga bog'liq edi.
+   * Endi mintaqa aniq (+05:00) — kun chegaralari bilan bir xil.
+   */
   private parseKbDate(s?: string): Date | null {
-    if (!s) return null;
-    try {
-      return parse(s, 'dd.MM.yyyy', new Date());
-    } catch {
-      return null;
-    }
+    return this.tashkentDate(s, undefined);
   }
 
-  /** "dd.MM.yyyy" + "HH:mm:ss" → Date */
+  /** "dd.MM.yyyy" + "HH:mm:ss" → Date (Toshkent vaqti). Vaqt yo'q bo'lsa — 00:00. */
   private parseKbDateTime(d?: string, t?: string): Date | null {
+    return this.tashkentDate(d, t);
+  }
+
+  /**
+   * "dd.MM.yyyy" → Date, UTC peshin (12:00Z).
+   * FAQAT @db.Date ustunlar uchun (valueDate): Prisma sanani UTC bo'yicha kesadi,
+   * shuning uchun Toshkent yarim tuni (=19:00 UTC oldingi kun) kunni siljitib yuboradi.
+   */
+  private parseKbDateOnly(s?: string): Date | null {
+    if (!s) return null;
+    const m = String(s).trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return null;
+    const dt = new Date(`${m[3]}-${m[2]}-${m[1]}T12:00:00Z`);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  /**
+   * Bank sanasi + vaqtini Toshkent (+05:00) mintaqasida Date'ga aylantiradi.
+   * Loyihada kun chegaralari ham +05:00 bo'yicha hisoblanadi (parseDayStartTashkent),
+   * shuning uchun saqlash ham shu mintaqada bo'lishi kerak.
+   */
+  private tashkentDate(d?: string, t?: string): Date | null {
     if (!d) return null;
-    try {
-      const dateStr = t ? `${d} ${t}` : d;
-      const fmt = t ? 'dd.MM.yyyy HH:mm:ss' : 'dd.MM.yyyy';
-      return parse(dateStr, fmt, new Date());
-    } catch {
-      return null;
+    const m = String(d).trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return null;
+    const [, dd, mm, yyyy] = m;
+    let time = '00:00:00';
+    const tm = String(t ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (tm) {
+      const hh = String(Math.min(23, Number(tm[1]))).padStart(2, '0');
+      time = `${hh}:${tm[2]}:${tm[3] ?? '00'}`;
     }
+    const dt = new Date(`${yyyy}-${mm}-${dd}T${time}+05:00`);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  /** Bank bergan vaqtlardan eng ishonchlisi bilan tranzaksiya vaqtini quradi */
+  private buildTxnDateTime(ddate?: string, time?: string, stime?: string, inputTime?: string): Date | null {
+    if (!ddate) return null;
+    const bankTime = [time, stime, inputTime]
+      .map((v) => String(v ?? '').trim())
+      .find((v) => /^\d{1,2}:\d{2}/.test(v));
+    return this.tashkentDate(ddate, bankTime);
   }
 
   /**

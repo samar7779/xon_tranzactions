@@ -491,6 +491,26 @@ export class TransactionsController {
     return this.svc.countByAccountNo(accountNo);
   }
 
+  @Post('fix-txn-time')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
+  @ApiOperation({
+    summary: "Eski yozuvlar vaqtini BANK vaqtiga keltirish (txn_date ichidagi soat)",
+    description:
+      "Ilgari sync soati tranzaksiya vaqti bo'lib saqlanardi. Bu yerda txn_date " +
+      "operation_time (yo'q bo'lsa settlement_time) bo'yicha qayta quriladi; kun o'zgarmaydi. " +
+      "Default: dryRun=true (faqat nechta qator o'zgarishini ko'rsatadi).",
+  })
+  async fixTxnTime(
+    @Body() body: { dateFrom?: string; dateTo?: string; dryRun?: boolean; batchSize?: number },
+  ) {
+    return this.svc.fixTxnTimeFromBank({
+      dateFrom: body?.dateFrom ?? null,
+      dateTo: body?.dateTo ?? null,
+      dryRun: body?.dryRun !== false,
+      batchSize: body?.batchSize,
+    });
+  }
+
   @Post('cleanup-by-account')
   @UseGuards(RolesGuard)
   @Roles('SUPERADMIN')

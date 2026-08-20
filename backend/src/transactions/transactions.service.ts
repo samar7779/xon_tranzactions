@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -55,6 +55,8 @@ export interface ExportFilters {
 
 @Injectable()
 export class TransactionsService {
+  private readonly logger = new Logger(TransactionsService.name);
+
   constructor(private prisma: PrismaService) {}
 
   /** Vergul bilan ajratilgan string'ni arrayga aylantiradi. Bo'sh bo'lsa null. */
@@ -818,6 +820,94 @@ export class TransactionsService {
         note,
       })),
     });
+  }
+
+  /**
+   * ESKI YOZUVLARNI TUZATISH — txn_date ichidagi vaqtni BANK vaqtiga keltirish.
+   *
+   * Ilgari sync faqat `ddate` ni saqlardi — vaqt 00:00 bo'lib qolar edi, shuning
+   * uchun kun ichida "eng oxirgi tepada" tartibi bank vaqti bo'yicha emas, yozuv
+   * qo'shilish tartibi (id) bo'yicha chiqardi. Yangi sync bank vaqtini ham yozadi;
+   * bu funksiya esa ESKI qatorlarni operation_time bo'yicha shu holatga keltiradi.
+   *
+   * Bu yerda txn_date bank vaqtidan (operation_time → settlement_time) qayta quriladi.
+   * Kun (Toshkent bo'yicha) O'ZGARMAYDI — faqat soat/daqiqa to'g'rilanadi.
+   */
+  async fixTxnTimeFromBank(opts: {
+    dateFrom?: string | null;
+    dateTo?: string | null;
+    dryRun?: boolean;
+    batchSize?: number;
+    maxBatches?: number;
+  } = {}) {
+    const dryRun = opts.dryRun !== false; // xavfsiz default: faqat ko'rsatadi
+    const batch = Math.min(Math.max(Number(opts.batchSize) || 5000, 100), 20000);
+    const maxBatches = Math.min(Math.max(Number(opts.maxBatches) || 200, 1), 1000);
+
+    // Sana oralig'i (Toshkent kun chegaralari)
+    const from = opts.dateFrom ? parseDayStartTashkent(opts.dateFrom) : null;
+    const to = opts.dateTo ? parseDayEndTashkent(opts.dateTo) : null;
+
+    // Bank vaqti bor va hozirgi txn_date undan farq qiladigan qatorlar
+    // Buzuq vaqt qiymati (masalan "9:05x") ::time cast'ni yiqitmasin — CASE bilan filtrlanadi
+    const TIME_RE = '^[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?$';
+    const candidateSql = Prisma.sql`
+      SELECT id, txn_date AS old_dt,
+             (((txn_date AT TIME ZONE 'Asia/Tashkent')::date
+               + COALESCE(
+                   CASE WHEN operation_time ~ ${TIME_RE} THEN operation_time::time END,
+                   CASE WHEN settlement_time ~ ${TIME_RE} THEN settlement_time::time END
+                 )
+              ) AT TIME ZONE 'Asia/Tashkent') AS new_dt
+      FROM transactions
+      WHERE (operation_time ~ ${TIME_RE} OR settlement_time ~ ${TIME_RE})
+        ${from ? Prisma.sql`AND txn_date >= ${from}` : Prisma.empty}
+        ${to ? Prisma.sql`AND txn_date <= ${to}` : Prisma.empty}
+    `;
+
+    // Nechta qator o'zgaradi + namunalar
+    const preview = await this.prisma.$queryRaw<Array<{ id: string; old_dt: Date; new_dt: Date }>>(Prisma.sql`
+      SELECT * FROM (${candidateSql}) c
+      WHERE c.old_dt IS DISTINCT FROM c.new_dt
+      ORDER BY c.new_dt DESC
+      LIMIT 10
+    `);
+    const countRows = await this.prisma.$queryRaw<Array<{ n: bigint }>>(Prisma.sql`
+      SELECT COUNT(*)::bigint AS n FROM (${candidateSql}) c WHERE c.old_dt IS DISTINCT FROM c.new_dt
+    `);
+    const willChange = Number(countRows[0]?.n || 0);
+
+    if (dryRun) {
+      return {
+        ok: true as const,
+        dryRun: true as const,
+        willChange,
+        updated: 0,
+        samples: preview.map((r) => ({
+          id: r.id,
+          old: r.old_dt?.toISOString() || null,
+          new: r.new_dt?.toISOString() || null,
+        })),
+      };
+    }
+
+    let updated = 0;
+    for (let i = 0; i < maxBatches; i++) {
+      const n = await this.prisma.$executeRaw(Prisma.sql`
+        WITH pick AS (
+          SELECT c.id, c.new_dt FROM (${candidateSql}) c
+          WHERE c.old_dt IS DISTINCT FROM c.new_dt
+          LIMIT ${batch}
+        )
+        UPDATE transactions t SET txn_date = p.new_dt
+        FROM pick p WHERE t.id = p.id
+      `);
+      updated += n;
+      if (n === 0) break;
+    }
+
+    this.logger.warn(`fixTxnTimeFromBank: ${updated} ta tranzaksiya vaqti bank vaqtiga keltirildi`);
+    return { ok: true as const, dryRun: false as const, willChange, updated, samples: [] };
   }
 
   /**
