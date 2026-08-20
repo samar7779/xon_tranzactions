@@ -31,7 +31,12 @@ type AnalyzeResult = {
   extracted: {
     fromContractNo: string | null; fromClient: string | null; fromFound: boolean; objectName: string | null; fromBalance: number | null;
     totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean; balance: number | null }>;
-    applicantName: string | null; applicantMatchesHolder: boolean | null; confidence: string | null; notes: string | null; date: string;
+    /** Arizada topilgan barcha summalar — roli bilan (bosib almashtirish uchun) */
+    amountsFound?: Array<{ amount: number; role: string; quote?: string | null }>;
+    /** AI bergan summani backend tuzatganmi */
+    amountCorrected?: boolean;
+    applicantName: string | null; applicantNameReadable?: boolean;
+    applicantMatchesHolder: boolean | null; confidence: string | null; notes: string | null; date: string;
   };
   balanceEnough: boolean;
   duplicates?: Array<{ date: string | null; amount: number }>;
@@ -41,6 +46,15 @@ type AnalyzeResult = {
 };
 
 const num = (s: any) => { const n = Number(String(s ?? '').replace(/\s/g, '')); return isNaN(n) ? 0 : n; };
+
+/** Arizadagi summa rollari — chip yorlig'i */
+const AMOUNT_ROLE_LABEL: Record<string, string> = {
+  transfer: "o'tkazma",
+  refunded: 'qaytarilgan',
+  repay: "qayta to'lov",
+  contract_total: 'shartnoma summasi',
+  other: 'boshqa',
+};
 
 // Ism taqqoslash — CRM nomlari (bir xil yozuv). Kamida 2 ta umumiy so'z (familya+ism) kerak.
 const nameTokens = (s: string) => (s || '').toUpperCase().replace(/[^A-ZА-ЯЁ]+/gi, ' ').trim().split(/\s+/).filter((w) => w.length >= 3);
@@ -344,7 +358,47 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 <MdText>{result.extracted.notes}</MdText>
               </div>
             )}
-            {result.extracted.applicantName && <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>}
+            {result.extracted.applicantName
+              ? <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>
+              : result.extracted.applicantNameReadable === false
+                ? <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: <span className="italic">qo'lyozma o'qilmadi — o'zingiz tekshiring</span></div>
+                : null}
+
+            {/* Arizada topilgan summalar — noto'g'ri tanlangan bo'lsa bir bosishda almashtiriladi */}
+            {(result.extracted.amountsFound?.length || 0) > 1 && (
+              <div className="mt-2.5">
+                <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1">
+                  Arizadagi summalar
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {result.extracted.amountsFound!.map((a, i) => {
+                    const active = dests.length === 1 && num(dests[0].amount) === a.amount;
+                    const label = AMOUNT_ROLE_LABEL[a.role] || a.role;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        title={a.quote || undefined}
+                        onClick={() => { if (dests.length === 1) setDest(0, { amount: String(a.amount) }); }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11.5px] font-medium ring-1 transition-colors ${
+                          active
+                            ? 'bg-violet-600 text-white ring-violet-600 shadow-sm'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-violet-50 dark:hover:bg-violet-950/40'
+                        } ${dests.length === 1 ? 'cursor-pointer' : 'cursor-default'}`}
+                      >
+                        <span className="tabular-nums font-bold">{a.amount.toLocaleString('ru-RU')}</span>
+                        <span className={active ? 'text-white/75' : 'text-slate-400 dark:text-slate-500'}>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {result.extracted.amountCorrected && (
+                  <div className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-300">
+                    ✓ Summa arizadagi "o'tkazma" bandiga qarab tuzatildi
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Takror ogohlantirishi — diqqat tortuvchi effekt */}

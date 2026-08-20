@@ -15,6 +15,7 @@ import { CrmContractCacheService, ReverifyStatus } from '../categorization/crm-c
 import { CategorizationService } from '../categorization/categorization.service';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { decideTransferAmount } from './perereboska-amounts';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -4889,7 +4890,7 @@ export class OplataKvService {
       .map((d: any) => ({ contractNo: String(d?.contractNo || '').trim().toUpperCase(), amount: Number(d?.amount) || 0 }))
       .filter((d: any) => d.contractNo);
     const destSum = dests.reduce((s: number, d: any) => s + d.amount, 0);
-    const totalAmount = Number(ex?.totalAmount) || destSum;
+    let totalAmount = Number(ex?.totalAmount) || destSum;
 
     const warnings: string[] = [];
     if (ex?.isTransferApplication === false) warnings.push("Hujjat переброска arizasiga o'xshamaydi");
@@ -4903,9 +4904,23 @@ export class OplataKvService {
       fromInfo = await this.contractBalance(fromCn).catch(() => null);
       if (!fromInfo?.foundInCrm) warnings.push(`Manba shartnoma topilmadi (CRM/tarix): ${fromCn}`);
       objectName = fromInfo?.objectName || null;
-      if (fromInfo && totalAmount > 0 && Number(fromInfo.totalPaid) < totalAmount - 0.01) {
-        warnings.push(`Manba qoldig'i yetarli emas: ${Number(fromInfo.totalPaid).toLocaleString('ru-RU')} < ${totalAmount.toLocaleString('ru-RU')}`);
-      }
+    }
+
+    // ── SUMMA TEKSHIRUVI (AI'ga ko'r-ko'rona ishonmaymiz) ──
+    // Ariza'dagi har bir summa roli bilan keladi; agent "qaytarilgan" pulni
+    // o'tkazma qilib qo'yishi mumkin (real hodisa) — shuni dastur tutadi.
+    const srcBalance = fromInfo ? Number(fromInfo.totalPaid) : null;
+    const amountDecision = decideTransferAmount(totalAmount, ex?.amountsFound, srcBalance);
+    warnings.push(...amountDecision.warnings);
+    if (amountDecision.corrected && amountDecision.amount > 0) {
+      totalAmount = amountDecision.amount;
+      // Bitta maqsad bo'lsa — uning summasini ham tuzatamiz (forma to'g'ri to'lsin)
+      if (dests.length === 1) dests[0].amount = totalAmount;
+    }
+
+    // Qoldiq yetarliligi — TUZATILGAN summa bo'yicha tekshiriladi
+    if (fromInfo && totalAmount > 0 && Number(fromInfo.totalPaid) < totalAmount - 0.01) {
+      warnings.push(`Manba qoldig'i yetarli emas: ${Number(fromInfo.totalPaid).toLocaleString('ru-RU')} < ${totalAmount.toLocaleString('ru-RU')}`);
     }
 
     // Maqsadlar tekshiruvi
@@ -4923,15 +4938,22 @@ export class OplataKvService {
       });
     }
 
-    // Summa balansi
-    const sumMatch = totalAmount > 0 && Math.abs(destSum - totalAmount) <= 0.01;
+    // Summa balansi — tuzatishdan KEYINGI qiymatlar bo'yicha qayta hisoblanadi
+    const destSumFinal = dests.reduce((s: number, d: any) => s + d.amount, 0);
+    const sumMatch = totalAmount > 0 && Math.abs(destSumFinal - totalAmount) <= 0.01;
     if (!sumMatch && dests.length > 0) {
-      warnings.push(`Summalar teng emas: maqsad jami ${destSum.toLocaleString('ru-RU')} ≠ manba ${totalAmount.toLocaleString('ru-RU')}`);
+      warnings.push(`Summalar teng emas: maqsad jami ${destSumFinal.toLocaleString('ru-RU')} ≠ manba ${totalAmount.toLocaleString('ru-RU')}`);
     }
 
-    // Ism-familya tekshiruvi (sozlamada yoqilgan bo'lsa) — Claude transliteratsiyani hisobga oladi
-    if (nameCheck && ex?.applicantMatchesHolder === false) {
+    // Ism-familya tekshiruvi (sozlamada yoqilgan bo'lsa) — Claude transliteratsiyani hisobga oladi.
+    // MUHIM: qo'lyozma ism o'qilmagan bo'lsa "mos emas" DEB HISOBLAMAYMIZ — aks holda
+    // model to'qib chiqargan ism yolg'on ogohlantirish berib, yaratishni bloklaydi.
+    const applicantReadable = ex?.applicantNameReadable !== false && !!String(ex?.applicantName || '').trim();
+    if (nameCheck && applicantReadable && ex?.applicantMatchesHolder === false) {
       warnings.push(`Ism mos emas: arizachi "${ex?.applicantName || '?'}" maqsadli shartnoma egasiga to'g'ri kelmaydi${ex?.nameNote ? ` — ${ex.nameNote}` : ''}`);
+    }
+    if (nameCheck && !applicantReadable) {
+      warnings.push("Arizachi ismi (qo'lyozma) ishonchli o'qilmadi — ismni o'zingiz tekshiring");
     }
     // Manba va maqsad shartnoma egasi bir xil odammi (CRM nomlari — bir xil yozuvда, token o'xshashligi)
     // Kamida 2 ta umumiy so'z (familya+ism) kerak — faqat ism mos kelsa (Gulnora↔Gulnora) yetarli emas.
@@ -4986,8 +5008,14 @@ export class OplataKvService {
         fromBalance,
         totalAmount,
         destinations: destResolved,
+        /** Arizada topilgan barcha summalar (rol + iqtibos) — UI'da almashtirish uchun */
+        amountsFound: amountDecision.alternatives,
+        /** AI bergan summa dastur tomonidan tuzatildimi */
+        amountCorrected: amountDecision.corrected,
         applicantName: ex?.applicantName || null,
-        applicantMatchesHolder: nameCheck ? (ex?.applicantMatchesHolder ?? null) : null,
+        applicantNameReadable: applicantReadable,
+        // O'qilmagan ism = "noma'lum" (false emas) — yolg'on blok bo'lmasin
+        applicantMatchesHolder: nameCheck && applicantReadable ? (ex?.applicantMatchesHolder ?? null) : null,
         confidence: ex?.confidence || null,
         notes: ex?.notes || null,
         date: new Date().toISOString().slice(0, 10),
@@ -5009,11 +5037,22 @@ export class OplataKvService {
       "Shartnoma raqami formati: raqamlar + obyekt kodi (SRH, VHA, ZUR, VTN...) + raqam/harflar. Masalan: 2986SRH2593, 4026SRH264E.",
       "O'TKAZILADIGAN SUMMANI TO'G'RI ANIQLA (JUDA MUHIM): ariza odatda '<eski shartnoma> bo'yicha QOLGAN [X] so'mni yangi (maqsadli) shartnomaga TO'LOV HISOBIDA QABUL QILISHINGIZNI so'rayman' deydi — aynan shu [X] o'tkaziladigan summa (totalAmount = maqsadli shartnoma summasi).",
       "Arizada 'shartnomani bekor qilish asosida menga QAYTARILGAN [Y] so'm' degan ALOHIDA band bo'lishi mumkin — [Y] QAYTARILGAN pul, u o'tkazma EMAS, uni totalAmount qilib OLMA. Ikkovini adashtirma: totalAmount = yangi shartnomaga qabul qilinadigan [X], qaytarilgan [Y] emas (odatda X > Y).",
+      // Real xato (2026-08): model 'qaytarilgan' summani o'tkazma qilib qo'ygan, o'zi
+      // esa izohda "buni o'tkazma qilib olmaslik kerak" deb yozgan. Shu sabab endi
+      // HAR BIR summa roli bilan alohida qaytariladi va backend dasturiy tekshiradi.
+      "MAJBURIY: hujjatdagi HAR BIR pul summasini amountsFound ro'yxatiga yoz — raqami, qavs ichidagi SO'Z bilan yozilgan shakli (amountWords, hujjatdagidek ko'chir), roli va o'sha jumladan qisqa iqtibos (quote).",
+      "Rollar: 'transfer' = yangi shartnomaga o'tkaziladigan (qabul qilinadigan) summa; 'refunded' = arizachiga qaytarib berilgan pul; 'repay' = arizachi qayta to'lash majburiyatini olgan summa; 'contract_total' = shartnoma umumiy qiymati; 'other' = qolgani.",
+      "totalAmount AYNAN role='transfer' bo'lgan summaga TENG bo'lishi shart. Agar 'transfer' rolli summa yo'q bo'lsa — taxmin qilma, confidence='low' qo'y.",
+      "Summani raqamda va so'zda TEKSHIR: agar raqam (masalan 34 942 710) qavsdagi so'z shakliga ('Етмиш миллион...' = 70 944 290) MOS KELMASA — ikkalasini ham amountsFound'ga yoz va notes'da bu ziddiyatni aniq ayt.",
       "Aniq bo'lmasa taxmin qilma — confidence='low' qo'y va notes'da yoz.",
       "notes'ni QISQA MARKDOWN formatда yoz: bullet (- ), summalarni **qalin**. FAQAT переброска uchun muhim narsalarni yoz (manba, maqsad, summa, obyekt, arizachi). Plastik karta, karta raqami, to'lov usuli, qaytarish/qayta to'lov summasi kabi переброскага aloqasiz tafsilotlarni YOZMA.",
       nameCheck
         ? "ISM TEKSHIRUVI: arizachi (imzo egasi) ismini MAQSADLI shartnoma egasi ismi (arizada yozilgan) bilan solishtir. Transliteratsiya (Dumcheva↔Dushayeva), ism tartibi, kirill/lotin farqini HISOBGA OL — mohiyatan bir odammi. Mos bo'lsa applicantMatchesHolder=true, aks holda false + nameNote'da qisqa tushuntir."
         : '',
+      // Real xato (2026-08): qo'lyozma "Ахмедова Анбар" ni "Arizapova Subor" deb
+      // o'qib, yolg'on "ism mos emas" ogohlantirishi bergan va yaratishni bloklagan.
+      "ARIZACHI ISMI QO'LDA yozilgan bo'lishi mumkin. Qo'lyozmani ISHONCH bilan o'qiy olmasang — TO'QIMA: applicantName=null qo'y, applicantNameReadable=false va applicantMatchesHolder ni UMUMAN qaytarma. Faqat ishonch bilan o'qilgan ismni solishtir.",
+      "Blank/forma yorliqlarini (Кимдан, Аризачи, Имзо, Паспорт серия) ism deb qabul QILMA — ular hujjat yorliqlari.",
     ].filter(Boolean).join(' ');
     const userContent = [
       { type: 'text', text: "Ushbu arizani diqqat bilan o'qib, extract_perereboska tool orqali ma'lumotlarni qaytar." },
@@ -5036,8 +5075,27 @@ export class OplataKvService {
               required: ['contractNo', 'amount'],
             },
           },
-          totalAmount: { type: 'number', description: "Manbadan o'tkazilayotgan jami summa" },
-          applicantName: { type: 'string', description: 'Arizachi (imzo egasi) ismi' },
+          totalAmount: { type: 'number', description: "Manbadan o'tkazilayotgan jami summa (role='transfer' summasiga TENG bo'lishi shart)" },
+          amountsFound: {
+            type: 'array',
+            description: "Hujjatdagi BARCHA pul summalari — roli va iqtibosi bilan (backend shu bo'yicha tekshiradi)",
+            items: {
+              type: 'object',
+              properties: {
+                amount: { type: 'number', description: 'Raqam bilan yozilgan summa' },
+                amountWords: { type: 'string', description: "Qavs ichida so'z bilan yozilgani (hujjatdagidek)" },
+                role: {
+                  type: 'string',
+                  enum: ['transfer', 'refunded', 'repay', 'contract_total', 'other'],
+                  description: "transfer=yangi shartnomaga o'tkaziladigan, refunded=qaytarilgan, repay=qayta to'lanadigan",
+                },
+                quote: { type: 'string', description: 'Hujjatdagi jumladan qisqa iqtibos' },
+              },
+              required: ['amount', 'role'],
+            },
+          },
+          applicantName: { type: 'string', description: "Arizachi (imzo egasi) ismi — ishonch bilan o'qilmasa qaytarma" },
+          applicantNameReadable: { type: 'boolean', description: "Arizachi ismi (qo'lyozma) ishonch bilan o'qildimi" },
           applicantMatchesHolder: { type: 'boolean', description: 'Arizachi ismi maqsadli shartnoma egasiga mos keladimi (ism tekshiruvi so\'ralganda)' },
           nameNote: { type: 'string', description: 'Ism mos kelmasa qisqa tushuntirish' },
           confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
