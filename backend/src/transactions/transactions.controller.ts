@@ -491,6 +491,16 @@ export class TransactionsController {
     return this.svc.countByAccountNo(accountNo);
   }
 
+  @Get('time-diagnostics')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @ApiOperation({
+    summary: "Vaqt diagnostikasi — bank har bir tranzaksiyaga alohida vaqt beryaptimi?",
+    description: "Xom bank javobidan (metadata) time/stime/input_time o'qiladi + oxirgi sync vaqti.",
+  })
+  async timeDiagnostics(@Query('date') date?: string) {
+    return this.svc.timeDiagnostics(date);
+  }
+
   @Post('fix-txn-time')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
   @ApiOperation({

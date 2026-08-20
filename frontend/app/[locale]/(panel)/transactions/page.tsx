@@ -22,6 +22,7 @@ import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
+import { TimeDiagnosticsDialog } from '@/components/time-diagnostics-dialog';
 import { PurposeInfoButton, PurposeModal } from '@/components/purpose-modal';
 import { BankLogo } from '@/components/bank-logo';
 import { DateRangeCalendar } from '@/components/date-range-calendar';
@@ -166,6 +167,7 @@ export default function TransactionsPage() {
   const [idSearchOpen, setIdSearchOpen] = useState(false);
   const [idInspectorTrigger, setIdInspectorTrigger] = useState(0);
   const [vipiskaDebugOpen, setVipiskaDebugOpen] = useState(false);
+  const [timeDiagOpen, setTimeDiagOpen] = useState(false);
   const [xatoModalOpen, setXatoModalOpen] = useState(false);
   const [clientXatoOpen, setClientXatoOpen] = useState(false);
   const [todayStatsOpen, setTodayStatsOpen] = useState(false);
@@ -987,6 +989,10 @@ export default function TransactionsPage() {
                     <Scissors className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
                     <span className="flex-1">{t('toolXatoContracts')}</span>
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTimeDiagOpen(true)} className="cursor-pointer">
+                    <Clock className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />
+                    <span className="flex-1">Vaqt diagnostikasi</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('filtersLabel')}</DropdownMenuLabel>
                   <DropdownMenuItem
@@ -1011,6 +1017,12 @@ export default function TransactionsPage() {
               <VipiskaDebugDialog
                 open={vipiskaDebugOpen}
                 onClose={() => setVipiskaDebugOpen(false)}
+              />
+
+              {/* Vaqt diagnostikasi — bank har bir tx'ga alohida vaqt beryaptimi */}
+              <TimeDiagnosticsDialog
+                open={timeDiagOpen}
+                onClose={() => setTimeDiagOpen(false)}
               />
 
               {/* Split kerak shartnomalar moduli */}

@@ -823,6 +823,76 @@ export class TransactionsService {
   }
 
   /**
+   * VAQT DIAGNOSTIKASI — "nega hamma qatorda bir xil vaqt?" degan savolga javob.
+   *
+   * Bazadagi XOM bank javobidan (metadata) o'qiydi: bank haqiqatan har bir
+   * tranzaksiyaga alohida vaqt beryaptimi yoki hammasiga bitta qiymatmi.
+   * Shu bilan birga oxirgi sync qachon bo'lgani ham qaytadi — "12:39 dan keyin
+   * tushum bo'lmaganmi yoki sync to'xtaganmi" degan savol uchun.
+   */
+  async timeDiagnostics(dateStr?: string | null) {
+    const day = (dateStr || new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10)).slice(0, 10);
+    const from = parseDayStartTashkent(day);
+    const to = parseDayEndTashkent(day);
+
+    const [opTimes, stTimes, samples, lastSync, logs] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ t: string | null; n: number }>>(Prisma.sql`
+        SELECT operation_time AS t, COUNT(*)::int AS n FROM transactions
+        WHERE txn_date >= ${from} AND txn_date <= ${to}
+        GROUP BY 1 ORDER BY n DESC LIMIT 15
+      `),
+      this.prisma.$queryRaw<Array<{ t: string | null; n: number }>>(Prisma.sql`
+        SELECT settlement_time AS t, COUNT(*)::int AS n FROM transactions
+        WHERE txn_date >= ${from} AND txn_date <= ${to}
+        GROUP BY 1 ORDER BY n DESC LIMIT 15
+      `),
+      // Xom bank javobi — nima kelganini o'z ko'zi bilan ko'rish uchun
+      this.prisma.$queryRaw<Array<any>>(Prisma.sql`
+        SELECT id, doc_number, direction, amount::text AS amount,
+               metadata->>'ddate'      AS raw_ddate,
+               metadata->>'time'       AS raw_time,
+               metadata->>'stime'      AS raw_stime,
+               metadata->>'input_date' AS raw_input_date,
+               metadata->>'input_time' AS raw_input_time,
+               operation_time, settlement_time,
+               txn_date, synced_at
+        FROM transactions
+        WHERE txn_date >= ${from} AND txn_date <= ${to}
+        ORDER BY synced_at DESC LIMIT 8
+      `),
+      this.prisma.$queryRaw<Array<{ last_synced: Date | null; n: number }>>(Prisma.sql`
+        SELECT MAX(synced_at) AS last_synced, COUNT(*)::int AS n FROM transactions
+        WHERE txn_date >= ${from} AND txn_date <= ${to}
+      `),
+      this.prisma.syncLog.findMany({
+        where: { startedAt: { gte: from } },
+        orderBy: { startedAt: 'desc' },
+        take: 5,
+        select: { source: true, status: true, fetched: true, saved: true, startedAt: true, finishedAt: true },
+      }),
+    ]);
+
+    const distinctOp = opTimes.filter((r) => r.t).length;
+    return {
+      ok: true as const,
+      date: day,
+      total: Number(lastSync[0]?.n || 0),
+      lastSyncedAt: lastSync[0]?.last_synced || null,
+      operationTimes: opTimes.map((r) => ({ time: r.t, count: Number(r.n) })),
+      settlementTimes: stTimes.map((r) => ({ time: r.t, count: Number(r.n) })),
+      samples,
+      recentSyncLogs: logs,
+      // Xulosa: bank bitta vaqtni takrorlayaptimi?
+      verdict:
+        distinctOp === 0
+          ? "Bank operatsiya vaqtini (time) umuman bermayapti"
+          : distinctOp === 1
+            ? "Bank BARCHA tranzaksiyaga bitta vaqt qaytarmoqda — bu bank tomonidagi holat"
+            : `Bank ${distinctOp} xil operatsiya vaqti bermoqda`,
+    };
+  }
+
+  /**
    * ESKI YOZUVLARNI TUZATISH — txn_date ichidagi vaqtni BANK vaqtiga keltirish.
    *
    * Ilgari sync faqat `ddate` ni saqlardi — vaqt 00:00 bo'lib qolar edi, shuning
