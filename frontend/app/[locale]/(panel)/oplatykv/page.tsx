@@ -14,7 +14,7 @@ import {
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
   PlusCircle, Paperclip, Wallet, Building2, BarChart3, RefreshCw,
-  Ruler, Sparkles,
+  Ruler, Sparkles, Scissors,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PurposeInfoButton } from '@/components/purpose-modal';
@@ -1953,6 +1953,8 @@ function AktSverkaDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Split — shartnomaning barcha to'lovlarini CRM grafigi bo'yicha qayta bo'lish */}
+            <ContractSplitButton contractNo={selectedContract} />
             {/* Мем. ордер — bosilганда PDF yoki Excel tanlanadi */}
             <div className="relative">
               <button
@@ -2673,6 +2675,50 @@ function ReSplitButton({ row }: { row: OplataKvItem }) {
         ? <Loader2 className="h-4 w-4 animate-spin" />
         : <Receipt className="h-4 w-4" />}
       {confirming ? t('pressToConfirm') : t('reSplit')}
+    </button>
+  );
+}
+
+// Shartnomaning BARCHA to'lovlarini eng oldingisidan boshlab CRM grafigi bo'yicha
+// qayta bo'lish (force re-split) — Akt Sverka footer'ida. Boshlang'ich/oylik waterfall.
+function ContractSplitButton({ contractNo }: { contractNo: string | null }) {
+  const qc = useQueryClient();
+  const user = useAuth((s) => s.user);
+  const canSplit = !!user?.permissions?.includes(PERMS.OPLATAKV_SPLIT);
+  const [confirming, setConfirming] = useState(false);
+  const splitMut = useMutation({
+    mutationFn: () => api.post<{ filled?: number; contracts?: number; notFound?: number }>(
+      '/oplata-kv/split-installments', { contractNo, force: true }, { timeout: 120_000 },
+    ),
+    onSuccess: (r) => {
+      if ((r.filled ?? 0) === 0 && (r.notFound ?? 0) > 0) {
+        toast.error("Shartnoma CRM'da topilmadi — split mumkin emas");
+      } else {
+        toast.success(`Split qayta hisoblandi ✓ — ${r.filled ?? 0} to'lov (boshlang'ich/oylik)`);
+      }
+      qc.invalidateQueries({ queryKey: ['oplata-kv-by-contract', contractNo] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Split xatosi'),
+  });
+  if (!canSplit || !contractNo) return null;
+  return (
+    <button
+      onClick={() => {
+        if (confirming) { splitMut.mutate(); setConfirming(false); }
+        else { setConfirming(true); setTimeout(() => setConfirming(false), 3000); }
+      }}
+      disabled={splitMut.isPending}
+      title="Bu shartnomaning BARCHA to'lovlarini eng oldingisidan boshlab CRM grafigi bo'yicha qayta bo'ladi (boshlang'ich ↔ oylik)"
+      className={cn(
+        'h-9 px-3 rounded-lg text-[12px] font-semibold transition-all inline-flex items-center gap-1.5 shadow-md',
+        confirming
+          ? 'bg-fuchsia-600 text-white scale-105 shadow-fuchsia-500/30'
+          : 'bg-gradient-to-br from-fuchsia-500 to-purple-600 hover:from-fuchsia-600 hover:to-purple-700 text-white',
+      )}
+    >
+      {splitMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5" />}
+      {confirming ? 'Tasdiqlash uchun bosing' : 'Split'}
     </button>
   );
 }
