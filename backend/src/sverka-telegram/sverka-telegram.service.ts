@@ -1112,7 +1112,9 @@ export class SverkaTelegramService implements OnModuleInit {
         const diffKey = String(Math.round(Number(it.diff?.formula) || 0));
         const existing = store.accounts[it.accountId];
         if (existing?.dismissed) continue;                // bugunga yopilgan — tegmaymiz
-        if (existing && existing.diffKey === diffKey) continue; // o'zgarmagan — qayta tahlil shart emas
+        // o'zgarmagan VA yangi shaklda (totalFarq bor) — qayta tahlil shart emas.
+        // Eski shakldagi (deploy'dan oldingi, totalFarq'siz) yozuvlar qayta tahlil qilinadi.
+        if (existing && existing.diffKey === diffKey && existing.totalFarq != null) continue;
 
         const res = await this.analyzeAccount(it, date, aiCount < MAX_AI, !synced);
         if (res.usedAi) aiCount++;
