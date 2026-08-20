@@ -5,6 +5,7 @@ import axios from 'axios';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ReconcileService } from '../transactions/reconcile.service';
 import { SverkaAgentService } from '../transactions/sverka-agent.service';
+import { renderDigest, DigestAccount } from './digest';
 
 /**
  * Sverka uchun Telegram bot servisi.
@@ -38,6 +39,27 @@ export interface HistoryEntry {
   actorName: string | null;
   chatId?: string;
   details: any;
+}
+
+/** Digest store — bir hisob uchun saqlanadigan holat (xabar YO'Q; yagona digest xabari alohida). */
+interface DigestStoreAccount {
+  accountNo?: string;
+  ownerName?: string | null;
+  bankName?: string | null;
+  diffKey: string;             // yaxlitlangan farq (o'zgarganini bilish uchun)
+  totalFarq: number;           // farq magnitudasi (so'm)
+  culprit?: string;
+  confidence?: string;
+  apply?: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean } | null;
+  actionKind?: 'ai' | 'add';   // tugma callback turi
+  dismissed?: boolean;         // bugunga yopilgan (ertaga qayta ko'rinadi)
+}
+
+/** Digest store — bir kunlik holat: yagona digest xabari (chat bo'yicha) + hisoblar. */
+interface DigestStore {
+  date: string;
+  digest: { msgs: Array<{ chatId: string; messageId: number; role?: 'approver' | 'watcher' }> };
+  accounts: Record<string, DigestStoreAccount>;
 }
 
 @Injectable()
@@ -101,7 +123,7 @@ export class SverkaTelegramService implements OnModuleInit {
       // (sync-lag) yo'qoladi va faqat HAQIQIY farqlar qoladi (kam xabar).
       const result: any = await reconcile.reconcileToday(undefined, { syncMismatched: true });
       if (result?.items && Array.isArray(result.items) && result.date) {
-        await this.notifyNewMismatches(result.items, result.date);
+        await this.notifyNewMismatches(result.items, result.date, { synced: true });
       }
     } catch (e: any) {
       this.log.warn(`autoSverkaNotify xato: ${e?.message}`);
@@ -393,117 +415,60 @@ export class SverkaTelegramService implements OnModuleInit {
     const data: string = cbq?.data || '';
     const cbId: string = cbq?.id;
     const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
-    const messageId: number | undefined = cbq?.message?.message_id;
     if (!data.startsWith('fix:')) { await this.answerCb(cbId, "Noma'lum amal"); return; }
 
-    // Ruxsat — faqat tasdiqlovchi (approver) chatlar
-    const chats = await this.getChats();
-    const chat = chats.find((c) => String(c.chatId) === chatId);
-    if (!chat || chat.role !== 'approver') {
-      await this.answerCb(cbId, "Sizda ruxsat yo'q — faqat tasdiqlovchi to'g'rilay oladi", true);
-      return;
-    }
+    const chat = await this.approverChat(chatId);
+    if (!chat) { await this.answerCb(cbId, "Sizda ruxsat yo'q — faqat tasdiqlovchi to'g'rilay oladi", true); return; }
 
-    const parts = data.split(':');
-    const accountId = parts[1];
-    const date = parts[2];
+    const [, accountId, date] = data.split(':');
     if (!accountId || !date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
 
     await this.answerCb(cbId, "To'g'rilanmoqda...");
 
     try {
       const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
-
-      // Hisob ma'lumoti — barcha xabarlarda ko'rsatamiz
-      const acc = await this.prisma.bankAccount.findUnique({
-        where: { id: accountId }, include: { bank: true },
-      }).catch(() => null);
-      const accLine = acc
-        ? `🏦 <b>Bank:</b> ${acc.bank?.name || '—'}\n💳 <b>Hisob:</b> <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 <b>Egasi:</b> ${acc.ownerName}\n` : ''}`
-        : '';
-      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const store = await this.getNotifiedStore(date);
 
       const diag: any = await reconcile.diagnoseDay(accountId, date);
       const bankOnly: any[] = diag?.bankOnly || [];
       const insertable = bankOnly.filter((it) => !it.existsOnDate && (it.b2Id || it.generalId));
 
-      // ── Qo'shib bo'lmaydigan farq — tugma bilan to'g'rilab bo'lmaydi ──
+      // ── Qo'shib bo'lmaydigan farq — digestga izoh (keyingi yangilashda tozalanadi) ──
       if (insertable.length === 0) {
         const dateShift = bankOnly.filter((it) => it.existsOnDate).length;
-        const dbExtra = Array.isArray(diag?.dbOnly) ? diag.dbOnly.length : 0;
-        let reason: string;
-        if (dateShift > 0) {
-          reason = `📅 ${dateShift} ta tranzaksiya <b>boshqa sana</b> ostida saqlangan — saytdagi sverka'da <b>"Sanani tuzatish"</b> kerak.`;
-        } else if (dbExtra > 0) {
-          reason = `📊 DB'da <b>${dbExtra} ta ortiqcha</b> yozuv bor (bankda yo'q) — saytda tekshiring.`;
-        } else {
-          reason = `Farq qo'shish orqali hal bo'lmaydi (boshqa sababdan) — saytda tekshiring.`;
-        }
-        await this.editMsg(
-          chatId, messageId,
-          `⚠️ <b>Avtomatik to'g'rilab bo'lmadi</b>\n\n` +
-          accLine +
-          `📅 <b>Sverka sanasi:</b> ${date}\n\n` +
-          `${reason}\n\n` +
-          `🌐 transactions.xonapps.uz/uz/check\n` +
-          `<i>Tekshirdi: ${chat.name || chatId} · ${nowTk}</i>`,
-        );
+        const note = dateShift > 0
+          ? `⚠️ Avtomatik qo'shib bo'lmadi — ${dateShift} ta boshqa sanada (saytda "Sanani tuzatish").`
+          : `⚠️ Avtomatik qo'shib bo'lmadi — saytda ko'ring.`;
+        await this.refreshDigest(store, note);
+        await this.saveNotifiedStore(store);
         return;
       }
 
       const items = insertable.map((it) => ({ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined }));
       const res: any = await reconcile.fixAllMissing(accountId, date, items);
-      const insertedRows: any[] = Array.isArray(res?.results) ? res.results.filter((r: any) => r.inserted) : [];
-      const added = insertedRows.length;
-      // Qo'shilgan tranzaksiyalarning ID lari (externalId — composite bank ID)
-      const addedIds: string[] = insertedRows
-        .map((r) => r.externalId || r.transactionId)
-        .filter((x): x is string => !!x);
+      const added = Array.isArray(res?.results) ? res.results.filter((r: any) => r.inserted).length : 0;
 
-      const idLines = addedIds.length > 0
-        ? '\n🆔 <b>ID lar:</b>\n' + addedIds.slice(0, 15).map((id) => `  • <code>${id}</code>`).join('\n') +
-          (addedIds.length > 15 ? `\n  • … va yana ${addedIds.length - 15} ta` : '')
-        : '';
+      // Hal bo'ldimi — qayta tekshiramiz (sync'siz, qo'shish DB'ga tushdi)
+      const rec: any = await reconcile.reconcile(accountId, date, date, { withSync: false }).catch(() => null);
+      if (!rec || rec.status === 'ok') {
+        delete store.accounts[accountId];
+      } else if (store.accounts[accountId]) {
+        store.accounts[accountId].diffKey = String(Math.round(Number(rec.diff?.formula) || 0));
+        store.accounts[accountId].totalFarq = this.farqOf(rec);
+      }
 
-      const resultText =
-        `✅ <b>To'g'rilandi</b>\n\n` +
-        accLine +
-        `📅 <b>Sverka sanasi:</b> ${date}\n` +
-        `➕ <b>Qo'shildi:</b> ${added} ta tranzaksiya` +
-        idLines + `\n\n` +
-        `👤 <b>Kim to'g'riladi:</b> ${chat.name || chatId}\n` +
-        `🕐 <b>Qachon:</b> ${nowTk}`;
-
-      // Joriy xabar — natija bilan tahrirlanadi (tugma yo'qoladi)
-      await this.editMsg(chatId, messageId, resultText);
-
-      // BOSHQA tasdiqlovchilardagi SHU farq xabarlari ham — tugma yo'qolsin,
-      // kim to'g'rilagani ko'rinsin. Keyin store'dan olib tashlaymiz.
-      try {
-        const store = await this.getNotifiedStore(date);
-        const entry = store.accounts[accountId];
-        if (entry?.msgs) {
-          for (const m of entry.msgs) {
-            if (String(m.chatId) === chatId && m.messageId === messageId) continue; // joriy — yuqorida
-            await this.editMsg(String(m.chatId), m.messageId, resultText);
-          }
-          delete store.accounts[accountId];
-          await this.saveNotifiedStore(store);
-        }
-      } catch { /* ignore */ }
+      await this.refreshDigest(store, `✅ ${chat.name || chatId}: ${added} ta qo'shildi`);
+      await this.saveNotifiedStore(store);
 
       await this.appendHistory({
-        action: 'telegram_fix_missing',
-        source: 'telegram',
-        actorId: null,
-        actorName: chat.name || chatId,
-        chatId,
-        details: { accountId, date, added, attempted: items.length, addedIds },
+        action: 'telegram_fix_missing', source: 'telegram', actorId: null,
+        actorName: chat.name || chatId, chatId,
+        details: { accountId, date, added, attempted: items.length },
       });
       this.log.log(`Telegram fix: account=${accountId} date=${date} added=${added} (chat=${chatId})`);
     } catch (e: any) {
-      await this.editMsg(chatId, messageId, `❌ <b>Xato:</b> ${e?.message || "noma'lum"}`);
       this.log.warn(`Telegram fix xato: ${e?.message}`);
+      await this.refreshDigestForDate(date).catch(() => {});
     }
   }
 
@@ -511,9 +476,66 @@ export class SverkaTelegramService implements OnModuleInit {
   private async handleCallback(cbq: any): Promise<void> {
     const data: string = cbq?.data || '';
     if (data.startsWith('apply:')) return this.handleApplyCallback(cbq);
+    if (data.startsWith('closeall:')) return this.handleCloseAllCallback(cbq);
     if (data.startsWith('close:')) return this.handleCloseCallback(cbq);
     if (data.startsWith('fix:')) return this.handleFixCallback(cbq);
+    if (data.startsWith('refresh:')) return this.handleRefreshCallback(cbq);
     await this.answerCb(cbq?.id, "Noma'lum amal");
+  }
+
+  /** Chat approver (tasdiqlovchi) bo'lsa qaytaradi, aks holda null. */
+  private async approverChat(chatId: string): Promise<SverkaChat | null> {
+    const chats = await this.getChats();
+    const chat = chats.find((c) => String(c.chatId) === chatId);
+    return chat && chat.role === 'approver' ? chat : null;
+  }
+
+  /** "❌ Yopish" — barcha ko'rsatilgan farqni bugunga yopadi (digest o'chadi). */
+  private async handleCloseAllCallback(cbq: any): Promise<void> {
+    const cbId: string = cbq?.id;
+    const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
+    const [, date] = String(cbq?.data || '').split(':');
+    const chat = await this.approverChat(chatId);
+    if (!chat) { await this.answerCb(cbId, "Sizda ruxsat yo'q", true); return; }
+    if (!date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
+    try {
+      const store = await this.getNotifiedStore(date);
+      let n = 0;
+      for (const a of Object.values(store.accounts)) {
+        if (!a.dismissed) { a.dismissed = true; a.apply = null; n++; }
+      }
+      await this.refreshDigest(store); // count → 0 → digest o'chadi
+      await this.saveNotifiedStore(store);
+      await this.answerCb(cbId, `${n} ta farq bugunga yopildi (ertaga qayta ko'rinadi)`, true);
+      await this.appendHistory({
+        action: 'telegram_dismiss_all', source: 'telegram', actorId: null,
+        actorName: chat.name || chatId, chatId, details: { date, count: n },
+      });
+    } catch (e: any) {
+      await this.answerCb(cbId, 'Xato');
+      this.log.warn(`Telegram closeall xato: ${e?.message}`);
+    }
+  }
+
+  /** "🔄 Yangilash" — sverkani qayta ishga tushiradi (sync bilan) va digestni yangilaydi. */
+  private async handleRefreshCallback(cbq: any): Promise<void> {
+    const cbId: string = cbq?.id;
+    const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
+    const [, date] = String(cbq?.data || '').split(':');
+    const chat = await this.approverChat(chatId);
+    if (!chat) { await this.answerCb(cbId, "Sizda ruxsat yo'q", true); return; }
+    if (!date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
+    await this.answerCb(cbId, 'Yangilanmoqda...');
+    try {
+      const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
+      const result: any = await reconcile.reconcileToday(date, { syncMismatched: true });
+      if (result?.items && Array.isArray(result.items) && result.date) {
+        await this.notifyNewMismatches(result.items, result.date, { synced: true });
+      }
+      this.log.log(`Telegram refresh: date=${date} (chat=${chatId})`);
+    } catch (e: any) {
+      this.log.warn(`Telegram refresh xato: ${e?.message}`);
+    }
   }
 
   /**
@@ -525,17 +547,11 @@ export class SverkaTelegramService implements OnModuleInit {
     const data: string = cbq?.data || '';
     const cbId: string = cbq?.id;
     const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
-    const messageId: number | undefined = cbq?.message?.message_id;
 
-    const chats = await this.getChats();
-    const chat = chats.find((c) => String(c.chatId) === chatId);
-    if (!chat || chat.role !== 'approver') {
-      await this.answerCb(cbId, "Sizda ruxsat yo'q — faqat tasdiqlovchi tuzatadi", true);
-      return;
-    }
-    const parts = data.split(':');
-    const accountId = parts[1];
-    const date = parts[2];
+    const chat = await this.approverChat(chatId);
+    if (!chat) { await this.answerCb(cbId, "Sizda ruxsat yo'q — faqat tasdiqlovchi tuzatadi", true); return; }
+
+    const [, accountId, date] = data.split(':');
     if (!accountId || !date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
 
     await this.answerCb(cbId, 'Tuzatilmoqda...');
@@ -544,86 +560,59 @@ export class SverkaTelegramService implements OnModuleInit {
       if (!agent) throw new Error('AI agent mavjud emas');
 
       const store = await this.getNotifiedStore(date);
-      const entry = store.accounts[accountId];
-      const which = entry?.apply || { addMissing: true, fixDates: true, fixAmounts: true };
-
-      const acc = await this.prisma.bankAccount.findUnique({
-        where: { id: accountId }, include: { bank: true },
-      }).catch(() => null);
-      const accLine = acc
-        ? `🏦 <b>${acc.bank?.name || '—'}</b>\n💳 <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 ${acc.ownerName}\n` : ''}`
-        : '';
-      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const which = store.accounts[accountId]?.apply || { addMissing: true, fixDates: true, fixAmounts: true };
 
       const res: any = await agent.applyRecommended(accountId, date, which, `agent:tg:${chat.name || chatId}`);
       const c = res?.counts || { addMissing: 0, fixDates: 0, fixAmounts: 0 };
       const totalApplied = (c.addMissing || 0) + (c.fixDates || 0) + (c.fixAmounts || 0);
       const nowOk = res?.rec?.status === 'ok';
-      const newDiff = Math.abs(Number(res?.rec?.diff?.formula) || 0);
-      const parts2: string[] = [];
-      if (c.addMissing) parts2.push(`➕ ${c.addMissing} qo‘shildi`);
-      if (c.fixDates) parts2.push(`📅 ${c.fixDates} sana`);
-      if (c.fixAmounts) parts2.push(`⚖️ ${c.fixAmounts} summa`);
 
-      // Barcha nusxalar (joriy + boshqa chatlardagi)
-      const copies = [
-        { chatId, messageId },
-        ...(entry?.msgs || [])
-          .filter((m) => !(String(m.chatId) === chatId && m.messageId === messageId))
-          .map((m) => ({ chatId: String(m.chatId), messageId: m.messageId })),
-      ];
-      try {
-        // To'liq yoki qisman — xabar(lar)ni O'CHIRAMIZ (guruhda qolmasin). Qisman bo'lsa
-        // qolgan farq keyingi tekshiruvda YANGI (aniq) xabar bo'lib keladi.
-        for (const m of copies) await this.deleteMsg(m.chatId, m.messageId);
+      if (nowOk) {
         delete store.accounts[accountId];
-        await this.saveNotifiedStore(store);
-      } catch { /* ignore */ }
+      } else if (store.accounts[accountId]) {
+        store.accounts[accountId].diffKey = String(Math.round(Number(res?.rec?.diff?.formula) || 0));
+        store.accounts[accountId].totalFarq = this.farqOf(res?.rec);
+      }
+
+      const parts2: string[] = [];
+      if (c.addMissing) parts2.push(`➕${c.addMissing}`);
+      if (c.fixDates) parts2.push(`📅${c.fixDates}`);
+      if (c.fixAmounts) parts2.push(`⚖️${c.fixAmounts}`);
+      const note = `✅ ${chat.name || chatId}: ${parts2.join(' ') || '0'} ${nowOk ? "(hal bo'ldi)" : '(qisman)'}`;
+      await this.refreshDigest(store, note);
+      await this.saveNotifiedStore(store);
 
       await this.appendHistory({
         action: 'telegram_agent_apply', source: 'telegram', actorId: null,
         actorName: chat.name || chatId, chatId,
-        details: { accountId, date, counts: c, nowOk, newDiff },
+        details: { accountId, date, counts: c, nowOk },
       });
       this.log.log(`Telegram AI apply: account=${accountId} date=${date} applied=${totalApplied} ok=${nowOk}`);
     } catch (e: any) {
-      await this.editMsg(chatId, messageId, `❌ <b>Xato:</b> ${e?.message || "noma'lum"}`);
       this.log.warn(`Telegram AI apply xato: ${e?.message}`);
+      await this.refreshDigestForDate(date).catch(() => {});
     }
   }
 
-  /** Farqni e'tiborsiz qoldirish — callback_data: close:<accountId>:<date>. */
+  /** Yakka farqni bugunga yopish — callback_data: close:<accountId>:<date> (moslik uchun). */
   private async handleCloseCallback(cbq: any): Promise<void> {
     const data: string = cbq?.data || '';
     const cbId: string = cbq?.id;
     const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
-    const messageId: number | undefined = cbq?.message?.message_id;
 
-    const chats = await this.getChats();
-    const chat = chats.find((c) => String(c.chatId) === chatId);
-    if (!chat || chat.role !== 'approver') {
-      await this.answerCb(cbId, "Sizda ruxsat yo'q", true);
-      return;
-    }
-    const parts = data.split(':');
-    const accountId = parts[1];
-    const date = parts[2];
+    const chat = await this.approverChat(chatId);
+    if (!chat) { await this.answerCb(cbId, "Sizda ruxsat yo'q", true); return; }
+
+    const [, accountId, date] = data.split(':');
     if (!accountId || !date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
 
     await this.answerCb(cbId, 'Yopildi');
     try {
-      // Xabar(lar)ni O'CHIRAMIZ + dismissed (shu kuni qayta chiqmaydi; ertaga store yangi).
       const store = await this.getNotifiedStore(date);
       const entry = store.accounts[accountId];
-      if (entry) {
-        for (const m of (entry.msgs || [])) await this.deleteMsg(String(m.chatId), m.messageId);
-        entry.dismissed = true;
-        entry.apply = undefined;
-        entry.msgs = [];
-        await this.saveNotifiedStore(store);
-      } else {
-        await this.deleteMsg(chatId, messageId);
-      }
+      if (entry) { entry.dismissed = true; entry.apply = null; } // bugunga yopildi (ertaga qayta)
+      await this.refreshDigest(store);
+      await this.saveNotifiedStore(store);
       await this.appendHistory({
         action: 'telegram_dismiss', source: 'telegram', actorId: null,
         actorName: chat.name || chatId, chatId, details: { accountId, date },
@@ -882,19 +871,23 @@ export class SverkaTelegramService implements OnModuleInit {
     return { ok: failed === 0, sent, failed, errors, messages };
   }
 
-  // ─── NOTIFIED STORE (farq holatini + xabar message_id'larini saqlash) ──
-  private async getNotifiedStore(date: string): Promise<{ date: string; accounts: Record<string, { diffKey: string; msgs: Array<{ chatId: string; messageId: number; role?: 'approver' | 'watcher' }>; apply?: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean }; dismissed?: boolean }> }> {
+  // ─── NOTIFIED STORE (digest holati: yagona xabar + farqli hisoblar) ──
+  private async getNotifiedStore(date: string): Promise<DigestStore> {
     const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY } });
     if (s?.value) {
       try {
         const parsed = JSON.parse(s.value);
-        if (parsed?.date === date && parsed.accounts && typeof parsed.accounts === 'object') return parsed;
+        if (parsed?.date === date && parsed.accounts && typeof parsed.accounts === 'object') {
+          // Eski shakl bilan moslik — digest bo'lmasa bo'sh qo'shamiz
+          if (!parsed.digest || !Array.isArray(parsed.digest.msgs)) parsed.digest = { msgs: [] };
+          return parsed as DigestStore;
+        }
       } catch { /* ignore */ }
     }
-    return { date, accounts: {} };
+    return { date, digest: { msgs: [] }, accounts: {} };
   }
 
-  private async saveNotifiedStore(store: { date: string; accounts: Record<string, any> }): Promise<void> {
+  private async saveNotifiedStore(store: DigestStore): Promise<void> {
     await this.prisma.setting.upsert({
       where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
       create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify(store), updatedBy: 'system' },
@@ -902,54 +895,69 @@ export class SverkaTelegramService implements OnModuleInit {
     });
   }
 
-  /** Bitta mismatch uchun Telegram xabar matni — yuborish va JOYIDA tahrir bir xil matn ishlatsin. */
-  private renderMismatch(
-    it: { accountNo?: string; ownerName?: string | null; bankName?: string | null;
-          diff?: { formula?: number }; bank?: { debit?: number; credit?: number };
-          db?: { inflow?: number; outflow?: number; inCount?: number; outCount?: number } },
-    date: string,
-    fmt: (n: number | undefined) => string,
-  ): string {
-    const bankKirim = Number(it.bank?.credit) || 0;
-    const bankChiqim = Number(it.bank?.debit) || 0;
-    const dbKirim = Number(it.db?.inflow) || 0;
-    const dbChiqim = Number(it.db?.outflow) || 0;
-    const farqKirim = bankKirim - dbKirim;   // + = bankda ko'p, − = DB'da ko'p
-    const farqChiqim = bankChiqim - dbChiqim;
-    const totalFarq = Math.abs(Number(it.diff?.formula) || 0);
-
-    const lines: string[] = [];
-    lines.push(`⚠️ <b>Sverka farq aniqlandi</b>`);
-    lines.push('');
-    if (it.bankName) lines.push(`🏦 <b>Bank:</b> ${it.bankName}`);
-    if (it.accountNo) lines.push(`💳 <b>Hisob:</b> <code>${it.accountNo}</code>`);
-    if (it.ownerName) lines.push(`👤 <b>Egasi:</b> ${it.ownerName}`);
-    lines.push(`📅 <b>Sana:</b> ${date}`);
-    lines.push('');
-
-    if (Math.abs(farqKirim) > 0.01) {
-      const sign = farqKirim > 0 ? '+' : '−';
-      const who = farqKirim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
-      lines.push(`📥 <b>Kirim oborot:</b>`);
-      lines.push(`  • Bank: <code>${fmt(bankKirim)}</code>`);
-      lines.push(`  • DB:   <code>${fmt(dbKirim)}</code> (${it.db?.inCount || 0} ta)`);
-      lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqKirim))}</code> ${who}`);
+  /** Store'dagi (yopilmagan) hisoblardan DigestAccount[] tuzadi. */
+  private storeToDigestAccounts(store: DigestStore): DigestAccount[] {
+    const out: DigestAccount[] = [];
+    for (const [accountId, a] of Object.entries(store.accounts)) {
+      if (a.dismissed) continue;
+      out.push({
+        accountId,
+        accountNo: a.accountNo,
+        ownerName: a.ownerName,
+        bankName: a.bankName,
+        totalFarq: Number(a.totalFarq) || 0,
+        culprit: a.culprit,
+        confidence: a.confidence,
+        actionable: !!a.apply || a.actionKind === 'add',
+        actionKind: a.actionKind || 'ai',
+      });
     }
-    if (Math.abs(farqChiqim) > 0.01) {
-      const sign = farqChiqim > 0 ? '+' : '−';
-      const who = farqChiqim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
-      lines.push(`📤 <b>Chiqim oborot:</b>`);
-      lines.push(`  • Bank: <code>${fmt(bankChiqim)}</code>`);
-      lines.push(`  • DB:   <code>${fmt(dbChiqim)}</code> (${it.db?.outCount || 0} ta)`);
-      lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqChiqim))}</code> ${who}`);
+    return out;
+  }
+
+  /**
+   * Digest xabarini JORIY store holatiga keltiradi:
+   *  - farqli hisob bor → yagona xabarni yuboradi (yo'q bo'lsa) yoki JOYIDA tahrirlaydi;
+   *  - hech farq qolmasa → xabarni o'chiradi (guruh toza bo'ladi).
+   * Approver chatlar tugmali, watcher chatlar tugmasiz digest oladi.
+   */
+  private async refreshDigest(store: DigestStore, note?: string): Promise<void> {
+    const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const accounts = this.storeToDigestAccounts(store);
+    const { text, keyboard, count } = renderDigest(accounts, store.date, nowTk, { note });
+
+    // Farq qolmadi — mavjud digest xabarlarini o'chiramiz
+    if (count === 0) {
+      for (const m of (store.digest?.msgs || [])) await this.deleteMsg(String(m.chatId), m.messageId);
+      store.digest = { msgs: [] };
+      return;
     }
 
-    lines.push('');
-    lines.push(`💰 <b>UMUMIY FARQ:</b> <code>${fmt(totalFarq)}</code> UZS`);
-    lines.push('');
-    lines.push(`❓ <b>To'g'rilaysizmi?</b>`);
-    lines.push(`<i>Tasdiqlovchilar quyidagi tugma orqali (bankda bor, DBda yo'q yozuvlarni qo'shadi) yoki saytda to'g'rilashi mumkin.</i>`);
-    return lines.join('\n');
+    const existing = store.digest?.msgs || [];
+    if (existing.length > 0) {
+      // JOYIDA tahrir — approver tugmali, watcher tugmasiz
+      for (const m of existing) {
+        await this.editMsg(String(m.chatId), m.messageId, text, m.role === 'approver' ? keyboard : { inline_keyboard: [] });
+      }
+      return;
+    }
+
+    // Birinchi marta — yuboramiz (approver tugmali, watcher tugmasiz)
+    const rApprover = await this.sendNotification({ text, role: 'approver', replyMarkup: keyboard });
+    const rWatcher = await this.sendNotification({ text, role: 'watcher' });
+    store.digest = {
+      msgs: [
+        ...rApprover.messages.map((m) => ({ ...m, role: 'approver' as const })),
+        ...rWatcher.messages.map((m) => ({ ...m, role: 'watcher' as const })),
+      ],
+    };
+  }
+
+  /** Store'ni diskdan qayta o'qib, digestни yangilaydi (callback'lardan keyin). */
+  private async refreshDigestForDate(date: string): Promise<void> {
+    const store = await this.getNotifiedStore(date);
+    await this.refreshDigest(store);
+    await this.saveNotifiedStore(store);
   }
 
   /** SverkaAgentService — moduleRef orqali (circular dep bo'lmasin). */
@@ -958,79 +966,39 @@ export class SverkaTelegramService implements OnModuleInit {
     catch { return null; }
   }
 
-  /** Culprit (ayb) → emoji + so'z (uz). */
-  private culpritLabel(c: string): string {
-    switch (c) {
-      case 'bank': return '🔴 <b>Bank tomonda xato</b>';
-      case 'us': return '🔵 <b>Biz tomonda xato</b>';
-      case 'mixed': return '🟠 <b>Aralash sabab</b>';
-      case 'none': return '🟢 <b>Farq yo‘q</b>';
-      default: return '⚪ <b>Sabab aniqlanmadi</b>';
-    }
-  }
-
-  /** Culprit — qisqa (sarlavha uchun). */
-  private culpritShort(c: string): string {
-    switch (c) {
-      case 'bank': return '🔴 Bank xatosi';
-      case 'us': return '🔵 Biz tomonda';
-      case 'mixed': return '🟠 Aralash';
-      case 'none': return '🟢 Farq yo‘q';
-      default: return '⚪ Noaniq';
-    }
-  }
-
-  private truncate(s: string | undefined, n: number): string {
-    if (!s) return '';
-    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  /** Farq magnitudasi (so'm) — formula/kirim/chiqim farqlarining eng kattasi. */
+  private farqOf(rec: any): number {
+    const f = Math.abs(Number(rec?.diff?.formula) || 0);
+    const c = Math.abs(Number(rec?.diff?.credit) || 0);
+    const d = Math.abs(Number(rec?.diff?.debit) || 0);
+    return Math.max(f, c, d);
   }
 
   /**
-   * AI-boyitilgan mismatch matni (Telegram, HTML) — QISQA (guruh to'lmasin).
-   * Faqat muhim: kim/qancha/nega(qisqa xulosa)/ayb + tuzatish rejasi. To'liq tafsilot
-   * (findings, tavsiya) saytda ko'rinadi.
+   * Bir hisob uchun tahlil → digest maydonlari.
+   * useSync=true → AI/reconcile avval bankdan sync qilib QAYTA tekshiradi (soxta farq shu yerda yo'qoladi).
+   * resolved=true → sync'dan keyin farq YO'Q (soxta edi) — digestga qo'shilmaydi.
    */
-  private renderAiMismatch(
-    it: any, date: string, fmt: (n: number | undefined) => string,
-    d: any, p: any, which: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean },
-  ): string {
-    const totalFarq = Math.abs(Number(it.diff?.formula) || 0);
-    const lines: string[] = [];
-    lines.push(`⚠️ <b>Sverka farq</b> · ${this.culpritShort(d.culprit)}`);
-    lines.push(`🏦 ${it.bankName || '—'} · <code>${it.accountNo || ''}</code>`);
-    if (it.ownerName) lines.push(`👤 ${it.ownerName}`);
-    lines.push(`💰 <b>${fmt(totalFarq)}</b> UZS · 📅 ${date}`);
-    if (d.summary) { lines.push(''); lines.push(this.truncate(d.summary, 320)); }
-    if (d.cautionNote) lines.push(`⚠️ ${this.truncate(d.cautionNote, 160)}`);
-    const parts: string[] = [];
-    if (which.addMissing) parts.push(`➕ ${p.addMissing.length} qo‘shish`);
-    if (which.fixDates) parts.push(`📅 ${p.fixDates.length} sana`);
-    if (which.fixAmounts) parts.push(`⚖️ ${p.fixAmounts.length} summa`);
-    if (parts.length) { lines.push(''); lines.push(`🔧 ${parts.join(' · ')}`); }
-    else if (p.unresolved?.length) { lines.push(''); lines.push(`🔎 ${p.unresolved.length} ta qo‘lda ko‘rish kerak`); }
-    return lines.join('\n');
-  }
-
-  /**
-   * Bitta mismatch uchun Telegram xabari + tugmalar + apply qarori.
-   * useAi=true bo'lsa AI tahlil qiladi (sabab + tavsiya + [Tuzatish]/[Yopish]).
-   * AI o'chirilgan yoki xato bersa — eski oddiy matn + legacy "qo'shish" tugmasi.
-   */
-  private async buildMismatchNotif(
-    it: any, date: string, fmt: (n: number | undefined) => string, useAi: boolean,
-  ): Promise<{ text: string; replyMarkup: any; apply: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean } | null; ai: boolean; resolved: boolean }> {
+  private async analyzeAccount(
+    it: any, date: string, useAi: boolean, useSync: boolean,
+  ): Promise<{
+    resolved: boolean;
+    usedAi: boolean;
+    culprit?: string;
+    confidence?: string;
+    totalFarq?: number;
+    apply: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean } | null;
+    actionKind: 'ai' | 'add';
+  }> {
     if (useAi) {
       const agent = this.getSverkaAgent();
       if (agent) {
         try {
-          // withSync=false — cron (autoSverkaNotify) allaqachon syncMismatched qildi
-          const a: any = await agent.analyze(it.accountId, date, 'uz', false);
+          const a: any = await agent.analyze(it.accountId, date, 'uz', useSync);
+          // Sync bilan farq HAL bo'ldi (soxta edi) → digestga qo'shmaymiz
+          if (a?.status === 'ok') return { resolved: true, usedAi: true, apply: null, actionKind: 'ai' };
           const d = a?.diagnosis;
           const p = a?.proposed;
-          // Tahlil (sync bilan) farqni HAL qilган bo'lsa — xabar yubormaymiz/o'chiramiz.
-          if (a?.status === 'ok') {
-            return { text: '', replyMarkup: { inline_keyboard: [] }, apply: null, ai: true, resolved: true };
-          }
           if (d && p) {
             const act = d.actions || {};
             const which = {
@@ -1039,30 +1007,28 @@ export class SverkaTelegramService implements OnModuleInit {
               fixAmounts: p.fixAmounts.length > 0 && act.fixAmounts !== 'skip',
             };
             const hasFix = which.addMissing || which.fixDates || which.fixAmounts;
-            const text = this.renderAiMismatch(it, date, fmt, d, p, which);
-            const replyMarkup = hasFix
-              ? { inline_keyboard: [[
-                  { text: '✅ Tuzatish', callback_data: `apply:${it.accountId}:${date}` },
-                  { text: '❌ Yopish', callback_data: `close:${it.accountId}:${date}` },
-                ]] }
-              : { inline_keyboard: [[
-                  { text: '❌ Yopish', callback_data: `close:${it.accountId}:${date}` },
-                ]] };
-            return { text, replyMarkup, apply: hasFix ? which : null, ai: true, resolved: false };
+            return {
+              resolved: false, usedAi: true,
+              culprit: d.culprit, confidence: d.confidence,
+              totalFarq: a?.rec ? this.farqOf(a.rec) : undefined,
+              apply: hasFix ? which : null,
+              actionKind: 'ai',
+            };
           }
         } catch (e: any) {
-          this.log.warn(`Telegram AI tahlil xato (${it.accountNo}): ${e?.message} — oddiy xabar`);
+          this.log.warn(`Digest AI tahlil xato (${it.accountNo}): ${e?.message} — oddiy`);
         }
       }
     }
-    // Fallback — eski xatti-harakat (bankda bor DBda yo'q yozuvni qo'shish)
-    return {
-      text: this.renderMismatch(it, date, fmt),
-      replyMarkup: { inline_keyboard: [[{ text: "✅ To'g'rilash (qo'shish)", callback_data: `fix:${it.accountId}:${date}` }]] },
-      apply: null,
-      ai: false,
-      resolved: false,
-    };
+    // Fallback (AI o'chiq/xato): qo'shish tugmasi (legacy). Ayb yo'q → "noaniq" ko'rsatiladi.
+    if (useSync) {
+      // AI yo'q, lekin sync bilan qayta tekshiramiz — soxta farqni tashlaymiz
+      const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
+      const rec: any = await reconcile.reconcile(it.accountId, date, date, { withSync: true }).catch(() => null);
+      if (rec && rec.status === 'ok') return { resolved: true, usedAi: false, apply: null, actionKind: 'add' };
+      if (rec) return { resolved: false, usedAi: false, totalFarq: this.farqOf(rec), apply: null, actionKind: 'add' };
+    }
+    return { resolved: false, usedAi: false, apply: null, actionKind: 'add' };
   }
 
   /** Test notification — admin UI'dan chaqiriladi. */
@@ -1118,112 +1084,67 @@ export class SverkaTelegramService implements OnModuleInit {
       db?: { inflow?: number; outflow?: number; inCount?: number; outCount?: number };
     }>,
     date: string,
+    opts: { synced?: boolean } = {},
   ): Promise<void> {
     try {
-      // MUHIM: reconcile har bir item'da `ok: true` ni hardcode qaytaradi
-      // (bu "amal bajarildi" degani, "mos keldi" emas). Haqiqiy holat — `status`.
-      // Farq = status === 'mismatch'.
+      // synced=true — chaqiruvchi ALLAQACHON bankdan sync qilib bo'lgan (cron 2-pass).
+      // synced=false (web) — bu yerda AI/reconcile withSync bilan QAYTA tekshiradi
+      // (sync-lag'dan yuzaga kelgan SOXTA farqlar shu bosqichda tashlanadi).
+      const synced = !!opts.synced;
+
+      // Haqiqiy holat — `status` (reconcile item'da `ok:true` hardcode bo'lishi mumkin).
       const mismatches = (items || []).filter((it) => it.status === 'mismatch');
-
       const store = await this.getNotifiedStore(date);
-      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
-      const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
 
-      // ─── 1) HAL QILINDI: store'da bor, lekin endi MOS (ok) bo'lgan hisoblar ───
-      // Hal bo'lgan farq guruhni to'ldirmasin — xabarni O'CHIRAMIZ (tarix admin'da qoladi).
+      // ─── 1) HAL BO'LGAN: store'da bor, lekin endi MOS (ok) — olib tashlaymiz ───
       const currentMismatchIds = new Set(mismatches.map((m) => m.accountId));
-      let resolved = 0;
       for (const accId of Object.keys(store.accounts)) {
-        if (currentMismatchIds.has(accId)) continue; // hali ham farq — tegmaymiz
+        if (currentMismatchIds.has(accId)) continue; // hali ham farq
         const cur = (items || []).find((it) => it.accountId === accId);
-        if (cur && cur.status === 'ok') {
-          const entry = store.accounts[accId];
-          for (const m of (entry.msgs || [])) {
-            await this.deleteMsg(m.chatId, m.messageId);
-          }
-          delete store.accounts[accId];
-          resolved++;
-        }
+        if (cur && cur.status === 'ok') delete store.accounts[accId];
+        // status='error' yoki umuman yo'q → tegmaymiz (bank olinmagan bo'lishi mumkin)
       }
 
-      if (mismatches.length === 0) {
-        if (resolved > 0) await this.saveNotifiedStore(store);
-        return;
-      }
-
-      // ─── 2) Har farq uchun: BIRINCHI marta bo'lsa yuboramiz, farq O'ZGARGAN bo'lsa
-      //     mavjud xabarni JOYIDA tahrirlaymiz (yangi xabar EMAS), bir xil bo'lsa tegmaymiz.
-      //     Shu bilan bitta hisob = bitta xabar bo'ladi — guruh tolmaydi va eski
-      //     "orphan" xabarlar qolmaydi (avval har o'zgarishda yangi xabar ketardi).
-      let sentCount = 0;
-      let editedCount = 0;
+      // ─── 2) Har mismatch: yangi yoki farq O'ZGARGAN bo'lsa tahlil (cap ichida) ───
       let aiCount = 0;
       const MAX_AI = 15; // storm himoyasi — bitta tsiklda maksimal AI tahlil soni
       for (const it of mismatches) {
         const diffKey = String(Math.round(Number(it.diff?.formula) || 0));
         const existing = store.accounts[it.accountId];
+        if (existing?.dismissed) continue;                // bugunga yopilgan — tegmaymiz
+        if (existing && existing.diffKey === diffKey) continue; // o'zgarmagan — qayta tahlil shart emas
 
-        if (!existing) {
-          // BIRINCHI marta — AI-boyitilgan xabar (cap ichida), watcher tugmasiz.
-          const notif = await this.buildMismatchNotif(it, date, fmt, aiCount < MAX_AI);
-          if (notif.ai) aiCount++;
-          // Tahlil (sync bilan) farqni HAL qilган bo'lsa — xabar YUBORMAYMIZ (guruh to'lmasin).
-          if (notif.resolved) {
-            this.log.log(`Mismatch sync bilan hal bo'ldi — xabar yuborilmadi: ${it.accountNo}`);
-            continue;
-          }
-          const rApprover = await this.sendNotification({ text: notif.text, role: 'approver', replyMarkup: notif.replyMarkup });
-          const rWatcher = await this.sendNotification({ text: notif.text, role: 'watcher' });
-          const msgs = [
-            ...rApprover.messages.map((m) => ({ ...m, role: 'approver' as const })),
-            ...rWatcher.messages.map((m) => ({ ...m, role: 'watcher' as const })),
-          ];
-          if (msgs.length > 0) {
-            store.accounts[it.accountId] = { diffKey, msgs, apply: notif.apply || undefined };
-            sentCount++;
-            this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (ai=${notif.ai}, sent=${rApprover.sent + rWatcher.sent})`);
-          } else {
-            const errors = [...rApprover.errors, ...rWatcher.errors];
-            this.log.warn(`Mismatch notification YUBORILMADI ${it.accountNo}: errors=${errors.join(' | ')}`);
-          }
-        } else if (existing.diffKey !== diffKey && !existing.dismissed) {
-          // Farq O'ZGARGAN (va yopilmagan) — joyida qayta AI tahlil + yangilash.
-          const notif = await this.buildMismatchNotif(it, date, fmt, aiCount < MAX_AI);
-          if (notif.ai) aiCount++;
-          if (notif.resolved) {
-            // Endi hal bo'lgan — xabar(lar)ni o'chiramiz (bu yerda qolmasin).
-            for (const m of (existing.msgs || [])) await this.deleteMsg(m.chatId, m.messageId);
-            delete store.accounts[it.accountId];
-            this.log.log(`Mismatch endi hal bo'ldi — xabar o'chirildi: ${it.accountNo}`);
-            continue;
-          }
-          for (const m of (existing.msgs || [])) {
-            await this.editMsg(m.chatId, m.messageId, notif.text, m.role === 'approver' ? notif.replyMarkup : { inline_keyboard: [] });
-          }
-          existing.diffKey = diffKey;
-          existing.apply = notif.apply || undefined;
-          editedCount++;
-          this.log.log(`Mismatch joyida yangilandi: ${it.accountNo} → ${diffKey} (ai=${notif.ai})`);
+        const res = await this.analyzeAccount(it, date, aiCount < MAX_AI, !synced);
+        if (res.usedAi) aiCount++;
+        if (res.resolved) {
+          // Sync bilan hal bo'ldi (soxta farq edi) — digestga qo'shmaymiz
+          delete store.accounts[it.accountId];
+          continue;
         }
-        // diffKey bir xil (yoki dismissed) — hech narsa qilmaymiz (spam yo'q).
+        store.accounts[it.accountId] = {
+          accountNo: it.accountNo,
+          ownerName: it.ownerName,
+          bankName: it.bankName,
+          diffKey,
+          totalFarq: res.totalFarq ?? this.farqOf(it),
+          culprit: res.culprit,
+          confidence: res.confidence,
+          apply: res.apply,
+          actionKind: res.actionKind,
+          dismissed: false,
+        };
       }
 
+      // ─── 3) Yagona digest xabarini JORIY holatga keltiramiz ───
+      await this.refreshDigest(store);
       await this.saveNotifiedStore(store);
-      await this.appendHistory({
-        action: 'mismatch_detected',
-        source: 'web',
-        actorId: null,
-        actorName: 'system',
-        details: {
-          date,
-          sent: sentCount,
-          edited: editedCount,
-          resolved,
-          total: mismatches.length,
-        },
-      });
 
-      this.log.log(`Mismatch notification: ${sentCount} yuborildi, ${editedCount} yangilandi, ${resolved} hal qilindi (jami ${mismatches.length} farq, sana ${date})`);
+      const shown = Object.values(store.accounts).filter((a) => !a.dismissed).length;
+      await this.appendHistory({
+        action: 'mismatch_detected', source: 'web', actorId: null, actorName: 'system',
+        details: { date, total: mismatches.length, shown },
+      });
+      this.log.log(`Digest yangilandi: ${shown} farq ko'rsatildi (jami ${mismatches.length} mismatch, sana ${date})`);
     } catch (e: any) {
       this.log.warn(`notifyNewMismatches xato: ${e?.message}`);
     }
@@ -1241,43 +1162,28 @@ export class SverkaTelegramService implements OnModuleInit {
       if (!accountId || !date) return;
       const store = await this.getNotifiedStore(date);
       const entry = store.accounts[accountId];
-      if (!entry?.msgs?.length) return; // bu farq uchun bot xabari yo'q
+      if (!entry) return; // bu farq digestda yo'q
 
       // HAQIQIY holatni tekshiramiz (web fix to'liq hal qildimi?)
       const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
       const rec: any = await reconcile.reconcile(accountId, date, date, { withSync: false }).catch(() => null);
-      if (!rec) return; // bank olinmadi — xabarga tegmaymiz
-
-      const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
+      if (!rec) return; // bank olinmadi — digestga tegmaymiz
 
       if (rec.status === 'ok') {
-        // To'liq hal bo'ldi → xabar(lar)ni o'chiramiz
-        for (const m of entry.msgs) await this.deleteMsg(String(m.chatId), m.messageId);
-        delete store.accounts[accountId];
-        await this.saveNotifiedStore(store);
+        delete store.accounts[accountId];               // hal bo'ldi — digestdan chiqadi
         await this.appendHistory({
           action: 'sverka_resolved_web', source: 'web', actorId: null,
           actorName: actorName || null, details: { accountId, date },
         });
-        this.log.log(`Web fix → hal bo'ldi, bot xabari o'chirildi: ${accountId} ${date}`);
-        return;
-      }
-
-      // Hali farqli — xabarni JORIY holatga qayta tahlil bilan yangilaymiz (stale qolmasin)
-      const notif = await this.buildMismatchNotif(rec, date, fmt, true);
-      if (notif.resolved) {
-        for (const m of entry.msgs) await this.deleteMsg(String(m.chatId), m.messageId);
-        delete store.accounts[accountId];
       } else {
-        for (const m of entry.msgs) {
-          await this.editMsg(String(m.chatId), m.messageId, notif.text, m.role === 'approver' ? notif.replyMarkup : { inline_keyboard: [] });
-        }
+        // Hali farqli — digest qatorini yangilaymiz (stale summa qolmasin)
         entry.diffKey = String(Math.round(Number(rec.diff?.formula) || 0));
-        entry.apply = notif.apply || undefined;
+        entry.totalFarq = this.farqOf(rec);
         entry.dismissed = false;
       }
+      await this.refreshDigest(store);
       await this.saveNotifiedStore(store);
-      this.log.log(`Web fix → hali farqli, bot xabari yangilandi: ${accountId} ${date}`);
+      this.log.log(`Web fix → digest yangilandi: ${accountId} ${date} (status=${rec.status})`);
     } catch (e: any) {
       this.log.warn(`markResolvedFromWeb xato: ${e?.message}`);
     }
@@ -1334,10 +1240,14 @@ export class SverkaTelegramService implements OnModuleInit {
     if (setting?.value) {
       try {
         const parsed = JSON.parse(setting.value);
-        const accounts = parsed?.accounts || {};
-        for (const accId of Object.keys(accounts)) {
-          cleared++;
-          for (const m of (accounts[accId]?.msgs || [])) {
+        cleared = Object.keys(parsed?.accounts || {}).length;
+        // Yagona digest xabar(lar)ini o'chiramiz
+        for (const m of (parsed?.digest?.msgs || [])) {
+          if (m?.chatId && m?.messageId) toDelete.push({ chatId: String(m.chatId), messageId: Number(m.messageId) });
+        }
+        // Eski shakl (har hisob alohida xabar) qolgan bo'lsa — ularni ham
+        for (const accId of Object.keys(parsed?.accounts || {})) {
+          for (const m of (parsed.accounts[accId]?.msgs || [])) {
             if (m?.chatId && m?.messageId) toDelete.push({ chatId: String(m.chatId), messageId: Number(m.messageId) });
           }
         }
@@ -1357,8 +1267,8 @@ export class SverkaTelegramService implements OnModuleInit {
 
     await this.prisma.setting.upsert({
       where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
-      create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify({ date: '', accounts: {} }), updatedBy: actor?.name || 'system' },
-      update: { value: JSON.stringify({ date: '', accounts: {} }), updatedBy: actor?.name || 'system' },
+      create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify({ date: '', digest: { msgs: [] }, accounts: {} }), updatedBy: actor?.name || 'system' },
+      update: { value: JSON.stringify({ date: '', digest: { msgs: [] }, accounts: {} }), updatedBy: actor?.name || 'system' },
     });
     await this.appendHistory({
       action: 'notified_reset',
@@ -1381,11 +1291,13 @@ export class SverkaTelegramService implements OnModuleInit {
     if (!setting?.value) return;
     let stored: any = null;
     try { stored = JSON.parse(setting.value); } catch { return; }
-    if (!stored?.accounts || !stored.accounts[accountId]) return;
-    delete stored.accounts[accountId];
-    await this.prisma.setting.update({
-      where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
-      data: { value: JSON.stringify(stored) },
-    });
+    const date = stored?.date;
+    if (!date || !stored?.accounts || !stored.accounts[accountId]) return;
+    // Store'ni qayta o'qib, hisobni olib tashlaymiz va digestni yangilaymiz
+    const store = await this.getNotifiedStore(date);
+    if (!store.accounts[accountId]) return;
+    delete store.accounts[accountId];
+    await this.refreshDigest(store);
+    await this.saveNotifiedStore(store);
   }
 }

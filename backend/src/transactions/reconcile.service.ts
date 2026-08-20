@@ -271,7 +271,15 @@ export class ReconcileService {
   }
 
   private fmtDate(d: Date): string {
-    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+    // dd.mm.yyyy — HAR DOIM Asia/Tashkent bo'yicha (server timezone'iga BOG'LIQ EMAS).
+    // Avval local getDate/getMonth ishlatilardi: server UTC bo'lsa, Tashkent-yarim tuni
+    // instanti (T00:00+05:00 = oldingi kun 19:00 UTC) OLDINGI kunga tushib, butun kun
+    // noto'g'ri kundan so'ralardi → soxta farq. formatToParts bilan bu bartaraf etiladi.
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', year: 'numeric',
+    }).formatToParts(d);
+    const get = (t: string) => parts.find((x) => x.type === t)?.value || '';
+    return `${get('day')}.${get('month')}.${get('year')}`;
   }
 
   /**

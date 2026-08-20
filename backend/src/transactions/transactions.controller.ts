@@ -186,10 +186,11 @@ export class TransactionsController {
     const result: any = await this.reconcileSvc.reconcileToday(date, {
       syncMismatched: syncMismatched === 'true',
     });
-    // Yangi farq topilgan bo'lsa Telegram'ga xabar yuboriladi (kun ichida
-    // bir hisob uchun bir martagina — spam emas).
+    // Yangi farq topilgan bo'lsa Telegram digest yangilanadi. synced — bu so'rov
+    // syncMismatched bilan bo'lganmi (bo'lmasa notify o'zi qayta sync qilib soxta
+    // farqni tashlaydi).
     if (result?.items && Array.isArray(result.items) && result.date) {
-      this.sverkaTg.notifyNewMismatches(result.items, result.date).catch(() => {});
+      this.sverkaTg.notifyNewMismatches(result.items, result.date, { synced: syncMismatched === 'true' }).catch(() => {});
     }
     return result;
   }

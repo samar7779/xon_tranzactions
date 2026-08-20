@@ -278,6 +278,9 @@ export class SverkaAgentService {
       '',
       'AYB (culprit): agar asosiy farq qoshish/sana bo‘lsa → "us"; formula buzilgan yoki bankда ortiqcha bo‘lsa → "bank";',
       'ikkalasi ham bo‘lsa → "mixed"; farq yo‘q → "none"; aniqlab bo‘lmasa → "unknown".',
+      'ISHONCH (confidence): ayb dalili ANIQ va yagona bo‘lsa "high" ber. Bir nechta ehtimol bo‘lsa, yoki',
+      'hal_qilib_bolmaydigan/summa_tuzatish ustun bo‘lsa (bank yoki biz — noaniq) → "low" yoki "medium".',
+      'Faqat "high" bo‘lganda foydalanuvchiga aniq ayb ko‘rsatiladi — shubha bo‘lsa "high" BERMA.',
       'Har bir guruh uchun actions‘da "recommend" (bemalol tuzatish), "caution" (ehtiyot, avval ko‘rib chiq) yoki "skip" ber.',
       'Faqat mavjud guruhlar bo‘yicha gapir — yo‘q narsani o‘ylab topma.',
     ].join('\n');
@@ -290,6 +293,7 @@ export class SverkaAgentService {
         properties: {
           summary: { type: 'string', description: 'Farqning asosiy sababi, 1-3 jumla, odam tilida, aniq raqamlar bilan' },
           culprit: { type: 'string', enum: ['bank', 'us', 'mixed', 'none', 'unknown'] },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'], description: 'Ayb (culprit) qanchalik ishonchli. Dalil aniq bo‘lsa "high"; shubha bo‘lsa "low".' },
           severity: { type: 'string', enum: ['info', 'low', 'medium', 'high'] },
           findings: {
             type: 'array',
@@ -316,7 +320,7 @@ export class SverkaAgentService {
           },
           cautionNote: { type: 'string', description: 'Ehtiyot qilinadigan holat bo‘lsa (ixtiyoriy)' },
         },
-        required: ['summary', 'culprit', 'severity', 'recommendation'],
+        required: ['summary', 'culprit', 'confidence', 'severity', 'recommendation'],
       },
     }];
 
@@ -338,6 +342,7 @@ export class SverkaAgentService {
       diagnosis: {
         summary: String(out.summary || ''),
         culprit: out.culprit || 'unknown',
+        confidence: out.confidence || 'low',
         severity: out.severity || 'medium',
         findings: Array.isArray(out.findings) ? out.findings : [],
         recommendation: String(out.recommendation || ''),
