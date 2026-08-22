@@ -23,6 +23,7 @@ function filtersFrom(q: any): SverkaFilters {
     methods: list(q.methods),
     ourMethods: list(q.ourMethods),
     crmStatuses: list(q.crmStatuses),
+    crmTypes: list(q.crmTypes),
     objects: list(q.objects),
     rowStatuses: list(q.rowStatuses),
     dateFrom: q.dateFrom || undefined,

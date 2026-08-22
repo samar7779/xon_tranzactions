@@ -1539,7 +1539,14 @@
     "pageLimitInfo": "sahifa hajmi {n}",
     "fetchingPage": "{n}-sahifa so’ralmoqda...",
     "lastPageMs": "oxirgi sahifa {n}s",
-    "partialLive": "Natija to'liq emas — tortish davom etmoqda ({pages} sahifa · {n} CRM to'lovi). Raqamlar o'sib boradi."
+    "partialLive": "Natija to'liq emas — tortish davom etmoqda ({pages} sahifa · {n} CRM to'lovi). Raqamlar o'sib boradi.",
+    "kpiSplitMismatch": "Taqsimot farqi",
+    "catInitial": "Boshlang'ich (1 взнос)",
+    "catMonthly": "Oylik (ежемесячный)",
+    "filterCrmTypes": "CRM to'lov turi",
+    "sortDiffInitial": "Boshlang'ich farqi bo'yicha",
+    "sortDiffMonthly": "Oylik farqi bo'yicha",
+    "splitMismatchBadge": "jami mos, taqsimot xato"
   },
   "common": {
     "save": "Saqlash",

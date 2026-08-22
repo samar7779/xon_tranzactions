@@ -33,6 +33,13 @@ export interface CrmSverkaRow {
   ourTotal: number;
   ourCount: number;
   diff: number;
+  crmInitial: number;
+  crmMonthly: number;
+  ourInitial: number;
+  ourMonthly: number;
+  diffInitial: number;
+  diffMonthly: number;
+  splitMismatch: boolean;
   status: 'ok' | 'mismatch' | 'crm-only' | 'our-only';
   lastDate: string | null;
   methods: string[];
@@ -59,10 +66,14 @@ interface ResultResponse {
   summary?: {
     total: number; ok: number; mismatch: number; crmOnly: number; ourOnly: number;
     crmSum: number; ourSum: number; diffSum: number;
+    splitMismatch: number;
+    crmInitialSum: number; crmMonthlySum: number;
+    ourInitialSum: number; ourMonthlySum: number;
+    diffInitialSum: number; diffMonthlySum: number;
   };
   filtered?: { total: number; page: number; perPage: number; pageCount: number };
   items?: CrmSverkaRow[];
-  facets?: { methods: Facet[]; ourMethods: Facet[]; crmStatuses: Facet[]; objects: Facet[] };
+  facets?: { methods: Facet[]; crmTypes?: Facet[]; ourMethods: Facet[]; crmStatuses: Facet[]; objects: Facet[] };
 }
 
 interface StatusResponse {
@@ -101,12 +112,13 @@ export default function CheckCrmPage() {
   const [methods, setMethods] = useState<string[]>([]);
   const [ourMethods, setOurMethods] = useState<string[]>([]);
   const [crmStatuses, setCrmStatuses] = useState<string[]>([]);
+  const [crmTypes, setCrmTypes] = useState<string[]>([]);
   const [objects, setObjects] = useState<string[]>([]);
   const [rowStatuses, setRowStatuses] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [minDiff, setMinDiff] = useState('');
-  const [sort, setSort] = useState<'diff' | 'crm' | 'our' | 'contract'>('diff');
+  const [sort, setSort] = useState<'diff' | 'crm' | 'our' | 'contract' | 'diffInitial' | 'diffMonthly'>('diff');
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selected, setSelected] = useState<CrmSverkaRow | null>(null);
@@ -127,6 +139,7 @@ export default function CheckCrmPage() {
     if (methods.length) p.set('methods', methods.join(','));
     if (ourMethods.length) p.set('ourMethods', ourMethods.join(','));
     if (crmStatuses.length) p.set('crmStatuses', crmStatuses.join(','));
+    if (crmTypes.length) p.set('crmTypes', crmTypes.join(','));
     if (objects.length) p.set('objects', objects.join(','));
     if (rowStatuses.length) p.set('rowStatuses', rowStatuses.join(','));
     if (dateFrom) p.set('dateFrom', dateFrom);
@@ -136,7 +149,7 @@ export default function CheckCrmPage() {
     p.set('page', String(page));
     p.set('perPage', String(PER_PAGE));
     return p.toString();
-  }, [qDebounced, methods, ourMethods, crmStatuses, objects, rowStatuses, dateFrom, dateTo, minDiff, sort, page]);
+  }, [qDebounced, methods, ourMethods, crmStatuses, crmTypes, objects, rowStatuses, dateFrom, dateTo, minDiff, sort, page]);
 
   // ── Status (jonli tortish jarayoni) ──
   const statusQuery = useQuery<StatusResponse>({
@@ -224,13 +237,13 @@ export default function CheckCrmPage() {
   }
 
   function resetFilters() {
-    setQ(''); setMethods([]); setOurMethods([]); setCrmStatuses([]);
+    setQ(''); setMethods([]); setOurMethods([]); setCrmStatuses([]); setCrmTypes([]);
     setObjects([]); setRowStatuses([]); setDateFrom(''); setDateTo('');
     setMinDiff(''); setPage(1);
   }
 
   const activeFilterCount =
-    methods.length + ourMethods.length + crmStatuses.length + objects.length +
+    methods.length + ourMethods.length + crmStatuses.length + crmTypes.length + objects.length +
     rowStatuses.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (minDiff ? 1 : 0);
 
   const data = resultQuery.data;
@@ -376,7 +389,7 @@ export default function CheckCrmPage() {
         {/* ═══ KPI ═══ */}
         {hasSnapshot && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <Kpi label={t('kpiContracts')} value={summary?.total ?? 0} color="sky" icon={<Building2 className="h-4 w-4" />} loading={resultQuery.isLoading} />
               <Kpi
                 label={t('kpiOk')} value={summary?.ok ?? 0} color="emerald" icon={<CheckCircle2 className="h-4 w-4" />}
@@ -403,6 +416,13 @@ export default function CheckCrmPage() {
                 active={rowStatuses.includes('our-only')}
                 onClick={() => toggleOnly(rowStatuses, setRowStatuses, 'our-only', setPage)}
               />
+              <Kpi
+                label={t('kpiSplitMismatch')} value={summary?.splitMismatch ?? 0}
+                color={(summary?.splitMismatch ?? 0) > 0 ? 'amber' : 'slate'}
+                icon={<ArrowRightLeft className="h-4 w-4" />} loading={resultQuery.isLoading}
+                active={rowStatuses.includes('split')}
+                onClick={() => toggleOnly(rowStatuses, setRowStatuses, 'split', setPage)}
+              />
             </div>
 
             {/* ═══ SUMMALAR ═══ */}
@@ -411,6 +431,22 @@ export default function CheckCrmPage() {
                 <SumCard label={t('sumCrm')} value={summary.crmSum} icon={<Cloud className="h-3.5 w-3.5" />} tone="sky" sub={meta ? t('crmRecords', { n: meta.crmCount }) : undefined} />
                 <SumCard label={t('sumOur')} value={summary.ourSum} icon={<Database className="h-3.5 w-3.5" />} tone="violet" sub={meta ? t('ourRecords', { n: meta.ourCount }) : undefined} />
                 <SumCard label={t('sumDiff')} value={summary.diffSum} icon={<ArrowRightLeft className="h-3.5 w-3.5" />} tone={summary.diffSum > 0 ? 'amber' : 'emerald'} sub={t('diffHint')} />
+              </div>
+            )}
+
+            {/* Boshlang'ich / oylik kesimi — CRM turi ↔ bizdagi split ustunlari */}
+            {summary && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CategoryCard
+                  label={t('catInitial')}
+                  crm={summary.crmInitialSum} our={summary.ourInitialSum} diff={summary.diffInitialSum}
+                  t={t}
+                />
+                <CategoryCard
+                  label={t('catMonthly')}
+                  crm={summary.crmMonthlySum} our={summary.ourMonthlySum} diff={summary.diffMonthlySum}
+                  t={t}
+                />
               </div>
             )}
 
@@ -494,6 +530,8 @@ export default function CheckCrmPage() {
                           <option value="crm">{t('sortCrm')}</option>
                           <option value="our">{t('sortOur')}</option>
                           <option value="contract">{t('sortContract')}</option>
+                          <option value="diffInitial">{t('sortDiffInitial')}</option>
+                          <option value="diffMonthly">{t('sortDiffMonthly')}</option>
                         </select>
                       </LabeledInput>
                     </div>
@@ -505,6 +543,10 @@ export default function CheckCrmPage() {
                     <ChipGroup
                       label={t('filterOurMethods')} facets={facets?.ourMethods || []}
                       selected={ourMethods} onChange={(v) => { setOurMethods(v); setPage(1); }}
+                    />
+                    <ChipGroup
+                      label={t('filterCrmTypes')} facets={facets?.crmTypes || []}
+                      selected={crmTypes} onChange={(v) => { setCrmTypes(v); setPage(1); }}
                     />
                     <ChipGroup
                       label={t('filterCrmStatuses')} facets={facets?.crmStatuses || []}
@@ -765,6 +807,31 @@ function ContractRow({ row, onClick }: { row: CrmSverkaRow; onClick: () => void 
             <span className="text-slate-400 dark:text-slate-500 tabular-nums">{row.lastDate}</span>
           )}
         </div>
+
+        {/* Boshlang'ich / oylik taqsimoti farqli bo'lsa — shu yerda ko'rinadi */}
+        {(Math.abs(row.diffInitial) >= 1 || Math.abs(row.diffMonthly) >= 1) && (
+          <div className="flex items-center gap-2 text-[10.5px] flex-wrap mt-1">
+            {Math.abs(row.diffInitial) >= 1 && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900">
+                {t('catInitial')}: CRM <b className="tabular-nums">{m(row.crmInitial)}</b>
+                <span className="opacity-50">·</span> {t('colOur')} <b className="tabular-nums">{m(row.ourInitial)}</b>
+                <span className="opacity-50">·</span> {row.diffInitial > 0 ? '+' : '−'}<b className="tabular-nums">{m(Math.abs(row.diffInitial))}</b>
+              </span>
+            )}
+            {Math.abs(row.diffMonthly) >= 1 && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                {t('catMonthly')}: CRM <b className="tabular-nums">{m(row.crmMonthly)}</b>
+                <span className="opacity-50">·</span> {t('colOur')} <b className="tabular-nums">{m(row.ourMonthly)}</b>
+                <span className="opacity-50">·</span> {row.diffMonthly > 0 ? '+' : '−'}<b className="tabular-nums">{m(Math.abs(row.diffMonthly))}</b>
+              </span>
+            )}
+            {row.splitMismatch && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-fuchsia-100 dark:bg-fuchsia-950/50 text-fuchsia-800 dark:text-fuchsia-300 font-semibold">
+                ⇄ {t('splitMismatchBadge')}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <RowStatusBadge row={row} />
@@ -891,6 +958,45 @@ function SumCard({
         {formatMoney(value).replace(' UZS', '')}
       </div>
       {sub && <div className="text-[10.5px] opacity-70 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+/** Boshlang'ich / oylik kesimi: CRM ↔ bizda ↔ farq (bitta kartada) */
+function CategoryCard({
+  label, crm, our, diff, t,
+}: {
+  label: string; crm: number; our: number; diff: number; t: any;
+}) {
+  const bad = Math.abs(diff) >= 1;
+  return (
+    <div className={cn(
+      'rounded-2xl ring-1 px-4 py-3',
+      bad
+        ? 'bg-amber-50/70 dark:bg-amber-950/30 ring-amber-200 dark:ring-amber-900'
+        : 'bg-emerald-50/60 dark:bg-emerald-950/25 ring-emerald-200 dark:ring-emerald-900',
+    )}>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-[10px] uppercase tracking-[0.12em] font-bold text-slate-600 dark:text-slate-300">{label}</span>
+        <span className={cn(
+          'text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full',
+          bad
+            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+            : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300',
+        )}>
+          {bad ? `${t('colDiff')}: ${formatMoney(diff).replace(' UZS', '')}` : t('statusOk')}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex items-center gap-1.5 text-[12px] text-sky-700 dark:text-sky-300">
+          <Cloud className="h-3 w-3 shrink-0" />
+          <span className="font-bold tabular-nums">{formatMoney(crm).replace(' UZS', '')}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[12px] text-violet-700 dark:text-violet-300">
+          <Database className="h-3 w-3 shrink-0" />
+          <span className="font-bold tabular-nums">{formatMoney(our).replace(' UZS', '')}</span>
+        </div>
+      </div>
     </div>
   );
 }

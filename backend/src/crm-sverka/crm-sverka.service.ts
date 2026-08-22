@@ -38,6 +38,21 @@ function getRu(obj: any, fallback = ''): string {
   return fallback;
 }
 
+/**
+ * CRM to'lovi boshlang'ichmi yoki oylikmi.
+ * Qoida oplata-kv.service.ts (crmSverka) bilan BIR XIL: type.key da
+ * init / boshlang / перво bo'lsa — boshlang'ich, aks holda oylik.
+ * key bo'lmasa — ko'rinadigan matn bo'yicha tekshiriladi.
+ */
+function crmKindOf(typeObj: any, label: string): 'initial' | 'monthly' {
+  const key = String(typeObj?.key ?? '').toLowerCase();
+  if (key) {
+    return key.includes('init') || key.includes('boshlang') || key.includes('перво')
+      ? 'initial' : 'monthly';
+  }
+  return /перв|нач|boshlang|1\s*[-. ]?\s*взнос/i.test(label) ? 'initial' : 'monthly';
+}
+
 /** Shartnoma raqami — ikkala tomonda bir xil kanonik ko'rinish */
 function normContract(s: any): string {
   return String(s ?? '').trim().toUpperCase();
@@ -76,6 +91,8 @@ interface CrmPay {
   date: string;
   method: string;
   type: string;
+  /** CRM to'lov turi — boshlang'ich (1-взнос) yoki oylik (ежемесячный) */
+  kind: 'initial' | 'monthly';
   category: string;
   status: string;
   object: string;
@@ -89,6 +106,10 @@ interface OurPay {
   id: string;
   contract: string;
   amount: number;
+  /** ОплатыКв "1 взнос" ustuni */
+  first: number;
+  /** ОплатыКв "ежемесячный" ustuni */
+  monthly: number;
   date: string;
   method: string;
   type: string;
@@ -117,6 +138,8 @@ export interface SverkaFilters {
   ourMethods?: string[];
   /** CRM to'lov statuslari (bo'sh = hammasi) */
   crmStatuses?: string[];
+  /** CRM to'lov turlari — boshlang'ich/oylik yorliqlari (bo'sh = hammasi) */
+  crmTypes?: string[];
   /** Obyekt nomlari */
   objects?: string[];
   /** Qator holati: ok | mismatch | crm-only | our-only */
@@ -125,7 +148,7 @@ export interface SverkaFilters {
   dateTo?: string;
   /** Shu summadan katta farqlar (mutlaq qiymat) */
   minDiff?: number;
-  sort?: 'diff' | 'crm' | 'our' | 'contract';
+  sort?: 'diff' | 'crm' | 'our' | 'contract' | 'diffInitial' | 'diffMonthly';
   page?: number;
   perPage?: number;
 }
@@ -139,6 +162,15 @@ export interface SverkaRow {
   ourTotal: number;
   ourCount: number;
   diff: number; // ourTotal - crmTotal  (+ bizda ko'p, − CRM'da ko'p)
+  // ── Kategoriya kesimi: boshlang'ich (1-взнос) va oylik (ежемесячный) ──
+  crmInitial: number;
+  crmMonthly: number;
+  ourInitial: number;
+  ourMonthly: number;
+  diffInitial: number; // ourInitial - crmInitial
+  diffMonthly: number; // ourMonthly - crmMonthly
+  /** Jami mos, lekin TAQSIMOT farq qiladi — split xato bo'lgan holat */
+  splitMismatch: boolean;
   status: 'ok' | 'mismatch' | 'crm-only' | 'our-only';
   lastDate: string | null;
   methods: string[];
@@ -421,12 +453,14 @@ export class CrmSverkaService implements OnModuleInit {
         for (const p of pageItems) {
           const contract = normContract(p.contract);
           if (!contract) continue;
+          const typeLabel = getRu(p.type);
           const item: CrmPay = {
             contract,
             amount: toNum(p.amount),
             date: dayOf(p.date_paid),
             method: this.intern(getRu(p.payment_method)),
-            type: this.intern(getRu(p.type)),
+            type: this.intern(typeLabel),
+            kind: crmKindOf(p.type, typeLabel),
             category: this.intern(getRu(p.category)),
             status: this.intern(getRu(p.status)),
             object: this.intern(p.object_name),
@@ -479,6 +513,8 @@ export class CrmSverkaService implements OnModuleInit {
         contractNo: true,
         date: true,
         paymentAmount: true,
+        firstInstallment: true,
+        monthlyAmount: true,
         paymentMethod: true,
         txType: true,
         object: true,
@@ -492,6 +528,8 @@ export class CrmSverkaService implements OnModuleInit {
       id: r.id,
       contract: normContract(r.contractNo),
       amount: Number(r.paymentAmount || 0),
+      first: Number(r.firstInstallment || 0),
+      monthly: Number(r.monthlyAmount || 0),
       date: dayOf(r.date),
       method: this.intern(r.paymentMethod),
       type: this.intern(r.txType),
@@ -604,9 +642,12 @@ export class CrmSverkaService implements OnModuleInit {
     const statusSet = f.crmStatuses?.length ? new Set(f.crmStatuses) : null;
     const objectSet = f.objects?.length ? new Set(f.objects) : null;
 
+    const typeSet = f.crmTypes?.length ? new Set(f.crmTypes) : null;
+
     const keepCrm = (p: CrmPay) =>
       (!methodSet || methodSet.has(p.method || '—')) &&
       (!statusSet || statusSet.has(p.status || '—')) &&
+      (!typeSet || typeSet.has(p.type || '—')) &&
       (!objectSet || objectSet.has(p.object || '—')) &&
       this.inRange(p.date, f.dateFrom, f.dateTo);
 
@@ -621,31 +662,45 @@ export class CrmSverkaService implements OnModuleInit {
     for (const cn of contracts) {
       const crmAll = s.crmByContract.get(cn) || [];
       const ourAll = s.ourByContract.get(cn) || [];
-      const crmList = methodSet || statusSet || objectSet || f.dateFrom || f.dateTo ? crmAll.filter(keepCrm) : crmAll;
+      const crmList = methodSet || statusSet || typeSet || objectSet || f.dateFrom || f.dateTo ? crmAll.filter(keepCrm) : crmAll;
       const ourList = ourMethodSet || objectSet || f.dateFrom || f.dateTo ? ourAll.filter(keepOur) : ourAll;
 
       if (crmList.length === 0 && ourList.length === 0) continue;
 
       let crmTotal = 0;
+      let crmInitial = 0;
+      let crmMonthly = 0;
       let lastDate = '';
       const methods = new Set<string>();
       for (const p of crmList) {
         crmTotal += p.amount;
+        // CRM to'lov turi bo'yicha (boshlang'ich / oylik)
+        if (p.kind === 'initial') crmInitial += p.amount; else crmMonthly += p.amount;
         if (p.date > lastDate) lastDate = p.date;
         if (p.method) methods.add(p.method);
       }
       let ourTotal = 0;
+      let ourInitial = 0;
+      let ourMonthly = 0;
       for (const p of ourList) {
         ourTotal += p.amount;
+        // Bizdagi split ustunlari (1 взнос / ежемесячный)
+        ourInitial += p.first;
+        ourMonthly += p.monthly;
         if (p.date > lastDate) lastDate = p.date;
       }
 
       const diff = (cents(ourTotal) - cents(crmTotal)) / 100;
+      const diffInitial = (cents(ourInitial) - cents(crmInitial)) / 100;
+      const diffMonthly = (cents(ourMonthly) - cents(crmMonthly)) / 100;
       const status: SverkaRow['status'] =
         crmList.length === 0 ? 'our-only'
         : ourList.length === 0 ? 'crm-only'
         : Math.abs(diff) < 0.01 ? 'ok'
         : 'mismatch';
+      // Jami to'g'ri, lekin boshlang'ich/oylik taqsimoti farq qiladi —
+      // aynan shu holat split xatosini ko'rsatadi (1220ORZ23FP misoli).
+      const splitMismatch = status === 'ok' && Math.abs(diffInitial) >= 1;
 
       rows.push({
         contractNo: cn,
@@ -656,6 +711,13 @@ export class CrmSverkaService implements OnModuleInit {
         ourTotal,
         ourCount: ourList.length,
         diff,
+        crmInitial,
+        crmMonthly,
+        ourInitial,
+        ourMonthly,
+        diffInitial,
+        diffMonthly,
+        splitMismatch,
         status,
         lastDate: lastDate || null,
         methods: Array.from(methods),
@@ -684,6 +746,14 @@ export class CrmSverkaService implements OnModuleInit {
       crmSum: 0,
       ourSum: 0,
       diffSum: 0, // farqlarning mutlaq yig'indisi
+      // ── Boshlang'ich / oylik kesimi ──
+      splitMismatch: 0,      // jami mos, lekin taqsimot farq qiladi
+      crmInitialSum: 0,
+      crmMonthlySum: 0,
+      ourInitialSum: 0,
+      ourMonthlySum: 0,
+      diffInitialSum: 0,     // farqlarning mutlaq yig'indisi (boshlang'ich)
+      diffMonthlySum: 0,     // farqlarning mutlaq yig'indisi (oylik)
     };
     for (const r of rows) {
       if (r.status === 'ok') summary.ok++;
@@ -693,6 +763,14 @@ export class CrmSverkaService implements OnModuleInit {
       summary.crmSum += r.crmTotal;
       summary.ourSum += r.ourTotal;
       if (r.status !== 'ok') summary.diffSum += Math.abs(r.diff);
+
+      summary.crmInitialSum += r.crmInitial;
+      summary.crmMonthlySum += r.crmMonthly;
+      summary.ourInitialSum += r.ourInitial;
+      summary.ourMonthlySum += r.ourMonthly;
+      if (Math.abs(r.diffInitial) >= 1) summary.diffInitialSum += Math.abs(r.diffInitial);
+      if (Math.abs(r.diffMonthly) >= 1) summary.diffMonthlySum += Math.abs(r.diffMonthly);
+      if (r.splitMismatch) summary.splitMismatch++;
     }
 
     // ── Qator filtri (status + qidiruv + min farq) ──
@@ -701,7 +779,11 @@ export class CrmSverkaService implements OnModuleInit {
     const minDiff = Number(f.minDiff) || 0;
 
     let filtered = rows;
-    if (rowStatusSet) filtered = filtered.filter((r) => rowStatusSet.has(r.status));
+    if (rowStatusSet) {
+      // 'split' — alohida holat emas, "jami mos lekin taqsimot farqli" belgisi
+      const wantSplit = rowStatusSet.has('split');
+      filtered = filtered.filter((r) => rowStatusSet.has(r.status) || (wantSplit && r.splitMismatch));
+    }
     if (minDiff > 0) filtered = filtered.filter((r) => Math.abs(r.diff) >= minDiff);
     if (ql) {
       filtered = filtered.filter(
@@ -716,6 +798,8 @@ export class CrmSverkaService implements OnModuleInit {
     const sort = f.sort || 'diff';
     filtered = [...filtered].sort((a, b) => {
       if (sort === 'contract') return a.contractNo.localeCompare(b.contractNo);
+      if (sort === 'diffInitial') return Math.abs(b.diffInitial) - Math.abs(a.diffInitial);
+      if (sort === 'diffMonthly') return Math.abs(b.diffMonthly) - Math.abs(a.diffMonthly);
       if (sort === 'crm') return b.crmTotal - a.crmTotal;
       if (sort === 'our') return b.ourTotal - a.ourTotal;
       // diff — farqi kattalar tepada, mos qatorlar oxirida
@@ -780,7 +864,7 @@ export class CrmSverkaService implements OnModuleInit {
 
   facets() {
     const s = this.snapshot;
-    if (!s) return { methods: [], ourMethods: [], crmStatuses: [], objects: [] };
+    if (!s) return { methods: [], crmTypes: [], ourMethods: [], crmStatuses: [], objects: [] };
     const cacheKey = `${s.builtAt.getTime()}:${s.crm.length}:${s.our.length}`;
     if (this.facetCache?.key === cacheKey) return this.facetCache.data;
 
@@ -796,6 +880,7 @@ export class CrmSverkaService implements OnModuleInit {
 
     const data = {
       methods: count(s.crm.map((p) => p.method)),
+      crmTypes: count(s.crm.map((p) => p.type)),
       ourMethods: count(s.our.map((p) => p.method)),
       crmStatuses: count(s.crm.map((p) => p.status)),
       objects: Array.from(objects, ([value, n]) => ({ value, count: n })).sort((a, b) => b.count - a.count),
@@ -827,10 +912,13 @@ export class CrmSverkaService implements OnModuleInit {
     const statusSet = f.crmStatuses?.length ? new Set(f.crmStatuses) : null;
     const objectSet = f.objects?.length ? new Set(f.objects) : null;
 
+    const typeSet = f.crmTypes?.length ? new Set(f.crmTypes) : null;
+
     const crmList = (s.crmByContract.get(cn) || []).filter(
       (p) =>
         (!methodSet || methodSet.has(p.method || '—')) &&
         (!statusSet || statusSet.has(p.status || '—')) &&
+        (!typeSet || typeSet.has(p.type || '—')) &&
         (!objectSet || objectSet.has(p.object || '—')) &&
         this.inRange(p.date, f.dateFrom, f.dateTo),
     );
@@ -933,6 +1021,11 @@ export class CrmSverkaService implements OnModuleInit {
         diff: (cents(ourTotal) - cents(crmTotal)) / 100,
         crmCount: crmList.length,
         ourCount: ourList.length,
+        // Boshlang'ich / oylik kesimi — taqsimot farqi shu yerdan ko'rinadi
+        crmInitial: crmList.reduce((a, p) => (p.kind === 'initial' ? a + p.amount : a), 0),
+        crmMonthly: crmList.reduce((a, p) => (p.kind === 'monthly' ? a + p.amount : a), 0),
+        ourInitial: ourList.reduce((a, p) => a + p.first, 0),
+        ourMonthly: ourList.reduce((a, p) => a + p.monthly, 0),
       },
       pairs: {
         matched,
@@ -998,6 +1091,12 @@ export class CrmSverkaService implements OnModuleInit {
       { header: 'ОплатыКв жами', key: 'ourTotal', width: 18 },
       { header: 'ОплатыКв та', key: 'ourCount', width: 12 },
       { header: 'Фарқ', key: 'diff', width: 18 },
+      { header: 'CRM 1-взнос', key: 'crmInitial', width: 18 },
+      { header: 'Биздa 1-взнос', key: 'ourInitial', width: 18 },
+      { header: 'Фарқ (1-взнос)', key: 'diffInitial', width: 18 },
+      { header: 'CRM ойлик', key: 'crmMonthly', width: 18 },
+      { header: 'Бизда ойлик', key: 'ourMonthly', width: 18 },
+      { header: 'Фарқ (ойлик)', key: 'diffMonthly', width: 18 },
       { header: 'Ҳолат', key: 'status', width: 16 },
       { header: 'Охирги сана', key: 'lastDate', width: 13 },
       { header: 'Тўлов усули', key: 'methods', width: 28 },
@@ -1038,7 +1137,13 @@ export class CrmSverkaService implements OnModuleInit {
         ourTotal: r.ourTotal,
         ourCount: r.ourCount,
         diff: r.diff,
-        status: label[r.status],
+        crmInitial: r.crmInitial,
+        ourInitial: r.ourInitial,
+        diffInitial: r.diffInitial,
+        crmMonthly: r.crmMonthly,
+        ourMonthly: r.ourMonthly,
+        diffMonthly: r.diffMonthly,
+        status: label[r.status] + (r.splitMismatch ? ' (тақсимот фарқли)' : ''),
         lastDate: r.lastDate || '',
         methods: r.methods.join(', '),
       });
@@ -1046,6 +1151,9 @@ export class CrmSverkaService implements OnModuleInit {
       row.getCell('crmTotal').numFmt = '#,##0.00';
       row.getCell('ourTotal').numFmt = '#,##0.00';
       row.getCell('diff').numFmt = '#,##0.00';
+      for (const k of ['crmInitial', 'ourInitial', 'diffInitial', 'crmMonthly', 'ourMonthly', 'diffMonthly']) {
+        row.getCell(k).numFmt = '#,##0.00';
+      }
       row.getCell('status').font = { size: 9, bold: true, color: { argb: color[r.status] } };
     }
 

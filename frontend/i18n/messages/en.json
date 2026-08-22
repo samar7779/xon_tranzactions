@@ -1539,7 +1539,14 @@
     "pageLimitInfo": "page size {n}",
     "fetchingPage": "requesting page {n}...",
     "lastPageMs": "last page {n}s",
-    "partialLive": "Partial result — still fetching ({pages} pages · {n} CRM payments). Numbers will keep growing."
+    "partialLive": "Partial result — still fetching ({pages} pages · {n} CRM payments). Numbers will keep growing.",
+    "kpiSplitMismatch": "Split mismatch",
+    "catInitial": "Initial (1st instalment)",
+    "catMonthly": "Monthly",
+    "filterCrmTypes": "CRM payment type",
+    "sortDiffInitial": "By initial difference",
+    "sortDiffMonthly": "By monthly difference",
+    "splitMismatchBadge": "total matches, split does not"
   },
   "common": {
     "save": "Save",
