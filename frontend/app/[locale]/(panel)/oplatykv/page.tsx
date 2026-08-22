@@ -1041,7 +1041,7 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
   const [id, setId] = useState('');
   const lookup = useMutation({
     mutationFn: (compositeId: string) =>
-      api.get<{ ok: boolean; error?: string; parsed?: any; candidates: CrmCandidate[]; scanned: number; pages: number }>(
+      api.get<{ ok: boolean; error?: string; parsed?: any; candidates: CrmCandidate[]; sameDate?: CrmCandidate[]; sample?: any; sampleKeys?: string[]; scanned: number; pages: number; aborted?: boolean }>(
         `/crm/find-by-composite?id=${encodeURIComponent(compositeId)}`,
         { timeout: 180_000 },
       ),
@@ -1096,7 +1096,7 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
             {res.parsed && (
               <div className="text-[11px] text-slate-500 dark:text-slate-400 rounded-lg bg-slate-50 dark:bg-slate-900 px-3 py-2 space-y-0.5">
                 <div>general_id: <b className="text-slate-700 dark:text-slate-300">{res.parsed.generalId}</b> · sana: <b className="text-slate-700 dark:text-slate-300">{res.parsed.isoDate || res.parsed.ddate}</b> · summa: <b className="text-slate-700 dark:text-slate-300">{formatMoney(res.parsed.amount)}</b></div>
-                <div>Skaner qilindi: {res.scanned} ta to'lov · {res.pages} sahifa</div>
+                <div>Skaner qilindi: <b className="text-slate-700 dark:text-slate-300">{res.scanned}</b> ta to'lov · {res.pages} sahifa{res.aborted ? ' · ⚠️ to‘liq skanerlanmadi (CRM javob bermadi)' : ''}</div>
               </div>
             )}
 
@@ -1108,9 +1108,35 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
 
             {!res.error && candidates.length === 0 && (
               <div className="text-[13px] text-amber-600 dark:text-amber-400 flex items-center gap-2 py-2">
-                <AlertTriangle className="h-4 w-4" /> CRM'dan mos to'lov topilmadi (bu shartnoma CRM'da yo'q yoki hali sinxron emas bo'lishi mumkin).
+                <AlertTriangle className="h-4 w-4" /> CRM'dan mos to'lov topilmadi (bu to'lov CRM'da yo'q, yoki hali sinxron emas, yoki external_id boshqacha).
               </div>
             )}
+
+            {/* Diagnostika: shu sanadagi CRM to'lovlari (mos kelmasa ham — nima borligini ko'rish) */}
+            {!res.error && candidates.length === 0 && (res.sameDate?.length ?? 0) > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-[11.5px] font-semibold text-slate-600 dark:text-slate-300">Shu sanadagi CRM to'lovlari ({res.sameDate!.length}):</div>
+                {res.sameDate!.map((c, i) => (
+                  <div key={i} className="text-[11px] rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 px-2.5 py-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span className="text-slate-500">shartnoma: <b className="text-slate-700 dark:text-slate-300">{c.contract || '—'}</b></span>
+                    <span className="text-slate-500">summa: <b className="text-slate-700 dark:text-slate-300">{formatMoney(c.amount)}</b></span>
+                    <span className="text-slate-500">obyekt: <b className="text-slate-700 dark:text-slate-300">{c.object || '—'}</b></span>
+                    <span className="text-slate-500 w-full truncate">external_id: <span className="font-mono">{c.externalId || '—'}</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Diagnostika: CRM to'lov qatorining maydonlari (external_id formati aniqlanadi) */}
+            {!res.error && candidates.length === 0 && res.sampleKeys?.length ? (
+              <details className="text-[11px] text-slate-500 dark:text-slate-400">
+                <summary className="cursor-pointer select-none">Diagnostika — CRM maydon nomlari</summary>
+                <div className="mt-1 font-mono break-words rounded-lg bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5">{res.sampleKeys.join(', ')}</div>
+                {res.sample?.external_id != null && (
+                  <div className="mt-1">namuna external_id: <span className="font-mono">{String(res.sample.external_id)}</span></div>
+                )}
+              </details>
+            ) : null}
 
             {candidates.map((c, i) => (
               <div key={i} className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-1.5 bg-white dark:bg-slate-950">

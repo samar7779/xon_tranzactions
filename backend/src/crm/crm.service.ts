@@ -156,16 +156,20 @@ export class CrmService {
     ok: boolean;
     error?: string;
     parsed?: any;
-    candidates: Array<{ contract: string; purpose: string; externalId: string; amount: number; date: string; object: string | null; method: string | null; status: string | null; matchedBy: string[] }>;
+    candidates: Array<any>;
+    sameDate: Array<any>;
+    sample?: any;
+    sampleKeys?: string[];
     scanned: number;
     pages: number;
+    aborted: boolean;
   }> {
     const parsed = this.parseComposite(compositeId);
-    if (!parsed) return { ok: false, error: "ID formati noto'g'ri", candidates: [], scanned: 0, pages: 0 };
+    if (!parsed) return { ok: false, error: "ID formati noto'g'ri", candidates: [], sameDate: [], scanned: 0, pages: 0, aborted: false };
     const { generalId, num, isoDate, amount } = parsed;
 
     const LIMIT = opts.limit || 5000;
-    const MAX_PAGES = opts.maxPages || 80;
+    const MAX_PAGES = opts.maxPages || 120;
     const ru = (v: any): string | null => {
       if (v == null) return null;
       if (typeof v === 'string') return v;
@@ -175,16 +179,38 @@ export class CrmService {
     // Summa: composite so'm yoki tiyin bo'lishi mumkin — ikkovini ham sinaymiz
     const amtMatch = (pamt: number) =>
       Math.abs(pamt - amount) < 1 || Math.abs(pamt * 100 - amount) < 1 || Math.abs(pamt - amount / 100) < 1;
+    const rowOut = (p: any, matchedBy: string[]) => ({
+      contract: String(p.contract || '').trim(),
+      purpose: p.purpose || '',
+      externalId: String(p.external_id ?? '').trim(),
+      amount: Number(p.amount || 0),
+      date: p.date_paid ? String(p.date_paid).slice(0, 10) : '',
+      object: ru(p.object_name),
+      method: ru(p.payment_method),
+      status: ru(p.status),
+      matchedBy,
+    });
 
     const candidates: Array<any> = [];
+    const sameDate: Array<any> = [];
+    let sample: any = undefined;
+    let sampleKeys: string[] | undefined = undefined;
     let scanned = 0;
     let page = 1;
+    let aborted = false;
+    let prevSig = '';
     while (page <= MAX_PAGES) {
       const r: any = await this.getPaymentHistory(page, LIMIT, 120_000);
-      if (!r?.ok) break;
+      if (!r?.ok) { aborted = true; break; } // sahifa olinmadi — to'xtaymiz (qisman natija)
       const raw: any = r.data?.data ?? r.data;
       const rows: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
       if (!rows.length) break;
+      // API page paramni e'tiborsiz qoldirsa — bir xil sahifa qaytadi: to'xtaymiz
+      const sig = `${rows.length}:${rows[0]?.external_id ?? ''}:${rows[rows.length - 1]?.external_id ?? ''}`;
+      if (sig === prevSig) break;
+      prevSig = sig;
+
+      if (!sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); }
       scanned += rows.length;
       for (const p of rows) {
         const ext = String(p.external_id ?? '').trim();
@@ -195,19 +221,9 @@ export class CrmService {
         if (generalId && generalId !== 'no_general_id' && (ext === generalId || ext.includes(generalId) || pur.includes(generalId))) matchedBy.push('general_id');
         if (num && num !== 'no_num' && (ext.includes(num) || pur.includes(num))) matchedBy.push('num');
         if (isoDate && pdate === isoDate && amtMatch(pamt)) matchedBy.push('sana+summa');
-        if (matchedBy.length) {
-          candidates.push({
-            contract: String(p.contract || '').trim(),
-            purpose: p.purpose || '',
-            externalId: ext,
-            amount: pamt,
-            date: pdate,
-            object: ru(p.object_name),
-            method: ru(p.payment_method),
-            status: ru(p.status),
-            matchedBy,
-          });
-        }
+        if (matchedBy.length) candidates.push(rowOut(p, matchedBy));
+        // Diagnostika: shu sanadagi to'lovlar (summa mos kelmasa ham) — CRM nima borligini ko'rish uchun
+        else if (isoDate && pdate === isoDate && sameDate.length < 12) sameDate.push(rowOut(p, ['shu sana']));
       }
       if (candidates.some((c) => c.matchedBy.includes('general_id'))) break; // kuchli match — to'xtaymiz
       const pg = raw?.pagination;
@@ -215,7 +231,7 @@ export class CrmService {
       if (totalPage && page >= totalPage) break;
       page++;
     }
-    return { ok: true, parsed, candidates, scanned, pages: page };
+    return { ok: true, parsed, candidates, sameDate, sample, sampleKeys, scanned, pages: page, aborted };
   }
 
   /**
