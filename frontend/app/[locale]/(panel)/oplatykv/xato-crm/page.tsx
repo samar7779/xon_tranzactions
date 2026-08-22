@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Loader2, Check, AlertTriangle, ArrowRight, ChevronDown,
-  ChevronLeft, ChevronRight, RefreshCw, Building2, Scissors,
+  ChevronLeft, ChevronRight, RefreshCw, Building2, Scissors, Search, Copy, X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatMoney, cn } from '@/lib/utils';
@@ -76,13 +76,19 @@ function ListView({ mode }: { mode: Mode }) {
   const [page, setPage] = useState(1);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [qInput, setQInput] = useState('');
+  const [q, setQ] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => { setQ(qInput.trim()); setPage(1); }, 400);
+    return () => clearTimeout(t);
+  }, [qInput]);
 
   const filter = mode === 'xato' ? 'xatoOnly=true' : 'unsplitOnly=true';
   const kvQ = useQuery({
-    queryKey: ['oplata-kv-xatocrm', mode, page],
+    queryKey: ['oplata-kv-xatocrm', mode, page, q],
     queryFn: () =>
       api.get<{ items: KvItem[]; total: number; pageCount: number }>(
-        `/oplata-kv?${filter}&page=${page}&perPage=${PER_PAGE}&sortBy=date&sortDir=desc`,
+        `/oplata-kv?${filter}&page=${page}&perPage=${PER_PAGE}&sortBy=date&sortDir=desc${q ? `&q=${encodeURIComponent(q)}` : ''}`,
       ),
   });
   const items = kvQ.data?.items || [];
@@ -122,6 +128,20 @@ function ListView({ mode }: { mode: Mode }) {
 
   return (
     <div className="space-y-3">
+      {/* Qidiruv (ix_id / shartnoma / mijoz / purpose bo'yicha) */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <input
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          placeholder="ix_id / shartnoma / mijoz / purpose bo'yicha qidirish…"
+          className="w-full pl-8 pr-8 py-2 text-[13px] rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-indigo-400 outline-none text-slate-700 dark:text-slate-200"
+        />
+        {qInput && (
+          <button onClick={() => setQInput('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X className="h-3.5 w-3.5" /></button>
+        )}
+      </div>
+
       {/* Statistika qatori */}
       <div className="flex flex-wrap items-center gap-2 text-[12px]">
         <span className={cn('px-2.5 py-1 rounded-lg font-semibold', mode === 'xato' ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400' : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400')}>
@@ -239,7 +259,8 @@ function ListView({ mode }: { mode: Mode }) {
                     <D k="Summa" v={`${formatMoney(amt)} UZS`} />
                     <D k="Obyekt" v={it.object || '—'} />
                     <D k="Mijoz" v={it.client || '—'} />
-                    <div className="text-slate-400 font-mono text-[10px] break-all">{it.sourceTxId || '(id yo\'q)'}</div>
+                    <IdRow label="ix_id" value={it.id} />
+                    {it.sourceTxId && <IdRow label="kompozit" value={it.sourceTxId} />}
                     {it.purpose && <div className="text-slate-500 dark:text-slate-400 rounded bg-slate-50 dark:bg-slate-900 px-2 py-1 mt-1">{it.purpose}</div>}
                   </div>
                   <div className="space-y-1">
@@ -281,6 +302,22 @@ function D({ k, v }: { k: string; v: string }) {
     <div className="flex gap-2">
       <span className="text-slate-400 dark:text-slate-500 min-w-[74px]">{k}:</span>
       <span className="text-slate-700 dark:text-slate-200 font-medium break-all">{v}</span>
+    </div>
+  );
+}
+
+function IdRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-slate-400 dark:text-slate-500 min-w-[74px] text-[10px] uppercase">{label}:</span>
+      <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px] break-all">{value}</span>
+      <button
+        onClick={() => { navigator.clipboard?.writeText(value); toast.success(`${label} nusxalandi`); }}
+        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0"
+        title="Nusxalash"
+      >
+        <Copy className="h-3 w-3" />
+      </button>
     </div>
   );
 }
