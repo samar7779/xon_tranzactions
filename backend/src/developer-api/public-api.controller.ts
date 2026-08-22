@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, Req, UseGuards, UseInterceptors, NotFoundException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { CrmService } from '../crm/crm.service';
 import { ApiKeyAuthGuard } from './guards/api-key-auth.guard';
 import { ApiLoggerInterceptor } from './interceptors/api-logger.interceptor';
 import { RequireApiScopes } from './decorators/api-scopes.decorator';
@@ -26,7 +27,28 @@ type CrmMeta = { orderId: string | null; branch: string | null; propertyType: st
 @UseInterceptors(ApiLoggerInterceptor)
 @Controller('v1')
 export class PublicApiController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly crm: CrmService) {}
+
+  // ─── DEBUG: shartnoma bo'yicha CRM xom javobi (turi/parking maydonini topish uchun) ───
+  @Get('_debug/crm-raw')
+  @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
+  @ApiOperation({ summary: 'DEBUG: CRM xom javobi (shartnoma turi/parking maydonini aniqlash). ?contract=' })
+  async debugCrmRaw(@Query('contract') contract?: string) {
+    if (!contract || !contract.trim()) return { ok: false, error: 'contract kerak' };
+    const showRes: any = await this.crm.show({ contract: contract.trim() });
+    const meta: any = await this.crm.getContractMeta(contract.trim());
+    // Shaxsiy ma'lumotni (passport/telefon/tug'ilgan sana) olib tashlaymiz
+    let detail = showRes?.detail ? JSON.parse(JSON.stringify(showRes.detail)) : null;
+    const scrub = (o: any) => {
+      if (!o || typeof o !== 'object') return;
+      for (const k of Object.keys(o)) {
+        if (/passport|pnfl|jshshir|inn|phone|birth|tug|address|manzil/i.test(k)) { delete o[k]; continue; }
+        if (typeof o[k] === 'object') scrub(o[k]);
+      }
+    };
+    scrub(detail);
+    return { ok: true, contract: contract.trim(), show: detail, index: meta };
+  }
 
   // ─── WHOAMI ──────────────────────────────────────────────────────
 
