@@ -105,6 +105,8 @@ interface Snapshot {
   our: OurPay[];
   crmByContract: Map<string, CrmPay[]>;
   ourByContract: Map<string, OurPay[]>;
+  /** true = CRM sahifalari hali tortilmoqda (natija to'liq emas, lekin ko'rsatiladi) */
+  partial: boolean;
 }
 
 export interface SverkaFilters {
@@ -152,6 +154,8 @@ type RunPhase = 'idle' | 'crm' | 'db' | 'compute' | 'done' | 'error';
 const DEFAULT_PAGE_LIMIT = 2000;
 /** Bitta sahifa uchun timeout — payment-history og'ir endpoint (60s ba'zan yetmaydi) */
 const DEFAULT_PAGE_TIMEOUT_MS = 180_000;
+/** Bir vaqtda nechta sahifa so'ralsin — ketma-ket tortish juda sekin edi */
+const DEFAULT_CONCURRENCY = 6;
 
 /** Run holati DB'da shu kalit ostida — server restartidan keyin ham bilinadi */
 const RUN_STATE_KEY = 'crmSverka.lastRun';
@@ -181,6 +185,7 @@ export class CrmSverkaService implements OnModuleInit {
   /** Sahifa hajmi va timeout — run boshlanganda beriladi (diagnostika uchun sozlanadi) */
   private runLimit = DEFAULT_PAGE_LIMIT;
   private runTimeoutMs = DEFAULT_PAGE_TIMEOUT_MS;
+  private runConcurrency = DEFAULT_CONCURRENCY;
 
   // String intern — 100k+ qatorda bir xil "usul/status/obyekt" matnlari
   // xotirada bitta nusxada saqlansin.
@@ -244,7 +249,7 @@ export class CrmSverkaService implements OnModuleInit {
    */
   start(
     actorName?: string | null,
-    opts: { limit?: number; timeoutMs?: number } = {},
+    opts: { limit?: number; timeoutMs?: number; concurrency?: number } = {},
   ): { ok: true; started: boolean; message: string } {
     if (this.running) {
       return { ok: true, started: false, message: 'Sverka allaqachon ishlamoqda' };
@@ -256,6 +261,7 @@ export class CrmSverkaService implements OnModuleInit {
     this.startedBy = actorName || null;
     this.runLimit = Math.min(Math.max(Number(opts.limit) || DEFAULT_PAGE_LIMIT, 100), 5000);
     this.runTimeoutMs = Math.min(Math.max(Number(opts.timeoutMs) || DEFAULT_PAGE_TIMEOUT_MS, 10_000), 300_000);
+    this.runConcurrency = Math.min(Math.max(Number(opts.concurrency) || DEFAULT_CONCURRENCY, 1), 12);
     this.progress = {
       phase: 'crm', pages: 0, crmFetched: 0, ourRows: 0, contracts: 0,
       fetchingPage: 1, lastPageMs: 0,
@@ -298,27 +304,20 @@ export class CrmSverkaService implements OnModuleInit {
     return { ok: true, started: true, message: 'CRM sverka boshlandi' };
   }
 
+  /**
+   * Tartib ATAYIN shunday: avval BIZNING baza (bir necha soniya), keyin CRM
+   * sahifalari PARALLEL tortiladi va har paket kelishi bilan snapshot'ga
+   * qo'shiladi. Shu sababli natija tortish TUGASHINI kutmaydi — birinchi
+   * sahifalardanoq ro'yxatda ko'rina boshlaydi (partial=true).
+   */
   private async runInBackground(): Promise<void> {
     const t0 = Date.now();
 
-    // ── 1) CRM: barcha to'lov tarixi (paginatsiya) ──
-    this.progress.phase = 'crm';
-    const { items: crm, pages } = await this.fetchAllCrmPayments();
-
-    // ── 2) Bizning ОплатыКв ──
+    // ── 1) Bizning ОплатыКв (tez — bitta DB so'rov) ──
     this.progress.phase = 'db';
     const our = await this.fetchOurPayments();
     this.progress.ourRows = our.length;
 
-    // ── 3) Shartnoma bo'yicha indeks ──
-    this.progress.phase = 'compute';
-    const crmByContract = new Map<string, CrmPay[]>();
-    for (const p of crm) {
-      if (!p.contract) continue;
-      const arr = crmByContract.get(p.contract);
-      if (arr) arr.push(p);
-      else crmByContract.set(p.contract, [p]);
-    }
     const ourByContract = new Map<string, OurPay[]>();
     for (const p of our) {
       if (!p.contract) continue;
@@ -327,114 +326,149 @@ export class CrmSverkaService implements OnModuleInit {
       else ourByContract.set(p.contract, [p]);
     }
 
-    const contracts = new Set([...crmByContract.keys(), ...ourByContract.keys()]).size;
-    this.progress.contracts = contracts;
-
-    this.snapshot = {
+    // ── 2) Snapshot DARROV tayyorlanadi (CRM hali bo'sh) — natija oqib keladi ──
+    const snap: Snapshot = {
       builtAt: new Date(),
-      durationMs: Date.now() - t0,
-      pages,
-      crm,
+      durationMs: 0,
+      pages: 0,
+      crm: [],
       our,
-      crmByContract,
+      crmByContract: new Map<string, CrmPay[]>(),
       ourByContract,
+      partial: true,
     };
+    this.snapshot = snap;
+    this.progress.contracts = ourByContract.size;
+
+    // ── 3) CRM sahifalari — parallel, kelgani sayin snapshot'ga qo'shiladi ──
+    this.progress.phase = 'crm';
+    await this.fetchAllCrmPayments(snap);
+
+    // ── 4) Yakun ──
+    snap.partial = false;
+    snap.builtAt = new Date();
+    snap.durationMs = Date.now() - t0;
+    snap.pages = this.progress.pages;
+    this.progress.contracts = new Set([...snap.crmByContract.keys(), ...snap.ourByContract.keys()]).size;
 
     this.progress.phase = 'done';
     this.running = false;
     this.finishedAt = new Date();
     this.log.log(
-      `CRM sverka tayyor: CRM=${crm.length} (${pages} sahifa) · ОплатыКв=${our.length} · ` +
-      `shartnoma=${contracts} · ${Math.round(this.snapshot.durationMs / 1000)}s`,
+      `CRM sverka tayyor: CRM=${snap.crm.length} (${snap.pages} sahifa) · ОплатыКв=${our.length} · ` +
+      `shartnoma=${this.progress.contracts} · ${Math.round(snap.durationMs / 1000)}s`,
     );
   }
 
-  /** CRM /payment-history/excel — barcha sahifalar */
-  private async fetchAllCrmPayments(): Promise<{ items: CrmPay[]; pages: number }> {
+  /**
+   * CRM /payment-history/excel — sahifalar PARALLEL tortiladi.
+   *
+   * Ilgari ketma-ket edi: sahifasiga ~2.3s × 100+ sahifa = daqiqalab kutish.
+   * Endi bir vaqtda CONCURRENCY ta sahifa so'raladi va har paket kelishi bilan
+   * snapshot'ga qo'shiladi — natija tortish tugashini kutmaydi.
+   */
+  private async fetchAllCrmPayments(snap: Snapshot): Promise<void> {
     const LIMIT = this.runLimit;
-    const MAX_PAGES = 1000; // himoya chegarasi (LIMIT kichikroq bo'lgani uchun ko'proq sahifa)
-    const MAX_RECORDS = 600_000; // xotira himoyasi — bundan oshsa CRM javobida nimadir noto'g'ri
-    const items: CrmPay[] = [];
-    let page = 1;
-    let prevSig = '';
+    const CONCURRENCY = this.runConcurrency;
+    const MAX_PAGES = 1000; // himoya chegarasi
+    const MAX_RECORDS = 600_000; // xotira himoyasi
+    const seenSigs = new Set<string>();
+    let nextPage = 1;
+    let stop = false;
+    let lastGoodPage = 0;
 
-    while (page <= MAX_PAGES) {
-      this.progress.fetchingPage = page;
-      const tPage = Date.now();
-      const r = await this.crm.getPaymentHistory(page, LIMIT, this.runTimeoutMs);
-      const ms = Date.now() - tPage;
-      this.progress.lastPageMs = ms;
+    while (!stop && nextPage <= MAX_PAGES) {
+      const pages: number[] = [];
+      for (let i = 0; i < CONCURRENCY && nextPage + i <= MAX_PAGES; i++) pages.push(nextPage + i);
+      this.progress.fetchingPage = pages[0];
 
-      if (!r.ok) {
-        const why = (r as any).error || `HTTP ${(r as any).status || '?'}`;
-        // Birinchi sahifa yiqilsa — umuman ma'lumot yo'q, xato beramiz.
-        // Keyingi sahifada yiqilsa — qisman ma'lumot bilan davom etamiz.
-        if (page === 1) {
-          this.log.error(`CRM sverka: 1-sahifa xato (${ms}ms, limit=${LIMIT}): ${String(why).slice(0, 300)}`);
-          throw new Error(`CRM javob bermadi (${Math.round(ms / 1000)}s, limit=${LIMIT}): ${String(why).slice(0, 200)}`);
-        }
-        this.lastError = `Sahifa ${page}: ${String(why).slice(0, 150)} — qisman ma'lumot`;
-        this.log.warn(`CRM sverka: ${this.lastError}`);
-        break;
-      }
-
-      const raw: any = (r as any).data?.data ?? (r as any).data;
-      const pageItems: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
-      this.log.log(
-        `CRM sverka: ${page}-sahifa ${pageItems.length} ta yozuv (${Math.round(ms / 1000)}s, limit=${LIMIT}, ` +
-        `total=${raw?.total ?? '?'}, last_page=${raw?.last_page ?? '?'})`,
+      const tBatch = Date.now();
+      // Promise.all tartibni saqlaydi — natijalar sahifa tartibida qayta ishlanadi
+      const results = await Promise.all(
+        pages.map(async (page) => ({ page, r: await this.crm.getPaymentHistory(page, LIMIT, this.runTimeoutMs) })),
       );
-      if (pageItems.length === 0) break;
+      this.progress.lastPageMs = Math.round((Date.now() - tBatch) / pages.length);
 
-      // HIMOYA: CRM `page` parametrini e'tiborsiz qoldirsa — har safar AYNAN
-      // o'sha sahifa qaytadi va sikl cheksiz aylanadi (xotira to'lib ketadi).
-      // Sahifa "imzosi" (birinchi+oxirgi external_id) takrorlansa — to'xtaymiz.
-      const sig = `${pageItems[0]?.external_id ?? ''}|${pageItems[pageItems.length - 1]?.external_id ?? ''}`;
-      if (sig !== '|' && sig === prevSig) {
-        this.lastError = `CRM paginatsiyani qo'llamadi (${page}-sahifa avvalgisi bilan bir xil) — ma'lumot to'liq emas`;
-        this.log.warn(`CRM sverka: ${this.lastError}`);
-        break;
+      for (const { page, r } of results) {
+        if (!r.ok) {
+          const why = (r as any).error || `HTTP ${(r as any).status || '?'}`;
+          if (page === 1) {
+            this.log.error(`CRM sverka: 1-sahifa xato (limit=${LIMIT}): ${String(why).slice(0, 300)}`);
+            throw new Error(`CRM javob bermadi (limit=${LIMIT}): ${String(why).slice(0, 200)}`);
+          }
+          this.lastError = `Sahifa ${page}: ${String(why).slice(0, 150)} — qisman ma'lumot`;
+          this.log.warn(`CRM sverka: ${this.lastError}`);
+          stop = true;
+          break;
+        }
+
+        const raw: any = (r as any).data?.data ?? (r as any).data;
+        const pageItems: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+        if (pageItems.length === 0) { stop = true; break; }
+
+        // HIMOYA: CRM `page` ni e'tiborsiz qoldirsa — bir xil sahifa qayta-qayta
+        // keladi va xotira to'lib ketadi. Sahifa "imzosi" takrorlansa — to'xtaymiz.
+        const sig = `${pageItems[0]?.external_id ?? ''}|${pageItems[pageItems.length - 1]?.external_id ?? ''}`;
+        if (sig !== '|' && seenSigs.has(sig)) {
+          this.lastError = `CRM paginatsiyani qo'llamadi (${page}-sahifa takrorlandi) — ma'lumot to'liq emas`;
+          this.log.warn(`CRM sverka: ${this.lastError}`);
+          stop = true;
+          break;
+        }
+        seenSigs.add(sig);
+
+        // Snapshot'ga DARROV qo'shamiz — foydalanuvchi kutmasdan ko'ra boshlaydi
+        for (const p of pageItems) {
+          const contract = normContract(p.contract);
+          if (!contract) continue;
+          const item: CrmPay = {
+            contract,
+            amount: toNum(p.amount),
+            date: dayOf(p.date_paid),
+            method: this.intern(getRu(p.payment_method)),
+            type: this.intern(getRu(p.type)),
+            category: this.intern(getRu(p.category)),
+            status: this.intern(getRu(p.status)),
+            object: this.intern(p.object_name),
+            client: this.intern(p.full_name),
+            externalId: String(p.external_id ?? '').trim(),
+            problematic: !!p.is_problematic,
+          };
+          snap.crm.push(item);
+          const arr = snap.crmByContract.get(contract);
+          if (arr) arr.push(item);
+          else snap.crmByContract.set(contract, [item]);
+        }
+
+        lastGoodPage = Math.max(lastGoodPage, page);
+        this.progress.pages = lastGoodPage;
+        this.progress.crmFetched = snap.crm.length;
+        snap.pages = lastGoodPage;
+
+        if (snap.crm.length >= MAX_RECORDS) {
+          this.lastError = `Yozuvlar soni ${MAX_RECORDS} dan oshdi — tortish to'xtatildi (ma'lumot to'liq emas)`;
+          this.log.warn(`CRM sverka: ${this.lastError}`);
+          stop = true;
+          break;
+        }
+        // So'ralgandan kam keldi — bu oxirgi sahifa
+        if (pageItems.length < LIMIT) { stop = true; break; }
       }
-      prevSig = sig;
 
-      for (const p of pageItems) {
-        const contract = normContract(p.contract);
-        if (!contract) continue;
-        items.push({
-          contract,
-          amount: toNum(p.amount),
-          date: dayOf(p.date_paid),
-          method: this.intern(getRu(p.payment_method)),
-          type: this.intern(getRu(p.type)),
-          category: this.intern(getRu(p.category)),
-          status: this.intern(getRu(p.status)),
-          object: this.intern(p.object_name),
-          client: this.intern(p.full_name),
-          externalId: String(p.external_id ?? '').trim(),
-          problematic: !!p.is_problematic,
-        });
-      }
+      // Har paketdan keyin shartnomalar sonini yangilaymiz (progress jonli ko'rinsin)
+      this.progress.contracts = new Set([...snap.crmByContract.keys(), ...snap.ourByContract.keys()]).size;
+      this.log.log(
+        `CRM sverka: ${pages[0]}-${pages[pages.length - 1]} sahifalar · jami ${snap.crm.length} yozuv · ` +
+        `${Math.round((Date.now() - tBatch) / 1000)}s`,
+      );
 
-      this.progress.pages = page;
-      this.progress.crmFetched = items.length;
-
-      if (items.length >= MAX_RECORDS) {
-        this.lastError = `Yozuvlar soni ${MAX_RECORDS} dan oshdi — tortish to'xtatildi (ma'lumot to'liq emas)`;
-        this.log.warn(`CRM sverka: ${this.lastError}`);
-        break;
-      }
-
-      if (pageItems.length < LIMIT) break;
-      page++;
+      nextPage += CONCURRENCY;
     }
 
-    // Chegaraga yetdik — ma'lumot to'liq emas, jim qolmaymiz (sverka noto'g'ri chiqadi)
-    if (page > MAX_PAGES) {
+    if (nextPage > MAX_PAGES && !stop) {
       this.lastError = `CRM ${MAX_PAGES} sahifadan oshdi — ma'lumot to'liq emas`;
       this.log.warn(`CRM sverka: ${this.lastError}`);
     }
-
-    return { items, pages: this.progress.pages };
   }
 
   /** ОплатыКв — barcha qatorlar (ixcham select) */
@@ -535,6 +569,7 @@ export class CrmSverkaService implements OnModuleInit {
         : 0,
       pageLimit: this.runLimit,
       pageTimeoutMs: this.runTimeoutMs,
+      concurrency: this.runConcurrency,
       snapshot: s
         ? {
             builtAt: s.builtAt.toISOString(),
@@ -544,6 +579,7 @@ export class CrmSverkaService implements OnModuleInit {
             crmCount: s.crm.length,
             ourCount: s.our.length,
             contracts: new Set([...s.crmByContract.keys(), ...s.ourByContract.keys()]).size,
+            partial: s.partial,
           }
         : null,
     };
@@ -727,6 +763,7 @@ export class CrmSverkaService implements OnModuleInit {
         ourCount: snapshot.our.length,
         pages: snapshot.pages,
         partialError: this.lastError,
+        partial: snapshot.partial,
       },
       summary,
       filtered: { total, page, perPage, pageCount: Math.max(1, Math.ceil(total / perPage)) },
@@ -739,12 +776,13 @@ export class CrmSverkaService implements OnModuleInit {
    * Filtr paneli uchun qiymatlar (usul / status / obyekt) — sanoq bilan.
    * Snapshot bo'yicha keshlanadi (har so'rovda 100k+ qatorni qayta sanamaslik uchun).
    */
-  private facetCache: { key: number; data: any } | null = null;
+  private facetCache: { key: string; data: any } | null = null;
 
   facets() {
     const s = this.snapshot;
     if (!s) return { methods: [], ourMethods: [], crmStatuses: [], objects: [] };
-    if (this.facetCache?.key === s.builtAt.getTime()) return this.facetCache.data;
+    const cacheKey = `${s.builtAt.getTime()}:${s.crm.length}:${s.our.length}`;
+    if (this.facetCache?.key === cacheKey) return this.facetCache.data;
 
     const count = (arr: string[]) => {
       const m = new Map<string, number>();
@@ -762,7 +800,7 @@ export class CrmSverkaService implements OnModuleInit {
       crmStatuses: count(s.crm.map((p) => p.status)),
       objects: Array.from(objects, ([value, n]) => ({ value, count: n })).sort((a, b) => b.count - a.count),
     };
-    this.facetCache = { key: s.builtAt.getTime(), data };
+    this.facetCache = { key: cacheKey, data };
     return data;
   }
 

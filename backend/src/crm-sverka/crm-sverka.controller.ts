@@ -45,13 +45,14 @@ export class CrmSverkaController {
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_CRM_RUN)
   @ApiOperation({
     summary: "CRM'dan jonli tortib sverka qilish (fonda ishlaydi — status bilan kuzatiladi)",
-    description: 'limit — sahifa hajmi (default 2000), timeoutMs — bitta sahifa timeouti (default 180000)',
+    description: 'limit — sahifa hajmi (default 2000), timeoutMs — sahifa timeouti (180000), concurrency — bir vaqtda nechta sahifa (default 6)',
   })
   run(@Query() q: any, @CurrentUser() user?: AuthUser) {
     const name = [user?.fullName, user?.email].filter(Boolean).join(' · ') || null;
     return this.svc.start(name, {
       limit: q.limit ? Number(q.limit) : undefined,
       timeoutMs: q.timeoutMs ? Number(q.timeoutMs) : undefined,
+      concurrency: q.concurrency ? Number(q.concurrency) : undefined,
     });
   }
 

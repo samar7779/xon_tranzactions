@@ -1538,7 +1538,8 @@
     "elapsed": "Ketgan vaqt: {t}",
     "pageLimitInfo": "sahifa hajmi {n}",
     "fetchingPage": "{n}-sahifa so’ralmoqda...",
-    "lastPageMs": "oxirgi sahifa {n}s"
+    "lastPageMs": "oxirgi sahifa {n}s",
+    "partialLive": "Natija to'liq emas — tortish davom etmoqda ({pages} sahifa · {n} CRM to'lovi). Raqamlar o'sib boradi."
   },
   "common": {
     "save": "Saqlash",

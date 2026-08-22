@@ -1538,7 +1538,8 @@
     "elapsed": "Elapsed: {t}",
     "pageLimitInfo": "page size {n}",
     "fetchingPage": "requesting page {n}...",
-    "lastPageMs": "last page {n}s"
+    "lastPageMs": "last page {n}s",
+    "partialLive": "Partial result — still fetching ({pages} pages · {n} CRM payments). Numbers will keep growing."
   },
   "common": {
     "save": "Save",

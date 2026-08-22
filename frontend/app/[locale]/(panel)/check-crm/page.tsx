@@ -54,6 +54,7 @@ interface ResultResponse {
     ourCount: number;
     pages: number;
     partialError: string | null;
+    partial?: boolean;
   };
   summary?: {
     total: number; ok: number; mismatch: number; crmOnly: number; ourOnly: number;
@@ -82,6 +83,7 @@ interface StatusResponse {
   snapshot: {
     builtAt: string; ageSeconds: number; durationMs: number;
     pages: number; crmCount: number; ourCount: number; contracts: number;
+    partial?: boolean;
   } | null;
 }
 
@@ -151,7 +153,10 @@ export default function CheckCrmPage() {
     queryKey: ['crm-sverka-result', query, statusQuery.data?.snapshot?.builtAt],
     queryFn: () => api.get(`/crm-sverka/result?${query}`, { timeout: 120_000 }),
     enabled: hasSnapshot,
-    staleTime: 60_000,
+    // Tortish davomida natija OQIB keladi — har 3 soniyada yangilanadi.
+    // Tugagach oddiy keshga o'tadi (ortiqcha so'rov yo'q).
+    refetchInterval: running ? 3000 : false,
+    staleTime: running ? 0 : 60_000,
     retry: false,
   });
 
@@ -406,6 +411,13 @@ export default function CheckCrmPage() {
                 <SumCard label={t('sumCrm')} value={summary.crmSum} icon={<Cloud className="h-3.5 w-3.5" />} tone="sky" sub={meta ? t('crmRecords', { n: meta.crmCount }) : undefined} />
                 <SumCard label={t('sumOur')} value={summary.ourSum} icon={<Database className="h-3.5 w-3.5" />} tone="violet" sub={meta ? t('ourRecords', { n: meta.ourCount }) : undefined} />
                 <SumCard label={t('sumDiff')} value={summary.diffSum} icon={<ArrowRightLeft className="h-3.5 w-3.5" />} tone={summary.diffSum > 0 ? 'amber' : 'emerald'} sub={t('diffHint')} />
+              </div>
+            )}
+
+            {meta?.partial && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-50 dark:bg-sky-950/30 ring-1 ring-sky-200 dark:ring-sky-900 text-[11.5px] text-sky-800 dark:text-sky-300">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                {t('partialLive', { pages: meta.pages, n: meta.crmCount.toLocaleString('ru-RU') })}
               </div>
             )}
 
