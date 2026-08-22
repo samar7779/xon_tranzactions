@@ -672,6 +672,46 @@ export class OplataKvService {
     return { ok: true, item: { firstInstallment: first, monthlyAmount: monthly, paymentCategory: category } };
   }
 
+  /**
+   * BULK: barcha XATO (yoki Split yo'q) qatorlarni CRM'dan topib, topilganlarga
+   * shartnoma + CRM aytgan ustun (boshlang'ich/oylik) qo'yadi — HAMMASI serverda
+   * (client round-trip yo'q → tez). Har sana CRM'dan bir marta so'raladi.
+   */
+  async bulkCrmFix(
+    mode: 'xato' | 'unsplit', actor?: Actor,
+  ): Promise<{ ok: boolean; total: number; matched: number; fixed: number }> {
+    const where = mode === 'xato' ? await this.buildXatoFilter() : await this.buildUnsplitFilter();
+    const rows = await this.prisma.oplataKv.findMany({
+      where,
+      select: { id: true, sourceTxId: true, purpose: true },
+      take: 8000,
+      orderBy: { date: 'desc' },
+    });
+    if (!rows.length) return { ok: true, total: 0, matched: 0, fixed: 0 };
+
+    const items = rows.map((r) => ({ id: r.sourceTxId || r.id, purpose: r.purpose || '' }));
+    const matches = await this.crmService.matchComposites(items);
+    const matchMap = new Map(matches.map((m) => [m.id, m.crm]));
+
+    let matched = 0;
+    let fixed = 0;
+    for (const r of rows) {
+      const crm: any = matchMap.get(r.sourceTxId || r.id);
+      if (!crm) continue;
+      matched++;
+      try {
+        if (mode === 'xato' && crm.contract) {
+          const a = await this.botAssignContract(r.id, crm.contract, actor?.name || 'web');
+          if (!a.ok) continue;
+        }
+        await this.applyCrmSplit(r.id, { initialAmount: crm.initialAmount, monthlyAmount: crm.monthlyAmount }, actor);
+        fixed++;
+      } catch { /* keyingisi */ }
+    }
+    this.log.log(`bulkCrmFix(${mode}): total=${rows.length} matched=${matched} fixed=${fixed}`);
+    return { ok: true, total: rows.length, matched, fixed };
+  }
+
   async getXatoContractNumbers(): Promise<string[]> {
     const xatoFilter = await this.buildXatoFilter();
     const rows = await this.prisma.oplataKv.findMany({

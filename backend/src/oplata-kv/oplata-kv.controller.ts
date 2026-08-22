@@ -710,6 +710,16 @@ export class OplataKvController {
     return this.svc.assignFromCrm(id, body?.contractNo, actorFrom(user), split);
   }
 
+  @Post('bulk-crm-fix')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_EDIT)
+  @ApiOperation({ summary: "BULK: barcha XATO/Split-yo'q to'lovlarni CRM'dan topib shartnoma + ustun (bosh/oylik) qo'yadi (serverda, tez)" })
+  bulkCrmFix(
+    @Body() body: { mode?: 'xato' | 'unsplit' },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.bulkCrmFix(body?.mode === 'xato' ? 'xato' : 'unsplit', actorFrom(user));
+  }
+
   @Delete(':id')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: 'Qatorni o\'chirish (history saqlanadi)' })

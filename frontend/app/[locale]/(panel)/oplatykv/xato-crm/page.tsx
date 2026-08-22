@@ -149,46 +149,14 @@ function ListView({ mode }: { mode: Mode }) {
   const runBulk = async () => {
     if (bulk.running) return;
     const confirmMsg = mode === 'xato'
-      ? "Barcha XATO to'lovlar CRM'dan qidiriladi va topilganlariga shartnoma + ustun (CRM bo'yicha) qo'yiladi. Davom etilsinmi?"
-      : "Barcha splitlanmagan to'lovlar CRM'dan qidiriladi va topilganlari CRM aytgan ustunga (boshlang'ich/oylik) joylanadi. Davom etilsinmi?";
+      ? "Barcha XATO to'lovlar CRM'dan topilib, topilganlariga shartnoma + ustun (CRM bo'yicha) qo'yiladi. Davom etilsinmi?"
+      : "Barcha splitlanmagan to'lovlar CRM'dan topilib, CRM aytgan ustunga (boshlang'ich/oylik) joylanadi. Davom etilsinmi?";
     if (!window.confirm(confirmMsg)) return;
-
+    // HAMMASI serverda — bitta so'rov (tez, client round-trip yo'q).
     setBulk({ running: true, done: 0, total: 0 });
     try {
-      // 1) BARCHA sahifalarni olamiz
-      const all: KvItem[] = [];
-      let p = 1;
-      for (;;) {
-        const r = await api.get<{ items: KvItem[]; pageCount: number }>(`/oplata-kv?${filter}&page=${p}&perPage=200&sortBy=date&sortDir=desc${q ? `&q=${encodeURIComponent(q)}` : ''}`);
-        all.push(...(r.items || []));
-        if (!r.items?.length || p >= (r.pageCount || 1)) break;
-        p++;
-      }
-      // 2) CRM match (300 talik chunk)
-      const map = new Map<string, CrmMatch | null>();
-      for (let i = 0; i < all.length; i += 300) {
-        const chunk = all.slice(i, i + 300);
-        const res = await api.post<Array<{ id: string; crm: CrmMatch | null }>>('/crm/match-composites', { items: chunk.map((it) => ({ id: compositeOf(it), purpose: it.purpose || '' })) }, { timeout: 180_000 });
-        for (const r of res) map.set(r.id, r.crm);
-        setBulk({ running: true, done: Math.min(i + 300, all.length), total: all.length });
-      }
-      // 3) Topilganlarga CRM split (initial/monthly) qo'yamiz + XATO'da shartnoma biriktiramiz
-      const found = all.filter((it) => map.get(compositeOf(it)));
-      setBulk({ running: true, done: 0, total: found.length });
-      let ok = 0;
-      for (const it of found) {
-        const crm = map.get(compositeOf(it))!;
-        try {
-          await api.post(`/oplata-kv/${it.id}/assign-from-crm`, {
-            contractNo: mode === 'xato' ? crm.contract : undefined,
-            initialAmount: crm.initialAmount,
-            monthlyAmount: crm.monthlyAmount,
-          }, { timeout: 120_000 });
-          ok++;
-        } catch { /* skip */ }
-        setBulk((b) => ({ ...b, done: b.done + 1 }));
-      }
-      toast.success(`${ok}/${found.length} to'g'irlandi (jami ${all.length} tekshirildi)`);
+      const r: any = await api.post('/oplata-kv/bulk-crm-fix', { mode }, { timeout: 900_000 });
+      toast.success(`${r?.fixed ?? 0} ta to'g'irlandi (${r?.matched ?? 0} topildi, jami ${r?.total ?? 0} tekshirildi)`);
     } catch (e: any) {
       toast.error(e?.message || 'Xato');
     }

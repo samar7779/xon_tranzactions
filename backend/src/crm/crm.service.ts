@@ -391,7 +391,7 @@ export class CrmService {
           .filter((x) => x.id)
           .map((x) => [x.id, x] as const),
       ).values(),
-    ).slice(0, 300);
+    ).slice(0, 8000); // bulk uchun katta partiya (sana bo'yicha guruhlaydi — har sana bir marta so'raladi)
 
     const resultMap = new Map<string, any | null>();
 
