@@ -78,6 +78,8 @@ function ListView({ mode }: { mode: Mode }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [qInput, setQInput] = useState('');
   const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'found' | 'notfound'>('all');
+  const [bulk, setBulk] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 });
   useEffect(() => {
     const t = setTimeout(() => { setQ(qInput.trim()); setPage(1); }, 400);
     return () => clearTimeout(t);
@@ -126,7 +128,35 @@ function ListView({ mode }: { mode: Mode }) {
     onSettled: () => setConfirmId(null),
   });
 
-  const matchedCount = items.filter((it) => matchMap.get(compositeOf(it))).length;
+  const foundItems = useMemo(() => items.filter((it) => matchMap.get(compositeOf(it))), [items, matchMap]);
+  const matchedCount = foundItems.length;
+  const displayItems = useMemo(() => {
+    if (statusFilter === 'all') return items;
+    return items.filter((it) => {
+      const has = !!matchMap.get(compositeOf(it));
+      return statusFilter === 'found' ? has : !has;
+    });
+  }, [items, matchMap, statusFilter]);
+
+  const runBulk = async () => {
+    const targets = foundItems;
+    if (!targets.length || bulk.running) return;
+    setBulk({ running: true, done: 0, total: targets.length });
+    let ok = 0;
+    for (const it of targets) {
+      const crm = matchMap.get(compositeOf(it));
+      try {
+        if (mode === 'xato') await api.post(`/oplata-kv/${it.id}/assign-from-crm`, { contractNo: crm!.contract }, { timeout: 120_000 });
+        else await api.post(`/oplata-kv/${it.id}/split`, {}, { timeout: 120_000 });
+        ok++;
+      } catch { /* skip — keyingisi */ }
+      setBulk((b) => ({ ...b, done: b.done + 1 }));
+    }
+    setBulk({ running: false, done: 0, total: 0 });
+    toast.success(`${ok}/${targets.length} to'g'irlandi`);
+    qc.invalidateQueries({ queryKey: ['oplata-kv-xatocrm'] });
+    qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+  };
 
   return (
     <div className="space-y-3">
@@ -161,6 +191,30 @@ function ListView({ mode }: { mode: Mode }) {
         >
           <RefreshCw className={cn('h-3.5 w-3.5', (kvQ.isFetching || matchQ.isFetching) && 'animate-spin')} />
         </button>
+
+        {/* Status filtri */}
+        <div className="inline-flex rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+          {([['all', 'Hammasi'], ['found', 'Topildi'], ['notfound', 'Topilmadi']] as const).map(([v, lbl]) => (
+            <button
+              key={v}
+              onClick={() => setStatusFilter(v)}
+              className={cn('px-2.5 py-1 text-[11.5px] font-medium transition-colors', statusFilter === v ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-950 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+
+        {/* Bulk — barchasini (topilganlar) to'g'irlash */}
+        {matchedCount > 0 && (
+          <button
+            onClick={runBulk}
+            disabled={bulk.running}
+            className="ml-auto px-3 py-1.5 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-[12px] font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-70"
+          >
+            {bulk.running ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {bulk.done}/{bulk.total}…</> : <><Check className="h-3.5 w-3.5" /> Barchasini to'g'irlash ({matchedCount})</>}
+          </button>
+        )}
       </div>
 
       {kvQ.isLoading && (
@@ -177,15 +231,15 @@ function ListView({ mode }: { mode: Mode }) {
       )}
 
       <div className="space-y-2">
-        {items.map((it) => {
+        {displayItems.map((it) => {
           const crm = matchMap.get(compositeOf(it)) || null;
           const matching = matchQ.isFetching && !matchQ.data;
           const confirming = confirmId === it.id;
           const busy = fix.isPending && fix.variables?.id === it.id;
           const open = openId === it.id;
           const amt = Number(it.paymentAmount || 0);
-          // Fix mumkinmi: xato → CRM mos bo'lsa; unsplit → doim (shartnoma bor)
-          const canFix = mode === 'xato' ? !!crm : true;
+          // Fix faqat CRM'da TOPILGANDA — topilmaganlarni bu yerdan to'g'irlamaymiz.
+          const canFix = !!crm;
           const fixLabel = mode === 'xato' ? 'Qo\'shish' : 'To\'g\'irlash';
 
           return (
