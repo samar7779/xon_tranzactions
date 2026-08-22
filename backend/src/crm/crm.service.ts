@@ -125,6 +125,100 @@ export class CrmService {
   }
 
   /**
+   * Kompozit bank ID'ni ajratadi: [IP_]general_id_num_ddate_acc_ct_acc_dt_amount_sign
+   * (ddate dd.MM.yyyy). null — format noto'g'ri.
+   */
+  private parseComposite(compositeId: string): {
+    generalId: string; num: string; ddate: string; isoDate: string;
+    accCt: string; accDt: string; amount: number; sign: string;
+  } | null {
+    const s = (compositeId || '').trim();
+    if (!s) return null;
+    const body = s.startsWith('IP_') ? s.slice(3) : s;
+    const parts = body.split('_');
+    if (parts.length < 7) return null;
+    const [generalId, num, ddate, accCt, accDt, amountRaw, sign] = parts;
+    let isoDate = '';
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(ddate || '');
+    if (m) isoDate = `${m[3]}-${m[2]}-${m[1]}`;
+    return { generalId, num, ddate, isoDate, accCt, accDt, amount: Number(amountRaw) || 0, sign };
+  }
+
+  /**
+   * XATO to'lovni CRM'dan topish — kompozit bank ID orqali.
+   * CRM'da bu ID bo'yicha to'g'ridan-to'g'ri qidirib bo'lmaydi (u bank ID'si),
+   * shuning uchun payment-history sahifama-sahifa tortilib, ID ichidagi ma'lumot
+   * (general_id / num / sana+summa) bo'yicha mos to'lov(lar) topiladi. Har nomzod
+   * uchun contract + purpose + external_id qaytadi; `matchedBy` qaysi maydon mos
+   * kelganini ko'rsatadi (external_id === general_id bo'lsa — aniq ID-match).
+   */
+  async findByComposite(compositeId: string, opts: { maxPages?: number; limit?: number } = {}): Promise<{
+    ok: boolean;
+    error?: string;
+    parsed?: any;
+    candidates: Array<{ contract: string; purpose: string; externalId: string; amount: number; date: string; object: string | null; method: string | null; status: string | null; matchedBy: string[] }>;
+    scanned: number;
+    pages: number;
+  }> {
+    const parsed = this.parseComposite(compositeId);
+    if (!parsed) return { ok: false, error: "ID formati noto'g'ri", candidates: [], scanned: 0, pages: 0 };
+    const { generalId, num, isoDate, amount } = parsed;
+
+    const LIMIT = opts.limit || 5000;
+    const MAX_PAGES = opts.maxPages || 80;
+    const ru = (v: any): string | null => {
+      if (v == null) return null;
+      if (typeof v === 'string') return v;
+      if (typeof v === 'object') return v.ru || v.uz || v.en || null;
+      return String(v);
+    };
+    // Summa: composite so'm yoki tiyin bo'lishi mumkin — ikkovini ham sinaymiz
+    const amtMatch = (pamt: number) =>
+      Math.abs(pamt - amount) < 1 || Math.abs(pamt * 100 - amount) < 1 || Math.abs(pamt - amount / 100) < 1;
+
+    const candidates: Array<any> = [];
+    let scanned = 0;
+    let page = 1;
+    while (page <= MAX_PAGES) {
+      const r: any = await this.getPaymentHistory(page, LIMIT, 120_000);
+      if (!r?.ok) break;
+      const raw: any = r.data?.data ?? r.data;
+      const rows: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+      if (!rows.length) break;
+      scanned += rows.length;
+      for (const p of rows) {
+        const ext = String(p.external_id ?? '').trim();
+        const pur = String(p.purpose ?? '');
+        const pdate = p.date_paid ? String(p.date_paid).slice(0, 10) : '';
+        const pamt = Number(p.amount || 0);
+        const matchedBy: string[] = [];
+        if (generalId && generalId !== 'no_general_id' && (ext === generalId || ext.includes(generalId) || pur.includes(generalId))) matchedBy.push('general_id');
+        if (num && num !== 'no_num' && (ext.includes(num) || pur.includes(num))) matchedBy.push('num');
+        if (isoDate && pdate === isoDate && amtMatch(pamt)) matchedBy.push('sana+summa');
+        if (matchedBy.length) {
+          candidates.push({
+            contract: String(p.contract || '').trim(),
+            purpose: p.purpose || '',
+            externalId: ext,
+            amount: pamt,
+            date: pdate,
+            object: ru(p.object_name),
+            method: ru(p.payment_method),
+            status: ru(p.status),
+            matchedBy,
+          });
+        }
+      }
+      if (candidates.some((c) => c.matchedBy.includes('general_id'))) break; // kuchli match — to'xtaymiz
+      const pg = raw?.pagination;
+      const totalPage = Number(pg?.totalPage || pg?.total_page || 0);
+      if (totalPage && page >= totalPage) break;
+      page++;
+    }
+    return { ok: true, parsed, candidates, scanned, pages: page };
+  }
+
+  /**
    * Chek sahifasi uchun — shartnoma bo'yicha menejer / sotuv ofisi / obyekt.
    * Bu maydonlar FAQAT /order/index javobida keladi (created_by, branch),
    * /order/show da yo'q. Shu sabab bu yerda /index ishlatiladi.

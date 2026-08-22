@@ -38,4 +38,16 @@ export class CrmController {
   paymentHistory(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.svc.getPaymentHistory(page ? Number(page) : 1, limit ? Number(limit) : 5000);
   }
+
+  @Get('find-by-composite')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: "Kompozit bank ID orqali CRM to'lovini topish (XATO to'lov shartnomasini aniqlash)",
+    description:
+      "?id=general_id_num_ddate_acc_ct_acc_dt_amount_sign — CRM payment-history'dan mos to'lovni topib " +
+      "contract + purpose + external_id qaytaradi. matchedBy: general_id / num / sana+summa.",
+  })
+  findByComposite(@Query('id') id: string) {
+    return this.svc.findByComposite(id);
+  }
 }

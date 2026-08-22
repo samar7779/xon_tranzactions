@@ -240,6 +240,7 @@ export default function OplataKvPage() {
   const [historyRow, setHistoryRow] = useState<OplataKvItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [aktSverkaOpen, setAktSverkaOpen] = useState(false);
+  const [crmLookupOpen, setCrmLookupOpen] = useState(false);
 
   // Per-column filter (Google Sheets style)
   const [columnFilterMode, setColumnFilterMode] = useState(false);
@@ -711,6 +712,13 @@ export default function OplataKvPage() {
                         <div className="text-[10.5px] text-slate-500 dark:text-slate-400">{t('browserPrintDialog')}</div>
                       </div>
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCrmLookupOpen(true)} className="gap-2 cursor-pointer">
+                      <Search className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      <div className="flex-1">
+                        <div className="text-[13px] font-semibold">CRM'dan qidir (ID)</div>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">XATO to'lov shartnomasini topish</div>
+                      </div>
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -1006,7 +1014,153 @@ export default function OplataKvPage() {
         copiedId={copiedId}
         onRowClick={(it) => setDetailRow(it)}
       />
+
+      {/* CRM'dan kompozit ID bo'yicha qidiruv (XATO to'lov shartnomasini topish) */}
+      <CrmLookupDialog open={crmLookupOpen} onClose={() => setCrmLookupOpen(false)} />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// CrmLookupDialog — kompozit bank ID orqali CRM'dan to'lovni topib,
+// shartnoma + purpose + external_id ko'rsatadi (XATO to'lovni bog'lash uchun).
+// ─────────────────────────────────────────────────────────
+interface CrmCandidate {
+  contract: string;
+  purpose: string;
+  externalId: string;
+  amount: number;
+  date: string;
+  object: string | null;
+  method: string | null;
+  status: string | null;
+  matchedBy: string[];
+}
+
+function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [id, setId] = useState('');
+  const lookup = useMutation({
+    mutationFn: (compositeId: string) =>
+      api.get<{ ok: boolean; error?: string; parsed?: any; candidates: CrmCandidate[]; scanned: number; pages: number }>(
+        `/crm/find-by-composite?id=${encodeURIComponent(compositeId)}`,
+        { timeout: 180_000 },
+      ),
+    onError: (e: any) => toast.error(e?.message || 'Qidiruv xatosi'),
+  });
+
+  const run = () => {
+    const v = id.trim();
+    if (!v) { toast.message('ID kiriting'); return; }
+    lookup.mutate(v);
+  };
+
+  const res = lookup.data;
+  const candidates = res?.candidates || [];
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            CRM'dan qidir — ID bo'yicha
+          </DialogTitle>
+          <DialogDescription>
+            XATO to'lovning kompozit ID'sini qo'ying — CRM'dan o'sha to'lovni topib, qaysi shartnoma va purposega bog'langanini ko'rsatadi.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex gap-2">
+          <Input
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') run(); }}
+            placeholder="6470860338_77488_17.08.2026_..._100000000_+"
+            className="flex-1 font-mono text-xs"
+            autoFocus
+          />
+          <Button onClick={run} disabled={lookup.isPending} className="gap-2 shrink-0">
+            {lookup.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            Qidir
+          </Button>
+        </div>
+
+        {lookup.isPending && (
+          <div className="text-[12px] text-slate-500 dark:text-slate-400 flex items-center gap-2 py-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> CRM to'lovlari qidirilmoqda… (biroz vaqt olishi mumkin)
+          </div>
+        )}
+
+        {res && !lookup.isPending && (
+          <div className="space-y-3 max-h-[55vh] overflow-y-auto">
+            {res.parsed && (
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 rounded-lg bg-slate-50 dark:bg-slate-900 px-3 py-2 space-y-0.5">
+                <div>general_id: <b className="text-slate-700 dark:text-slate-300">{res.parsed.generalId}</b> · sana: <b className="text-slate-700 dark:text-slate-300">{res.parsed.isoDate || res.parsed.ddate}</b> · summa: <b className="text-slate-700 dark:text-slate-300">{formatMoney(res.parsed.amount)}</b></div>
+                <div>Skaner qilindi: {res.scanned} ta to'lov · {res.pages} sahifa</div>
+              </div>
+            )}
+
+            {res.error && (
+              <div className="text-[13px] text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> {res.error}
+              </div>
+            )}
+
+            {!res.error && candidates.length === 0 && (
+              <div className="text-[13px] text-amber-600 dark:text-amber-400 flex items-center gap-2 py-2">
+                <AlertTriangle className="h-4 w-4" /> CRM'dan mos to'lov topilmadi (bu shartnoma CRM'da yo'q yoki hali sinxron emas bo'lishi mumkin).
+              </div>
+            )}
+
+            {candidates.map((c, i) => (
+              <div key={i} className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-1.5 bg-white dark:bg-slate-950">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 font-semibold">
+                      Shartnoma: {c.contract || '—'}
+                    </span>
+                    {c.contract && (
+                      <button
+                        onClick={() => { navigator.clipboard?.writeText(c.contract); toast.success('Shartnoma nusxalandi'); }}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        title="Nusxalash"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {c.matchedBy.map((m) => (
+                      <span key={m} className={cn(
+                        'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                        m === 'general_id'
+                          ? 'bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-400'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+                      )}>
+                        {m === 'general_id' ? '🎯 general_id (aniq)' : m}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
+                  <div className="text-slate-500 dark:text-slate-400">Summa: <span className="text-slate-800 dark:text-slate-200 font-medium">{formatMoney(c.amount)}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400">Sana: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.date || '—'}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400">Obyekt: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.object || '—'}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400">Metod: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.method || '—'}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400">Status: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.status || '—'}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400 truncate">external_id: <span className="text-slate-800 dark:text-slate-200 font-mono text-[11px]">{c.externalId || '—'}</span></div>
+                </div>
+                {c.purpose && (
+                  <div className="text-[11.5px] text-slate-600 dark:text-slate-300 rounded-lg bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5 whitespace-pre-wrap break-words">
+                    <span className="text-slate-400">purpose:</span> {c.purpose}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
