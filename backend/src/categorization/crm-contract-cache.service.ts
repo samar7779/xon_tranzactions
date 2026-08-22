@@ -126,35 +126,55 @@ export class CrmContractCacheService {
   // 2 fazali: (1) BARCHA found=true bo'ylab kursor-sweep — real type.key bilan OVERWRITE
   // (eski obyekt-nomli TAXMINlar tuzatiladi); sweep tugagach marker qo'yiladi (restartda takror emas).
   // (2) marker bor bo'lsa — faqat propertyType=NULL qatorlar (yangi fallback qatorlari) to'ldiriladi.
-  private ptCursor = '';
+  private ptOffset = 0;
+  private ptTotalDistinct = 0;
   private ptSweepDone = false;
   private static readonly PT_MARKER = '__PT_SWEEP_DONE_V1__';
 
   async backfillPropertyTypeViaShow(limit: number): Promise<{ filled: number; remaining: number }> {
-    // Faza 2: to'liq sweep tugagan — faqat NULL qatorlar
+    // Faza 2: to'liq sweep tugagan — faqat NULL qatorlar (yangi fallback qatorlari)
     if (this.ptSweepDone || (await this.isPtSweepDone())) {
       this.ptSweepDone = true;
       return this.fillNullPropertyTypes(limit);
     }
-    // Faza 1: BARCHA found=true bo'ylab kursor — real type.key bilan OVERWRITE
-    const batch = await this.prisma.crmContract.findMany({
-      where: { found: true, contractNumber: { gt: this.ptCursor } },
-      orderBy: { contractNumber: 'asc' },
+    // Faza 1: oplata_kv'da eng SO'NGGI to'lovlar shartnomalaridan boshlab (foydalanuvchi
+    // KO'RADIGAN qatorlar AVVAL to'g'rilanadi) — /show type.key bilan OVERWRITE.
+    const grp = await this.prisma.oplataKv.groupBy({
+      by: ['contractNo'],
+      _max: { date: true },
+      orderBy: { _max: { date: 'desc' } },
       take: limit,
-      select: { contractNumber: true },
+      skip: this.ptOffset,
     });
-    if (!batch.length) {
+    const contractNos = Array.from(new Set(
+      grp.map((g) => (g.contractNo || '').replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').toUpperCase()).filter(Boolean),
+    ));
+    if (!contractNos.length) {
       await this.markPtSweepDone();
       this.ptSweepDone = true;
-      this.log.log('crmMetaBackfill: turi to\'liq sweep tugadi (barcha shartnoma /show type.key bilan yangilandi)');
+      this.log.log('crmMetaBackfill: turi to\'liq sweep tugadi (barcha shartnoma /show type.key bilan tekshirildi)');
       return { filled: 0, remaining: 0 };
     }
-    const filled = await this.applyShowTypes(batch.map((b) => b.contractNumber));
-    this.ptCursor = batch[batch.length - 1].contractNumber;
-    const remaining = await this.prisma.crmContract.count({
-      where: { found: true, contractNumber: { gt: this.ptCursor } },
+    // Faqat SHUBHALI larni /show qilamiz: found=true + (null yoki 'apartment').
+    // 'parking' allaqachon tasdiqlangan — qayta so'ramaymiz (CRM yukini kamaytiradi).
+    const need = await this.prisma.crmContract.findMany({
+      where: {
+        contractNumber: { in: contractNos },
+        found: true,
+        OR: [{ propertyType: null }, { propertyType: 'apartment' }],
+      },
+      select: { contractNumber: true },
     });
-    if (filled) this.log.log(`crmMetaBackfill: turi ${filled} yangilandi (~${remaining} qoldi, sweep)`);
+    const filled = await this.applyShowTypes(need.map((n) => n.contractNumber));
+    this.ptOffset += limit;
+    if (!this.ptTotalDistinct) {
+      try {
+        const c: any = await this.prisma.$queryRaw`SELECT COUNT(DISTINCT contract_no)::int AS n FROM oplata_kv`;
+        this.ptTotalDistinct = Number(c?.[0]?.n || 0);
+      } catch { /* ignore — remaining taxminiy */ }
+    }
+    const remaining = Math.max(0, this.ptTotalDistinct - this.ptOffset);
+    if (filled) this.log.log(`crmMetaBackfill: turi ${filled} tuzatildi (~${remaining} shartnoma qoldi, recency sweep)`);
     return { filled, remaining };
   }
 
