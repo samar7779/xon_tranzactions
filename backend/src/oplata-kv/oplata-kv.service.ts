@@ -3542,6 +3542,14 @@ export class OplataKvService {
       else where.AND = [xatoFilter];
     }
 
+    // SPLIT YO'Q filter — list bilan bir xil (bo'lmasa eksport butun bazani oladi → xato)
+    const unsplitOnly = q.unsplitOnly === 'true' || q.unsplitOnly === '1';
+    if (unsplitOnly) {
+      const f = await this.buildUnsplitFilter();
+      if (where.AND) (where.AND as any[]).push(f);
+      else where.AND = [f];
+    }
+
     // crm_status filtri — list bilan bir xil
     if (q.crmStatuses && q.crmStatuses.trim()) {
       const crmFilter = await this.buildCrmStatusFilter(q.crmStatuses);

@@ -395,23 +395,24 @@ export class CrmService {
 
     const resultMap = new Map<string, any | null>();
 
-    // ── 1) Kompozit yadro bo'yicha — BUTUN sana ORALIG'INI bir marta tortamiz ──
-    //     (avval har sana alohida so'ralardi → 60+ sana = 60+ so'rov, juda sekin.
-    //      Endi min..max oraliq bir necha sahifada — bulk uchun ancha tez.)
-    const isoDates = list
-      .map((it) => this.parseComposite(it.id)?.isoDate)
-      .filter((d): d is string => !!d);
-    if (isoDates.length) {
-      let minD = isoDates[0];
-      let maxD = isoDates[0];
-      for (const d of isoDates) { if (d < minD) minD = d; if (d > maxD) maxD = d; }
-
+    // ── 1) Kompozit yadro (general_id_num_ddate) bo'yicha — sana guruhli CRM excel ──
+    //     (har DISTINCT sana bir marta so'raladi; excel endpoint faqat bitta kunlik
+    //      date_from=date_to filtrni ishonchli qabul qiladi — ko'p-kunlik oraliq emas.)
+    const byDate = new Map<string, string[]>();
+    for (const it of list) {
+      const p = this.parseComposite(it.id);
+      if (!p?.isoDate) continue;
+      const arr = byDate.get(p.isoDate) || [];
+      arr.push(it.id);
+      byDate.set(p.isoDate, arr);
+    }
+    for (const [isoDate, dateIds] of byDate) {
       const coreMap = new Map<string, any>();
       let page = 1;
       let prevSig = '';
-      const MAX = 40; // min..max oralig'idagi barcha to'lovlar (bir necha sahifa)
+      const MAX = 6;
       while (page <= MAX) {
-        const r: any = await this.callClient('/payment-history/excel', { page, limit: 5000, date_from: minD, date_to: maxD }, 120_000);
+        const r: any = await this.callClient('/payment-history/excel', { page, limit: 5000, date_from: isoDate, date_to: isoDate }, 90_000);
         if (!r?.ok) break;
         const raw: any = r.data?.data ?? r.data;
         const rows: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
@@ -429,10 +430,10 @@ export class CrmService {
         if (rows.length < 5000) break;
         page++;
       }
-      for (const it of list) {
-        const c = this.compositeCore(it.id);
+      for (const id of dateIds) {
+        const c = this.compositeCore(id);
         const row = c ? coreMap.get(c) : null;
-        if (row) resultMap.set(it.id, this.crmRowSummary(row));
+        if (row) resultMap.set(id, this.crmRowSummary(row));
       }
     }
 
