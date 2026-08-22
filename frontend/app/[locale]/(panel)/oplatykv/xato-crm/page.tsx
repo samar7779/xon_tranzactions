@@ -95,7 +95,9 @@ function ListView({ mode }: { mode: Mode }) {
   const total = kvQ.data?.total || 0;
   const pageCount = kvQ.data?.pageCount || 1;
 
-  const ids = useMemo(() => items.map((i) => i.sourceTxId).filter((x): x is string => !!x), [items]);
+  // Kompozit id — Excel qatorlarda sourceTxId null bo'lib, kompozit `id`da bo'ladi (bank kompozit).
+  const compositeOf = (it: KvItem) => it.sourceTxId || it.id || '';
+  const ids = useMemo(() => items.map(compositeOf).filter((x): x is string => !!x), [items]);
   const idsKey = ids.join(',');
   const matchQ = useQuery({
     queryKey: ['crm-match', idsKey],
@@ -124,7 +126,7 @@ function ListView({ mode }: { mode: Mode }) {
     onSettled: () => setConfirmId(null),
   });
 
-  const matchedCount = items.filter((it) => it.sourceTxId && matchMap.get(it.sourceTxId)).length;
+  const matchedCount = items.filter((it) => matchMap.get(compositeOf(it))).length;
 
   return (
     <div className="space-y-3">
@@ -176,7 +178,7 @@ function ListView({ mode }: { mode: Mode }) {
 
       <div className="space-y-2">
         {items.map((it) => {
-          const crm = it.sourceTxId ? matchMap.get(it.sourceTxId) : null;
+          const crm = matchMap.get(compositeOf(it)) || null;
           const matching = matchQ.isFetching && !matchQ.data;
           const confirming = confirmId === it.id;
           const busy = fix.isPending && fix.variables?.id === it.id;
