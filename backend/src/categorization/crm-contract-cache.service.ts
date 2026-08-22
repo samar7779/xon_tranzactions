@@ -66,7 +66,7 @@ export class CrmContractCacheService {
     if (this.crmMetaBackfillRunning) return;
     this.crmMetaBackfillRunning = true;
     try {
-      await this.runMetaBackfill(60); // cron: sotuv bo'limi 60/tsikl (CRM yukini tejab)
+      await this.runMetaBackfill(200); // cron: 2 sahifa/tsikl (200 shartnoma, bulk)
     } catch (e: any) {
       this.log.warn(`crmMetaBackfillTick xato: ${e?.message}`);
     } finally {
@@ -74,62 +74,49 @@ export class CrmContractCacheService {
     }
   }
 
+  // /index sahifa kursori (bulk branch backfill) — restartda 1'dan boshlanadi (idempotent).
+  private branchPage = 1;
+  private branchTotalPage = 0;
+
   /**
-   * Turi (property_type) + sotuv bo'limi (branch_name)ni to'ldiradi. XATO/topilmagan
-   * (found=false) shartnomalar TABIIY o'tkazib yuboriladi (faqat found=true'lar). Konvergent.
-   * @param branchLimit shu tsiklda /index orqali nechta sotuv bo'limi olinsin.
-   * @returns { typeFilled, branchFilled, branchRemaining } — qolganini cron avtomat to'ldiradi.
+   * SOTUV BO'LIMI (branch_name)ni to'ldiradi — BULK: CRM /index sahifasidan 100 tadan
+   * (avval 1 tadan edi — juda sekin). Har sahifadagi shartnomalar bo'lim bo'yicha guruhlanib
+   * updateMany (faqat NULL bo'lganlar). Konvergent — barcha sahifa aylanib chiqilgach bo'sh yuradi.
+   * Turi endi maqsad-matndan hisoblanadi (backfill kerak emas). typeFilled har doim 0.
+   * @param branchLimit ~ nechta shartnoma (100 ga bo'linadi → sahifa soni).
    */
   async runMetaBackfill(branchLimit: number): Promise<{ typeFilled: number; branchFilled: number; branchRemaining: number }> {
-    // 1) TURI — bepul: cached objectName'dan (barcha NULL, 5000 gacha)
-    const needType = await this.prisma.crmContract.findMany({
-      where: { found: true, propertyType: null, objectName: { not: null } },
-      select: { contractNumber: true, objectName: true },
-      take: 5000,
-    });
-    for (const c of needType) {
-      await this.prisma.crmContract.update({
-        where: { contractNumber: c.contractNumber },
-        data: { propertyType: derivePropertyType(c.objectName) },
-      }).catch(() => {});
-    }
-
-    // 2) SOTUV BO'LIMI — /index (getContractMeta) orqali NULL bo'lganlar.
-    //    NULL=tekshirilmagan; qiymat yoki '' (yo'q) yozilgach qayta so'ramaymiz.
-    const needBranch = await this.prisma.crmContract.findMany({
-      where: { found: true, branchName: null },
-      select: { contractNumber: true },
-      take: Math.max(1, branchLimit),
-    });
-    // PARALLEL (6 ta bir vaqtda) — ketma-ket bo'lsa 15s HTTP timeout'dan oshib ketardi.
+    const pages = Math.max(1, Math.round(branchLimit / 100));
     let branchFilled = 0;
-    const CONC = 6;
-    for (let i = 0; i < needBranch.length; i += CONC) {
-      const slice = needBranch.slice(i, i + CONC);
-      const res = await Promise.all(slice.map(async (c) => {
-        try {
-          const meta: any = await this.crm.getContractMeta(c.contractNumber);
-          if (meta?.ok) {
-            const branch = meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
-            await this.prisma.crmContract.update({
-              where: { contractNumber: c.contractNumber },
-              data: { branchName: branch },
-            });
-            return true;
-          }
-          // meta.ok=false (CRM xatosi) → NULL qoladi, keyingi safar qayta urinamiz
-        } catch { /* keyingi safar */ }
-        return false;
-      }));
-      branchFilled += res.filter(Boolean).length;
+    for (let p = 0; p < pages; p++) {
+      const res = await this.crm.listContractBranchesPage(this.branchPage, 100);
+      if (!res.ok) break;
+      if (res.totalPage) this.branchTotalPage = res.totalPage;
+      // Bo'lim bo'yicha guruhlab, NULL bo'lgan qatorlarni updateMany bilan to'ldiramiz
+      const byBranch = new Map<string, string[]>();
+      for (const it of res.items) {
+        const key = it.contract.toUpperCase().slice(0, 128);
+        const arr = byBranch.get(it.branchName) || [];
+        arr.push(key);
+        byBranch.set(it.branchName, arr);
+      }
+      for (const [branch, keys] of byBranch) {
+        const r = await this.prisma.crmContract.updateMany({
+          where: { contractNumber: { in: keys }, branchName: null },
+          data: { branchName: branch },
+        });
+        branchFilled += r.count;
+      }
+      this.branchPage++;
+      if (this.branchTotalPage && this.branchPage > this.branchTotalPage) { this.branchPage = 1; break; } // aylanib chiqdi
     }
     const branchRemaining = await this.prisma.crmContract.count({
       where: { found: true, branchName: null },
     });
-    if (needType.length || branchFilled) {
-      this.log.log(`crmMetaBackfill: turi ${needType.length}, sotuv bo'limi ${branchFilled} to'ldirildi (${branchRemaining} qoldi)`);
+    if (branchFilled) {
+      this.log.log(`crmMetaBackfill (bulk): sotuv bo'limi ${branchFilled} to'ldirildi (${branchRemaining} qoldi, page=${this.branchPage})`);
     }
-    return { typeFilled: needType.length, branchFilled, branchRemaining };
+    return { typeFilled: 0, branchFilled, branchRemaining };
   }
 
   /**

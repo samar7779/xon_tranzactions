@@ -1163,6 +1163,25 @@ export class CrmService {
   }
 
   /**
+   * BULK: /index sahifasidan har shartnoma + sotuv bo'limi (created_by.branch.name).
+   * branch backfill'ni tezlashtirish uchun — 100 tadan (1 tadan emas). trashed'lar ham.
+   */
+  async listContractBranchesPage(page = 1, perPage = 100): Promise<{
+    ok: boolean;
+    items: Array<{ contract: string; branchName: string }>;
+    totalPage: number;
+  }> {
+    const r = await this.call('/index', { page, 'per-page': perPage, is_trashed: 1, trashed_status: 1, with_trashed: 1 });
+    if (!r.ok) return { ok: false, items: [], totalPage: 0 };
+    const items = ((r.data?.data as any[]) || []).map((it) => ({
+      contract: String(it.contract || '').trim(),
+      branchName: it.created_by?.branch?.name ? String(it.created_by.branch.name).slice(0, 255) : '',
+    })).filter((x) => x.contract);
+    const pg = (r.data?.pagination as any) || {};
+    return { ok: true, items, totalPage: Number(pg.totalPage || pg.total_page || 0) };
+  }
+
+  /**
    * Bitta shartnoma to'lov jadvali (grafik) — CRM /order/show'dan.
    * initial.schedules[] + monthly.schedules[] → har installment.
    */

@@ -531,23 +531,38 @@ export class OplataKvService {
     return wantParking ? parkingCond : { NOT: parkingCond };
   }
 
-  /** Сотув бўлими filtri — CrmContract.branchName bo'yicha contractNo IN/NOT IN. */
+  /**
+   * Сотув бўлими filtri — CrmContract.branchName bo'yicha contractNo IN/NOT IN.
+   * TEZLASHTIRILGAN: faqat TANLANGAN bo'limlar shartnomalarini oladi (kichik IN),
+   * avval BARCHA (5000+) branchli qatorni yuklab, ulkan IN qurardi — filtr osilardi.
+   */
   private async buildBranchFilter(csv: string): Promise<Prisma.OplataKvWhereInput | null> {
     const wanted = csv.split(',').map((s) => s.trim()).filter(Boolean);
     if (!wanted.length) return null;
     const wantNone = wanted.includes('__none__');
     const named = wanted.filter((w) => w !== '__none__');
-    const rows = await this.prisma.crmContract.findMany({
-      where: { found: true, branchName: { not: null } },
-      select: { contractNumber: true, branchName: true },
+
+    let matchNos: string[] = [];
+    if (named.length) {
+      const rows = await this.prisma.crmContract.findMany({
+        where: { found: true, branchName: { in: named } }, // faqat tanlangan bo'limlar
+        select: { contractNumber: true },
+      });
+      matchNos = rows.map((r) => r.contractNumber);
+    }
+
+    if (!wantNone) {
+      return { contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } };
+    }
+
+    // __none__ tanlansa — branchli barcha shartnomalarni chiqarib tashlaymiz (NOT IN)
+    const withBranch = await this.prisma.crmContract.findMany({
+      where: { found: true, AND: [{ branchName: { not: null } }, { branchName: { not: '' } }] },
+      select: { contractNumber: true },
     });
-    const withBranch = rows.filter((r) => r.branchName && r.branchName.trim());
     const allWithBranch = withBranch.map((r) => r.contractNumber);
-    const namedLc = new Set(named.map((s) => s.toLowerCase()));
-    const matchNos = withBranch.filter((r) => namedLc.has((r.branchName as string).toLowerCase())).map((r) => r.contractNumber);
-    if (wantNone && named.length === 0) return { contractNo: { notIn: allWithBranch } };
-    if (!wantNone) return { contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } };
-    return { OR: [{ contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } }, { contractNo: { notIn: allWithBranch } }] };
+    if (!named.length) return { contractNo: { notIn: allWithBranch } };
+    return { OR: [{ contractNo: { in: matchNos } }, { contractNo: { notIn: allWithBranch } }] };
   }
 
   /**
