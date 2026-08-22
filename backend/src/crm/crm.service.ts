@@ -242,6 +242,33 @@ export class CrmService {
       }
     }
 
+    // 3) OXIRGI ZAXIRA: /payment-history/excel to'liq skaner (server filtr ishlamasa ham topadi).
+    //    external_id core (general_id_num_ddate) bo'yicha ANIQ mos topilsa to'xtaydi.
+    if (candidates.length === 0) {
+      let page = 1;
+      let prevSig = '';
+      const MAX_PAGES = 120;
+      while (page <= MAX_PAGES) {
+        const r: any = await this.getPaymentHistory(page, 5000, 120_000);
+        const rows = rowsOf(r);
+        if (!rows.length) break;
+        const sig = `${rows.length}:${rows[0]?.external_id ?? ''}:${rows[rows.length - 1]?.external_id ?? ''}`;
+        if (sig === prevSig) break;
+        prevSig = sig;
+        if (!sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); }
+        scanned += rows.length;
+        for (const p of rows) {
+          const mb = evaluate(p);
+          if (mb.length) { via = via || 'scan'; candidates.push(rowOut(p, mb)); }
+          else if (isoDate && (p.date_paid ? String(p.date_paid).slice(0, 10) : '') === isoDate && sameDate.length < 15) {
+            sameDate.push(rowOut(p, ['shu sana']));
+          }
+        }
+        if (candidates.some((c) => c.strong)) break; // aniq (external_id/general_id) topildi — to'xtaymiz
+        page++;
+      }
+    }
+
     candidates.sort((a, b) => (b.strong ? 1 : 0) - (a.strong ? 1 : 0)); // aniq (strong) tepaga
     return { ok: true, parsed, via, candidates, sameDate, sample, sampleKeys, scanned };
   }
