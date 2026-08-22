@@ -7,7 +7,7 @@ import {
   Loader2, Check, AlertTriangle, ArrowRight, ChevronDown,
   ChevronLeft, ChevronRight, RefreshCw, Building2, Scissors, Search, Copy, X, Download,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { formatMoney, cn } from '@/lib/utils';
 
 type Mode = 'xato' | 'unsplit';
@@ -35,6 +35,7 @@ interface CrmMatch {
   purpose: string;
   orderId: string | null;
   viaXonpay?: boolean;
+  type?: string | null;
 }
 
 const PER_PAGE = 20;
@@ -144,54 +145,73 @@ function ListView({ mode }: { mode: Mode }) {
   }, [items, matchMap, statusFilter]);
 
   const runBulk = async () => {
-    const targets = foundItems;
-    if (!targets.length || bulk.running) return;
-    setBulk({ running: true, done: 0, total: targets.length });
-    let ok = 0;
-    for (const it of targets) {
-      const crm = matchMap.get(compositeOf(it));
+    if (bulk.running) return;
+
+    // SPLIT YO'Q — server bulk auto-split (BARCHA splitlanmagan qatorlar, CRM grafigi bo'yicha)
+    if (mode === 'unsplit') {
+      if (!window.confirm("Barcha splitlanmagan to'lovlar CRM grafigi bo'yicha ustunga (boshlang'ich/oylik) joylanadi. Davom etilsinmi?")) return;
+      setBulk({ running: true, done: 0, total: 0 });
       try {
-        if (mode === 'xato') await api.post(`/oplata-kv/${it.id}/assign-from-crm`, { contractNo: crm!.contract }, { timeout: 120_000 });
-        else await api.post(`/oplata-kv/${it.id}/split`, {}, { timeout: 120_000 });
-        ok++;
-      } catch { /* skip — keyingisi */ }
-      setBulk((b) => ({ ...b, done: b.done + 1 }));
+        const r: any = await api.post('/oplata-kv/split-installments', {}, { timeout: 600_000 });
+        toast.success(`${r?.filled ?? r?.updated ?? 0} to'lov splitlandi`);
+      } catch (e: any) { toast.error(e?.message || 'Split xatosi'); }
+      setBulk({ running: false, done: 0, total: 0 });
+      qc.invalidateQueries({ queryKey: ['oplata-kv-xatocrm'] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      return;
+    }
+
+    // XATO — barcha sahifalarni olib, CRM'dan topib, topilganlarga shartnoma biriktirish
+    if (!window.confirm("Barcha XATO to'lovlar CRM'dan qidiriladi va topilganlariga shartnoma biriktiriladi. Davom etilsinmi?")) return;
+    setBulk({ running: true, done: 0, total: 0 });
+    try {
+      const all: KvItem[] = [];
+      let p = 1;
+      for (;;) {
+        const r = await api.get<{ items: KvItem[]; pageCount: number }>(`/oplata-kv?${filter}&page=${p}&perPage=200&sortBy=date&sortDir=desc${q ? `&q=${encodeURIComponent(q)}` : ''}`);
+        all.push(...(r.items || []));
+        if (!r.items?.length || p >= (r.pageCount || 1)) break;
+        p++;
+      }
+      const map = new Map<string, CrmMatch | null>();
+      for (let i = 0; i < all.length; i += 300) {
+        const chunk = all.slice(i, i + 300);
+        const res = await api.post<Array<{ id: string; crm: CrmMatch | null }>>('/crm/match-composites', { items: chunk.map((it) => ({ id: compositeOf(it), purpose: it.purpose || '' })) }, { timeout: 180_000 });
+        for (const r of res) map.set(r.id, r.crm);
+        setBulk({ running: true, done: Math.min(i + 300, all.length), total: all.length });
+      }
+      const found = all.filter((it) => map.get(compositeOf(it)));
+      setBulk({ running: true, done: 0, total: found.length });
+      let ok = 0;
+      for (const it of found) {
+        const crm = map.get(compositeOf(it));
+        try { await api.post(`/oplata-kv/${it.id}/assign-from-crm`, { contractNo: crm!.contract }, { timeout: 120_000 }); ok++; } catch { /* skip */ }
+        setBulk((b) => ({ ...b, done: b.done + 1 }));
+      }
+      toast.success(`${ok}/${found.length} biriktirildi (jami ${all.length} tekshirildi)`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Xato');
     }
     setBulk({ running: false, done: 0, total: 0 });
-    toast.success(`${ok}/${targets.length} to'g'irlandi`);
     qc.invalidateQueries({ queryKey: ['oplata-kv-xatocrm'] });
     qc.invalidateQueries({ queryKey: ['oplata-kv'] });
   };
 
-  // Joriy ko'rinishni CSV (Excel) qilib yuklab olish
-  const downloadCsv = () => {
-    const rows = displayItems.map((it) => {
-      const crm = matchMap.get(compositeOf(it));
-      return {
-        summa: Number(it.paymentAmount || 0),
-        sana: String(it.date).slice(0, 10),
-        shartnoma_oplatakv: it.contractNo || '',
-        obyekt: it.object || '',
-        mijoz: it.client || '',
-        ix_id: compositeOf(it),
-        crm_topildi: crm ? 'ha' : "yo'q",
-        crm_shartnoma: crm?.contract || '',
-        boshlangich: crm ? crm.initialAmount : '',
-        oylik: crm ? crm.monthlyAmount : '',
-        xonpay: crm?.viaXonpay ? 'ha' : '',
-      };
-    });
-    if (!rows.length) { toast.message('Yuklab olishga qator yo\'q'); return; }
-    const headers = Object.keys(rows[0]);
-    const esc = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
-    const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => esc((r as any)[h])).join(','))].join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `xato-crm-${mode}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // BARCHA qatorlarni server-side xlsx qilib yuklab olish (ustunlar Excel'da to'g'ri).
+  const [downloading, setDownloading] = useState(false);
+  const downloadXlsx = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await apiDownload(
+        `/oplata-kv/export?${filter}${q ? `&q=${encodeURIComponent(q)}` : ''}&sortBy=date&sortDir=desc`,
+        `xato-crm-${mode}.xlsx`,
+      );
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklab olishda xato');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -243,21 +263,25 @@ function ListView({ mode }: { mode: Mode }) {
 
         {/* Yuklab olish (CSV/Excel) */}
         <button
-          onClick={downloadCsv}
-          className="ml-auto px-2.5 py-1.5 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-[12px] font-medium flex items-center gap-1.5"
-          title="Joriy ko'rinishni CSV (Excel) qilib yuklab olish"
+          onClick={downloadXlsx}
+          disabled={downloading}
+          className="ml-auto px-2.5 py-1.5 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-[12px] font-medium flex items-center gap-1.5 disabled:opacity-60"
+          title="Barcha qatorlarni Excel (xlsx) qilib yuklab olish"
         >
-          <Download className="h-3.5 w-3.5" /> Yuklab olish
+          {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Yuklab olish
         </button>
 
-        {/* Bulk — barchasini (topilganlar) to'g'irlash */}
-        {matchedCount > 0 && (
+        {/* Bulk — BARCHA sahifadagilarni to'g'irlash (Split yo'q → server bulk; XATO → hammasini match+assign) */}
+        {total > 0 && (
           <button
             onClick={runBulk}
             disabled={bulk.running}
             className="px-3 py-1.5 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-[12px] font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-70"
+            title="Barcha sahifalardagi to'lovlarni to'g'irlaydi"
           >
-            {bulk.running ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {bulk.done}/{bulk.total}…</> : <><Check className="h-3.5 w-3.5" /> Barchasini to'g'irlash ({matchedCount})</>}
+            {bulk.running
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {bulk.total > 0 ? `${bulk.done}/${bulk.total}…` : 'Bajarilmoqda…'}</>
+              : <><Check className="h-3.5 w-3.5" /> Barchasini to'g'irlash</>}
           </button>
         )}
       </div>
@@ -374,6 +398,7 @@ function ListView({ mode }: { mode: Mode }) {
                     {crm ? (
                       <>
                         <D k="Shartnoma" v={crm.contract} />
+                        {crm.type && <D k="Turi" v={crm.type} />}
                         <D k="Boshlang'ich" v={formatMoney(crm.initialAmount)} />
                         <D k="Oylik" v={formatMoney(crm.monthlyAmount)} />
                         {crm.otherAmount > 0 && <D k="Boshqa" v={formatMoney(crm.otherAmount)} />}

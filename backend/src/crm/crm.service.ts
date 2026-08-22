@@ -447,19 +447,27 @@ export class CrmService {
       const variants = uuids.flatMap((u) => [u, u.toLowerCase(), u.toUpperCase()]);
       const xps = await this.prisma.xonpayTransaction.findMany({
         where: { xonpayUuid: { in: variants }, contract: { not: null } },
-        select: { xonpayUuid: true, contract: true, amount: true, datePaid: true, objectName: true, externalId: true, purpose: true },
+        select: { xonpayUuid: true, contract: true, amount: true, type: true, datePaid: true, objectName: true, externalId: true, purpose: true },
       });
       const xpMap = new Map<string, any>();
       for (const xp of xps) if (xp.xonpayUuid) xpMap.set(String(xp.xonpayUuid).toUpperCase(), xp);
       for (const it of pending) {
         const xp = xpMap.get(uuidOf(it.purpose)!);
         if (xp?.contract) {
+          // CRM 'type' (Ежемесячный платеж / 1 взнос) — qaysi ustunga ekanini aniqlaydi.
+          const amt = Number(xp.amount || 0);
+          const t = String(xp.type || '').toLowerCase();
+          const isInitial = /взнос|перв|initial|boshlang/.test(t);
+          const isMonthly = /ежемес|monthly|oylik/.test(t);
           resultMap.set(it.id, {
             contract: String(xp.contract).trim(),
-            initialAmount: 0, monthlyAmount: 0, otherAmount: 0,
-            amount: Number(xp.amount || 0),
+            initialAmount: isInitial ? amt : 0,
+            monthlyAmount: isMonthly ? amt : (!isInitial ? amt : 0), // noaniq bo'lsa oylik (ko'pincha)
+            otherAmount: 0,
+            amount: amt,
             date: xp.datePaid ? new Date(xp.datePaid).toISOString().slice(0, 10) : '',
             object: xp.objectName || null,
+            type: xp.type || null,
             externalId: String(xp.externalId || ''),
             purpose: xp.purpose || '',
             orderId: null,
