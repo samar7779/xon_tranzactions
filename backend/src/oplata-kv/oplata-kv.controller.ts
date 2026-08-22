@@ -701,10 +701,13 @@ export class OplataKvController {
   @ApiOperation({ summary: "XATO to'lovga CRM'dan topilgan shartnomani biriktirish + CRM grafigi bo'yicha split (boshlang'ich/oylik)" })
   assignFromCrm(
     @Param('id') id: string,
-    @Body() body: { contractNo?: string },
+    @Body() body: { contractNo?: string; initialAmount?: number; monthlyAmount?: number },
     @CurrentUser() user?: AuthUser,
   ) {
-    return this.svc.assignFromCrm(id, String(body?.contractNo || ''), actorFrom(user));
+    const split = (body?.initialAmount != null || body?.monthlyAmount != null)
+      ? { initialAmount: body?.initialAmount, monthlyAmount: body?.monthlyAmount }
+      : undefined;
+    return this.svc.assignFromCrm(id, body?.contractNo, actorFrom(user), split);
   }
 
   @Delete(':id')

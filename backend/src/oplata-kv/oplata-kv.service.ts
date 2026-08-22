@@ -609,19 +609,68 @@ export class OplataKvService {
    * avval shartnoma (botAssignContract split'ni tozalaydi), keyin splitSingleRow.
    */
   async assignFromCrm(
-    id: string, contractNo: string, actor?: Actor,
+    id: string, contractNo: string | undefined, actor?: Actor,
+    split?: { initialAmount?: number; monthlyAmount?: number },
   ): Promise<{ ok: boolean; error?: string; assign?: any; split?: any; found?: boolean }> {
-    if (!id || !String(contractNo || '').trim()) return { ok: false, error: 'id va contractNo kerak' };
-    const assign = await this.botAssignContract(id, String(contractNo).trim(), actor?.name || 'web');
-    if (!assign.ok) return { ok: false, error: assign.error || 'Biriktirib bo\'lmadi', assign };
-    // Shartnoma biriktirilgach — CRM grafigi bo'yicha split (found bo'lsa ishlaydi)
-    let split: any = null;
-    try {
-      split = await this.splitSingleRow(id, actor);
-    } catch (e: any) {
-      split = { ok: false, error: e?.message || 'split xatosi' };
+    if (!id) return { ok: false, error: 'id kerak' };
+    // 1) Shartnoma biriktirish (XATO uchun; Split yo'q'da shartnoma bor — o'tkaziladi)
+    let assign: any = null;
+    if (contractNo && String(contractNo).trim()) {
+      assign = await this.botAssignContract(id, String(contractNo).trim(), actor?.name || 'web');
+      if (!assign.ok) return { ok: false, error: assign.error || 'Biriktirib bo\'lmadi', assign };
     }
-    return { ok: true, assign, split, found: assign.found };
+    // 2) Split — CRM qiymatlari (initial/monthly) berilsa AYNAN o'shani qo'yamiz
+    //    (qayta hisoblamaymiz — waterfall CRM bilan zid bo'lishi mumkin); berilmasa waterfall.
+    let splitRes: any = null;
+    if (split && (split.initialAmount != null || split.monthlyAmount != null)) {
+      splitRes = await this.applyCrmSplit(id, split, actor);
+    } else {
+      try { splitRes = await this.splitSingleRow(id, actor); }
+      catch (e: any) { splitRes = { ok: false, error: e?.message || 'split xatosi' }; }
+    }
+    return { ok: true, assign, split: splitRes, found: assign?.found };
+  }
+
+  /**
+   * CRM aytgan boshlang'ich/oylik qiymatini AYNAN qo'yadi (grafik waterfall'siz).
+   * CRM nisbatini saqlab paymentAmount ga moslaydi (first + monthly = paymentAmount).
+   */
+  async applyCrmSplit(
+    id: string, split: { initialAmount?: number; monthlyAmount?: number }, actor?: Actor,
+  ): Promise<{ ok: boolean; error?: string; item?: any }> {
+    const row = await this.prisma.oplataKv.findUnique({ where: { id }, select: { id: true, paymentAmount: true } });
+    if (!row) return { ok: false, error: 'Qator topilmadi' };
+    const total = Number(row.paymentAmount || 0);
+    const ci = Math.abs(Number(split.initialAmount || 0));
+    const cm = Math.abs(Number(split.monthlyAmount || 0));
+    const ct = ci + cm;
+    const first = ct > 0 ? Math.round(total * (ci / ct)) : 0; // ci=0 → 0 (hammasi oylik)
+    const monthly = total - first;
+    const category = categoryOf(Math.abs(first), Math.abs(monthly));
+    await this.prisma.oplataKv.update({
+      where: { id },
+      data: {
+        firstInstallment: first !== 0 ? new Prisma.Decimal(first) : null,
+        monthlyAmount: monthly !== 0 ? new Prisma.Decimal(monthly) : null,
+        paymentCategory: category as OplataKvCategory,
+      },
+    });
+    try {
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: id, action: 'edited',
+          actorType: actor?.id ? 'user' : 'system', actorId: actor?.id || null,
+          actorName: actor?.name || 'crm-split',
+          fieldsChanged: ['firstInstallment', 'monthlyAmount', 'paymentCategory'],
+          changes: {
+            firstInstallment: { new: first },
+            monthlyAmount: { new: monthly },
+            paymentCategory: { new: category },
+          } as any,
+        },
+      });
+    } catch { /* history — muhim emas */ }
+    return { ok: true, item: { firstInstallment: first, monthlyAmount: monthly, paymentCategory: category } };
   }
 
   async getXatoContractNumbers(): Promise<string[]> {

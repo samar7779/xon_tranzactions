@@ -119,10 +119,12 @@ function ListView({ mode }: { mode: Mode }) {
   }, [matchQ.data]);
 
   const fix = useMutation({
-    mutationFn: (p: { id: string; contractNo?: string }) =>
-      mode === 'xato'
-        ? api.post(`/oplata-kv/${p.id}/assign-from-crm`, { contractNo: p.contractNo }, { timeout: 120_000 })
-        : api.post(`/oplata-kv/${p.id}/split`, {}, { timeout: 120_000 }),
+    mutationFn: (p: { id: string; contractNo?: string; initialAmount?: number; monthlyAmount?: number }) =>
+      api.post(`/oplata-kv/${p.id}/assign-from-crm`, {
+        contractNo: p.contractNo,
+        initialAmount: p.initialAmount,
+        monthlyAmount: p.monthlyAmount,
+      }, { timeout: 120_000 }),
     onSuccess: (r: any) => {
       const cat = r?.split?.item?.paymentCategory || r?.item?.paymentCategory;
       const catLabel = cat === 'FIRST' ? "boshlang'ich" : cat === 'MONTHLY' ? 'oylik' : cat === 'GENERAL' ? 'umumiy' : '';
@@ -146,25 +148,14 @@ function ListView({ mode }: { mode: Mode }) {
 
   const runBulk = async () => {
     if (bulk.running) return;
+    const confirmMsg = mode === 'xato'
+      ? "Barcha XATO to'lovlar CRM'dan qidiriladi va topilganlariga shartnoma + ustun (CRM bo'yicha) qo'yiladi. Davom etilsinmi?"
+      : "Barcha splitlanmagan to'lovlar CRM'dan qidiriladi va topilganlari CRM aytgan ustunga (boshlang'ich/oylik) joylanadi. Davom etilsinmi?";
+    if (!window.confirm(confirmMsg)) return;
 
-    // SPLIT YO'Q — server bulk auto-split (BARCHA splitlanmagan qatorlar, CRM grafigi bo'yicha)
-    if (mode === 'unsplit') {
-      if (!window.confirm("Barcha splitlanmagan to'lovlar CRM grafigi bo'yicha ustunga (boshlang'ich/oylik) joylanadi. Davom etilsinmi?")) return;
-      setBulk({ running: true, done: 0, total: 0 });
-      try {
-        const r: any = await api.post('/oplata-kv/split-installments', {}, { timeout: 600_000 });
-        toast.success(`${r?.filled ?? r?.updated ?? 0} to'lov splitlandi`);
-      } catch (e: any) { toast.error(e?.message || 'Split xatosi'); }
-      setBulk({ running: false, done: 0, total: 0 });
-      qc.invalidateQueries({ queryKey: ['oplata-kv-xatocrm'] });
-      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
-      return;
-    }
-
-    // XATO — barcha sahifalarni olib, CRM'dan topib, topilganlarga shartnoma biriktirish
-    if (!window.confirm("Barcha XATO to'lovlar CRM'dan qidiriladi va topilganlariga shartnoma biriktiriladi. Davom etilsinmi?")) return;
     setBulk({ running: true, done: 0, total: 0 });
     try {
+      // 1) BARCHA sahifalarni olamiz
       const all: KvItem[] = [];
       let p = 1;
       for (;;) {
@@ -173,6 +164,7 @@ function ListView({ mode }: { mode: Mode }) {
         if (!r.items?.length || p >= (r.pageCount || 1)) break;
         p++;
       }
+      // 2) CRM match (300 talik chunk)
       const map = new Map<string, CrmMatch | null>();
       for (let i = 0; i < all.length; i += 300) {
         const chunk = all.slice(i, i + 300);
@@ -180,15 +172,23 @@ function ListView({ mode }: { mode: Mode }) {
         for (const r of res) map.set(r.id, r.crm);
         setBulk({ running: true, done: Math.min(i + 300, all.length), total: all.length });
       }
+      // 3) Topilganlarga CRM split (initial/monthly) qo'yamiz + XATO'da shartnoma biriktiramiz
       const found = all.filter((it) => map.get(compositeOf(it)));
       setBulk({ running: true, done: 0, total: found.length });
       let ok = 0;
       for (const it of found) {
-        const crm = map.get(compositeOf(it));
-        try { await api.post(`/oplata-kv/${it.id}/assign-from-crm`, { contractNo: crm!.contract }, { timeout: 120_000 }); ok++; } catch { /* skip */ }
+        const crm = map.get(compositeOf(it))!;
+        try {
+          await api.post(`/oplata-kv/${it.id}/assign-from-crm`, {
+            contractNo: mode === 'xato' ? crm.contract : undefined,
+            initialAmount: crm.initialAmount,
+            monthlyAmount: crm.monthlyAmount,
+          }, { timeout: 120_000 });
+          ok++;
+        } catch { /* skip */ }
         setBulk((b) => ({ ...b, done: b.done + 1 }));
       }
-      toast.success(`${ok}/${found.length} biriktirildi (jami ${all.length} tekshirildi)`);
+      toast.success(`${ok}/${found.length} to'g'irlandi (jami ${all.length} tekshirildi)`);
     } catch (e: any) {
       toast.error(e?.message || 'Xato');
     }
@@ -370,7 +370,7 @@ function ListView({ mode }: { mode: Mode }) {
                     </button>
                   ) : (
                     <button
-                      onClick={() => fix.mutate({ id: it.id, contractNo: crm?.contract })}
+                      onClick={() => fix.mutate({ id: it.id, contractNo: mode === 'xato' ? crm?.contract : undefined, initialAmount: crm?.initialAmount, monthlyAmount: crm?.monthlyAmount })}
                       disabled={busy}
                       className="text-[12px] px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-60 animate-pulse"
                     >
