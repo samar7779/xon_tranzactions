@@ -66,49 +66,63 @@ export class CrmContractCacheService {
     if (this.crmMetaBackfillRunning) return;
     this.crmMetaBackfillRunning = true;
     try {
-      // 1) TURI — bepul: cached objectName'dan aniqlaymiz (500/tsikl)
-      const needType = await this.prisma.crmContract.findMany({
-        where: { found: true, propertyType: null, objectName: { not: null } },
-        select: { contractNumber: true, objectName: true },
-        take: 500,
-      });
-      for (const c of needType) {
-        await this.prisma.crmContract.update({
-          where: { contractNumber: c.contractNumber },
-          data: { propertyType: derivePropertyType(c.objectName) },
-        }).catch(() => {});
-      }
-
-      // 2) SOTUV BO'LIMI — /index (getContractMeta) orqali, NULL bo'lganlar (60/tsikl — CRM yukini tejash).
-      //    NULL=tekshirilmagan; qiymat yoki '' (yo'q) yozilgach qayta so'ramaymiz (konvergent).
-      const needBranch = await this.prisma.crmContract.findMany({
-        where: { found: true, branchName: null },
-        select: { contractNumber: true },
-        take: 60,
-      });
-      let branchFilled = 0;
-      for (const c of needBranch) {
-        try {
-          const meta: any = await this.crm.getContractMeta(c.contractNumber);
-          if (meta?.ok) {
-            const branch = meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
-            await this.prisma.crmContract.update({
-              where: { contractNumber: c.contractNumber },
-              data: { branchName: branch },
-            });
-            branchFilled++;
-          }
-          // meta.ok=false (CRM xatosi) → keyingi tsiklda qayta urinamiz (NULL qoladi)
-        } catch { /* keyingi tsikl */ }
-      }
-      if (needType.length || branchFilled) {
-        this.log.log(`crmMetaBackfill: turi ${needType.length}, sotuv bo'limi ${branchFilled} to'ldirildi`);
-      }
+      await this.runMetaBackfill(60); // cron: sotuv bo'limi 60/tsikl (CRM yukini tejab)
     } catch (e: any) {
       this.log.warn(`crmMetaBackfillTick xato: ${e?.message}`);
     } finally {
       this.crmMetaBackfillRunning = false;
     }
+  }
+
+  /**
+   * Turi (property_type) + sotuv bo'limi (branch_name)ni to'ldiradi. XATO/topilmagan
+   * (found=false) shartnomalar TABIIY o'tkazib yuboriladi (faqat found=true'lar). Konvergent.
+   * @param branchLimit shu tsiklda /index orqali nechta sotuv bo'limi olinsin.
+   * @returns { typeFilled, branchFilled, branchRemaining } — qolganini cron avtomat to'ldiradi.
+   */
+  async runMetaBackfill(branchLimit: number): Promise<{ typeFilled: number; branchFilled: number; branchRemaining: number }> {
+    // 1) TURI — bepul: cached objectName'dan (barcha NULL, 5000 gacha)
+    const needType = await this.prisma.crmContract.findMany({
+      where: { found: true, propertyType: null, objectName: { not: null } },
+      select: { contractNumber: true, objectName: true },
+      take: 5000,
+    });
+    for (const c of needType) {
+      await this.prisma.crmContract.update({
+        where: { contractNumber: c.contractNumber },
+        data: { propertyType: derivePropertyType(c.objectName) },
+      }).catch(() => {});
+    }
+
+    // 2) SOTUV BO'LIMI — /index (getContractMeta) orqali NULL bo'lganlar.
+    //    NULL=tekshirilmagan; qiymat yoki '' (yo'q) yozilgach qayta so'ramaymiz.
+    const needBranch = await this.prisma.crmContract.findMany({
+      where: { found: true, branchName: null },
+      select: { contractNumber: true },
+      take: Math.max(1, branchLimit),
+    });
+    let branchFilled = 0;
+    for (const c of needBranch) {
+      try {
+        const meta: any = await this.crm.getContractMeta(c.contractNumber);
+        if (meta?.ok) {
+          const branch = meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
+          await this.prisma.crmContract.update({
+            where: { contractNumber: c.contractNumber },
+            data: { branchName: branch },
+          });
+          branchFilled++;
+        }
+        // meta.ok=false (CRM xatosi) → NULL qoladi, keyingi safar qayta urinamiz
+      } catch { /* keyingi safar */ }
+    }
+    const branchRemaining = await this.prisma.crmContract.count({
+      where: { found: true, branchName: null },
+    });
+    if (needType.length || branchFilled) {
+      this.log.log(`crmMetaBackfill: turi ${needType.length}, sotuv bo'limi ${branchFilled} to'ldirildi (${branchRemaining} qoldi)`);
+    }
+    return { typeFilled: needType.length, branchFilled, branchRemaining };
   }
 
   /**

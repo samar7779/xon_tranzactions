@@ -87,6 +87,14 @@ export class OplataKvController {
     return this.crmCache.repairExistingVirtualStatuses();
   }
 
+  @Post('crm-meta/backfill')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Turi (parking/uy) + sotuv bo'limi ustunlarini to'ldirish. XATO/topilmagan shartnomalar skip." })
+  crmMetaBackfill() {
+    // Turi darrov (barcha), sotuv bo'limi 300/bosish (CRM /index). Qolganini cron avtomat to'ldiradi.
+    return this.crmCache.runMetaBackfill(300);
+  }
+
   @Get('export')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Filtr bo\'yicha barcha qatorlarni Excel sifatida yuklab olish' })

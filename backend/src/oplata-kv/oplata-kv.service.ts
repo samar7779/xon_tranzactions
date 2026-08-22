@@ -708,25 +708,33 @@ export class OplataKvService {
     const cns = Array.from(new Set(items.map((i) => (i.contractNo || '').toUpperCase()).filter(Boolean)));
     const crmRows = cns.length
       ? await this.prisma.crmContract.findMany({
-          where: { contractNumber: { in: cns }, found: true, virtualStatus: { not: null } },
-          select: { contractNumber: true, virtualStatus: true },
+          where: { contractNumber: { in: cns }, found: true },
+          select: { contractNumber: true, virtualStatus: true, branchName: true, propertyType: true },
         })
       : [];
-    // Faqat haqiqiy (bo'sh bo'lmagan) status. '' = "tekshirildi, status yo'q" → ko'rsatilmaydi.
-    // Hali tekshirilmagan (NULL) shartnomalarni crmStatusBackfillTick cron to'ldiradi.
+    // Faqat haqiqiy (bo'sh bo'lmagan) qiymatlar. '' = "tekshirildi, yo'q" → ko'rsatilmaydi.
+    // Hali tekshirilmagan (NULL) shartnomalarni backfill cronlari to'ldiradi.
     const crmStatusMap = new Map<string, string>();
+    const crmBranchMap = new Map<string, string>();
+    const crmTypeMap = new Map<string, string>();
     for (const c of crmRows) {
-      if (c.virtualStatus && c.virtualStatus.trim()) {
-        crmStatusMap.set(c.contractNumber.toUpperCase(), c.virtualStatus);
-      }
+      const key = c.contractNumber.toUpperCase();
+      if (c.virtualStatus && c.virtualStatus.trim()) crmStatusMap.set(key, c.virtualStatus);
+      if (c.branchName && c.branchName.trim()) crmBranchMap.set(key, c.branchName);
+      if (c.propertyType) crmTypeMap.set(key, c.propertyType);
     }
 
-    const itemsWithStatus = items.map((i) => ({
-      ...i,
-      crmXato: isXato(i),
-      contractSource: sourceOf(i),  // 'manual' | 'ariza' | null
-      crmStatus: crmStatusMap.get((i.contractNo || '').toUpperCase()) || null,
-    }));
+    const itemsWithStatus = items.map((i) => {
+      const key = (i.contractNo || '').toUpperCase();
+      return {
+        ...i,
+        crmXato: isXato(i),
+        contractSource: sourceOf(i),  // 'manual' | 'ariza' | null
+        crmStatus: crmStatusMap.get(key) || null,
+        crmBranch: crmBranchMap.get(key) || null,          // sotuv bo'limi
+        crmPropertyType: crmTypeMap.get(key) || null,      // 'parking' | 'apartment'
+      };
+    });
 
     return {
       ok: true,
