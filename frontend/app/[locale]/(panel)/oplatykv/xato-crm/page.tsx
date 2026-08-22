@@ -8,6 +8,8 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, Building2, Scissors, Search, Copy, X, Download,
 } from 'lucide-react';
 import { api, apiDownload } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 import { formatMoney, cn } from '@/lib/utils';
 
 type Mode = 'xato' | 'unsplit';
@@ -75,6 +77,7 @@ function SubTab({ active, onClick, icon: Icon, label, hint }: { active: boolean;
 
 function ListView({ mode }: { mode: Mode }) {
   const qc = useQueryClient();
+  const canEdit = useAuth((s) => !!s.user?.permissions?.includes(PERMS.OPLATAKV_EDIT));
   const [page, setPage] = useState(1);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -239,8 +242,8 @@ function ListView({ mode }: { mode: Mode }) {
           {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Yuklab olish
         </button>
 
-        {/* Bulk — BARCHA sahifadagilarni to'g'irlash (Split yo'q → server bulk; XATO → hammasini match+assign) */}
-        {total > 0 && (
+        {/* Bulk — BARCHA sahifadagilarni to'g'irlash (faqat tahrir ruxsati borlarga) */}
+        {canEdit && total > 0 && (
           <button
             onClick={runBulk}
             disabled={bulk.running}
@@ -275,8 +278,8 @@ function ListView({ mode }: { mode: Mode }) {
           const busy = fix.isPending && fix.variables?.id === it.id;
           const open = openId === it.id;
           const amt = Number(it.paymentAmount || 0);
-          // Fix faqat CRM'da TOPILGANDA — topilmaganlarni bu yerdan to'g'irlamaymiz.
-          const canFix = !!crm;
+          // Fix faqat CRM'da TOPILGANDA va tahrir ruxsati bo'lsa (viewer tuzatolmaydi).
+          const canFix = !!crm && canEdit;
           const fixLabel = mode === 'xato' ? 'Qo\'shish' : 'To\'g\'irlash';
 
           return (

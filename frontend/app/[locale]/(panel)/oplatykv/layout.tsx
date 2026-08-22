@@ -13,7 +13,7 @@ const TABS = [
   { key: 'overview', href: '/oplatykv',         label: 'ОплатыКв', img: '/sheets.png',         exact: true,  perm: PERMS.OPLATAKV_VIEW },
   { key: 'crm',      href: '/oplatykv/crm',     label: 'CRM',      img: '/xon-saroy-logo.png', exact: false, perm: PERMS.CRM_VIEW },
   { key: 'billing',  href: '/oplatykv/billing', label: 'Billing',  img: '/xonpay.jpg',         exact: false, perm: PERMS.CRM_VIEW },
-  { key: 'xato-crm', href: '/oplatykv/xato-crm', label: 'XATO → CRM', img: '/xon-saroy-logo.png', exact: false, perm: PERMS.CRM_VIEW },
+  { key: 'xato-crm', href: '/oplatykv/xato-crm', label: 'XATO → CRM', img: '/xon-saroy-logo.png', exact: false, perm: PERMS.OPLATAKV_VIEW },
 ];
 
 export default function OplatyKvLayout({ children }: { children: React.ReactNode }) {
