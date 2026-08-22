@@ -192,6 +192,10 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   xatoOnly?: string;
 
+  @ApiPropertyOptional({ description: "Faqat split yo'q qatorlar: shartnomasi CRM'da bor, lekin Оплата/1взнос/ежемесячный bo'sh" })
+  @IsOptional() @IsString()
+  unsplitOnly?: string;
+
   // ─── Summa oraliq filtrlari (aniq summa = min=max qilib yuboriladi) ───
   @ApiPropertyOptional({ description: 'Сумма оплаты — pastki chegara' })
   @IsOptional() @Type(() => Number)

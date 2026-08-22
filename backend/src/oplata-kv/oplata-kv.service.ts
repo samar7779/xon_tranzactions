@@ -439,6 +439,26 @@ export class OplataKvService {
   }
 
   /**
+   * "Split yo'q" filtri — shartnomasi CRM'da FOUND, lekin ustunlari BO'SH:
+   * paymentCategory (Оплата) / firstInstallment (1 взнос) / monthlyAmount (ежемесячный) = null.
+   * XATO → CRM modulining 2-sub-tabi uchun (CRM'dan tip topib splitlash kerak bo'lganlar).
+   */
+  private async buildUnsplitFilter(): Promise<Prisma.OplataKvWhereInput> {
+    const verified = await this.prisma.crmContract.findMany({
+      where: { found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedNos = verified.map((c) => c.contractNumber);
+    return {
+      sourceTxId: { not: null },
+      contractNo: { in: verifiedNos.length ? verifiedNos : ['__no_match__'] },
+      paymentCategory: null,
+      firstInstallment: null,
+      monthlyAmount: null,
+    };
+  }
+
+  /**
    * crm_status (virtual_status) bo'yicha OplataKv filtri.
    * CSV: "Бартер,Ипотека" — CrmContract.virtualStatus IN → contractNo IN.
    * '__none__' marker — crm_status bo'sh qatorlar (found=false yoki virtual_status yo'q):
@@ -722,6 +742,14 @@ export class OplataKvService {
       const xatoFilter = await this.buildXatoFilter();
       if (where.AND) (where.AND as any[]).push(xatoFilter);
       else where.AND = [xatoFilter];
+    }
+
+    // ─── SPLIT YO'Q filter — shartnomasi bor, lekin ustunlar bo'sh ───
+    const unsplitOnly = q.unsplitOnly === 'true' || q.unsplitOnly === '1';
+    if (unsplitOnly) {
+      const f = await this.buildUnsplitFilter();
+      if (where.AND) (where.AND as any[]).push(f);
+      else where.AND = [f];
     }
 
     // ─── crm_status (virtual_status) filtri — vergul bilan ko'p tanlov ───
