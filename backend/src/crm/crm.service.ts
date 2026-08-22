@@ -231,6 +231,12 @@ export class CrmService {
       status: ru(p.status),
       type: ru(p.type),         // boshlang'ich / oylik (initial / monthly)
       category: ru(p.category),
+      // SPLIT — CRM to'lov qatorida bevosita bor (so'mda)
+      initialAmount: Number(p.initial_amount || 0),   // boshlang'ich
+      monthlyAmount: Number(p.monthly_amount || 0),   // oylik
+      otherAmount: Number(p.other_amount || 0),        // boshqa
+      balance: p.balance != null ? Number(p.balance) : null,
+      orderId: p.order_id != null ? String(p.order_id) : null,
       matchedBy,
       strong: matchedBy.includes('external_id') || matchedBy.includes('general_id') || matchedBy.includes('transaction_id'),
     });

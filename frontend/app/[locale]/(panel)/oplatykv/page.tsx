@@ -1146,6 +1146,11 @@ interface CrmCandidate {
   status: string | null;
   type?: string | null;
   category?: string | null;
+  initialAmount?: number;
+  monthlyAmount?: number;
+  otherAmount?: number;
+  balance?: number | null;
+  orderId?: string | null;
   matchedBy: string[];
   strong?: boolean;
 }
@@ -1294,6 +1299,25 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
                     </button>
                   )}
                 </div>
+
+                {/* SPLIT — boshlang'ich / oylik / boshqa (CRM to'lov qatoridan) */}
+                {(c.initialAmount != null || c.monthlyAmount != null) && (
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 py-1.5">
+                      <div className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">Boshlang'ich</div>
+                      <div className="text-[12.5px] font-bold text-amber-800 dark:text-amber-300">{formatMoney(c.initialAmount || 0)}</div>
+                    </div>
+                    <div className="rounded-lg bg-sky-50 dark:bg-sky-950/30 ring-1 ring-sky-200 dark:ring-sky-900 py-1.5">
+                      <div className="text-[10px] text-sky-700 dark:text-sky-400 font-medium">Oylik</div>
+                      <div className="text-[12.5px] font-bold text-sky-800 dark:text-sky-300">{formatMoney(c.monthlyAmount || 0)}</div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 py-1.5">
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Boshqa</div>
+                      <div className="text-[12.5px] font-bold text-slate-700 dark:text-slate-300">{formatMoney(c.otherAmount || 0)}</div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
                   <div className="text-slate-500 dark:text-slate-400">Summa: <span className="text-slate-800 dark:text-slate-200 font-medium">{formatMoney(c.amount)}</span></div>
                   <div className="text-slate-500 dark:text-slate-400">Sana: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.date || '—'}</span></div>
