@@ -694,7 +694,7 @@ export class OplataKvService {
       purpose: r.purpose || '',
       date: r.date ? new Date(r.date).toISOString().slice(0, 10) : '',
     }));
-    const matches = await this.crmService.matchComposites(items);
+    const matches = await this.crmService.bulkMatch(items);
     const matchMap = new Map(matches.map((m) => [m.id, m.crm]));
 
     let matched = 0;

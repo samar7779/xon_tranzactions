@@ -441,47 +441,118 @@ export class CrmService {
     }
 
     // ── 2) XonPay UUID (purpose'dagi XONPAY:(UUID)) bo'yicha — lokal XonpayTransaction ──
+    await this.applyXonpayMatches(list, resultMap);
+
+    return list.map((it) => ({ id: it.id, crm: resultMap.get(it.id) ?? null }));
+  }
+
+  /** purpose'dagi XONPAY:(UUID) bo'yicha lokal XonpayTransaction'dan match (type→bosh/oylik). */
+  private async applyXonpayMatches(
+    list: Array<{ id: string; purpose: string }>, resultMap: Map<string, any>,
+  ): Promise<void> {
     const XONPAY_RE = /XONPAY[:\s]*\(?([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\)?/i;
     const uuidOf = (purpose: string): string | null => {
       const m = (purpose || '').match(XONPAY_RE);
       return m ? m[1].toUpperCase() : null;
     };
     const pending = list.filter((it) => !resultMap.get(it.id) && uuidOf(it.purpose));
-    if (pending.length) {
-      const uuids = Array.from(new Set(pending.map((it) => uuidOf(it.purpose)!)));
-      const variants = uuids.flatMap((u) => [u, u.toLowerCase(), u.toUpperCase()]);
-      const xps = await this.prisma.xonpayTransaction.findMany({
-        where: { xonpayUuid: { in: variants }, contract: { not: null } },
-        select: { xonpayUuid: true, contract: true, amount: true, type: true, datePaid: true, objectName: true, externalId: true, purpose: true },
+    if (!pending.length) return;
+    const uuids = Array.from(new Set(pending.map((it) => uuidOf(it.purpose)!)));
+    const variants = uuids.flatMap((u) => [u, u.toLowerCase(), u.toUpperCase()]);
+    const xps = await this.prisma.xonpayTransaction.findMany({
+      where: { xonpayUuid: { in: variants }, contract: { not: null } },
+      select: { xonpayUuid: true, contract: true, amount: true, type: true, datePaid: true, objectName: true, externalId: true, purpose: true },
+    });
+    const xpMap = new Map<string, any>();
+    for (const xp of xps) if (xp.xonpayUuid) xpMap.set(String(xp.xonpayUuid).toUpperCase(), xp);
+    for (const it of pending) {
+      const xp = xpMap.get(uuidOf(it.purpose)!);
+      if (!xp?.contract) continue;
+      const amt = Number(xp.amount || 0);
+      const t = String(xp.type || '').toLowerCase();
+      const isInitial = /взнос|перв|initial|boshlang/.test(t);
+      const isMonthly = /ежемес|monthly|oylik/.test(t);
+      resultMap.set(it.id, {
+        contract: String(xp.contract).trim(),
+        initialAmount: isInitial ? amt : 0,
+        monthlyAmount: isMonthly ? amt : (!isInitial ? amt : 0),
+        otherAmount: 0,
+        amount: amt,
+        date: xp.datePaid ? new Date(xp.datePaid).toISOString().slice(0, 10) : '',
+        object: xp.objectName || null,
+        type: xp.type || null,
+        externalId: String(xp.externalId || ''),
+        purpose: xp.purpose || '',
+        orderId: null,
+        viaXonpay: true,
       });
-      const xpMap = new Map<string, any>();
-      for (const xp of xps) if (xp.xonpayUuid) xpMap.set(String(xp.xonpayUuid).toUpperCase(), xp);
-      for (const it of pending) {
-        const xp = xpMap.get(uuidOf(it.purpose)!);
-        if (xp?.contract) {
-          // CRM 'type' (Ежемесячный платеж / 1 взнос) — qaysi ustunga ekanini aniqlaydi.
-          const amt = Number(xp.amount || 0);
-          const t = String(xp.type || '').toLowerCase();
-          const isInitial = /взнос|перв|initial|boshlang/.test(t);
-          const isMonthly = /ежемес|monthly|oylik/.test(t);
-          resultMap.set(it.id, {
-            contract: String(xp.contract).trim(),
-            initialAmount: isInitial ? amt : 0,
-            monthlyAmount: isMonthly ? amt : (!isInitial ? amt : 0), // noaniq bo'lsa oylik (ko'pincha)
-            otherAmount: 0,
-            amount: amt,
-            date: xp.datePaid ? new Date(xp.datePaid).toISOString().slice(0, 10) : '',
-            object: xp.objectName || null,
-            type: xp.type || null,
-            externalId: String(xp.externalId || ''),
-            purpose: xp.purpose || '',
-            orderId: null,
-            viaXonpay: true,
-          });
-        }
-      }
     }
+  }
 
+  // CRM to'lovlarining GLOBAL indeksi (kesh) — bulk match uchun (bir marta parallel tortiladi).
+  private crmIndex: { at: number; coreMap: Map<string, any>; exactMap: Map<string, any> } | null = null;
+  private static readonly CRM_INDEX_TTL = 20 * 60 * 1000; // 20 daqiqa
+
+  /** Barcha CRM to'lovlarini BIR marta (parallel sahifalar) tortib coreMap+exactMap quradi (keshlanadi). */
+  private async getCrmIndex(force = false): Promise<{ coreMap: Map<string, any>; exactMap: Map<string, any> }> {
+    if (!force && this.crmIndex && (Date.now() - this.crmIndex.at) < CrmService.CRM_INDEX_TTL) {
+      return this.crmIndex;
+    }
+    const coreMap = new Map<string, any>();
+    const exactMap = new Map<string, any>();
+    const addRows = (rows: any[]) => {
+      for (const p of rows) {
+        const ext = String(p.external_id ?? '').trim();
+        if (ext && !exactMap.has(ext)) exactMap.set(ext, p);
+        const c = this.compositeCore(ext);
+        if (c && !coreMap.has(c)) coreMap.set(c, p);
+      }
+    };
+    const rowsOf = (r: any): any[] => {
+      const raw = r?.ok ? (r.data?.data ?? r.data) : null;
+      return raw?.data ?? (Array.isArray(raw) ? raw : []);
+    };
+    // 1-sahifa — totalPage ni bilamiz
+    const r1: any = await this.getPaymentHistory(1, 5000, 120_000);
+    const raw1: any = r1?.ok ? (r1.data?.data ?? r1.data) : null;
+    const rows1 = raw1?.data ?? (Array.isArray(raw1) ? raw1 : []);
+    addRows(rows1);
+    let totalPage = Number(raw1?.pagination?.totalPage || raw1?.pagination?.total_page || 0);
+    if (!totalPage && rows1.length === 5000) totalPage = 100; // metadata yo'q — ehtiyot cap
+    totalPage = Math.min(totalPage || 1, 120);
+    // 2..totalPage — parallel partiyalar (CONC=8)
+    const CONC = 8;
+    for (let start = 2; start <= totalPage; start += CONC) {
+      const batch: number[] = [];
+      for (let p = start; p < start + CONC && p <= totalPage; p++) batch.push(p);
+      const results = await Promise.all(batch.map((p) => this.getPaymentHistory(p, 5000, 120_000)));
+      let anyEmpty = false;
+      for (const r of results) { const rows = rowsOf(r); if (!rows.length) anyEmpty = true; addRows(rows); }
+      if (anyEmpty) break; // oxiriga yetdik
+    }
+    this.crmIndex = { at: Date.now(), coreMap, exactMap };
+    this.log.log(`getCrmIndex: ${exactMap.size} to'lov keshlandi (${totalPage} sahifagacha)`);
+    return this.crmIndex;
+  }
+
+  /** BULK match — global keshlangan indeks bilan (tez). {id,purpose,date}[]. */
+  async bulkMatch(input: Array<{ id: string; purpose?: string; date?: string }>): Promise<Array<{ id: string; crm: any | null }>> {
+    const list = Array.from(
+      new Map(
+        (input || [])
+          .map((x) => ({ id: String(x?.id || '').trim(), purpose: String(x?.purpose || '') }))
+          .filter((x) => x.id)
+          .map((x) => [x.id, x] as const),
+      ).values(),
+    );
+    const { coreMap, exactMap } = await this.getCrmIndex();
+    const resultMap = new Map<string, any>();
+    for (const it of list) {
+      let row = exactMap.get(it.id);
+      if (!row) { const c = this.compositeCore(it.id); row = c ? coreMap.get(c) : null; }
+      if (row) resultMap.set(it.id, this.crmRowSummary(row));
+    }
+    await this.applyXonpayMatches(list, resultMap);
     return list.map((it) => ({ id: it.id, crm: resultMap.get(it.id) ?? null }));
   }
 
