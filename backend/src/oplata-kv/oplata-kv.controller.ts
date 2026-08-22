@@ -695,6 +695,17 @@ export class OplataKvController {
     return this.svc.update(id, body, actorFrom(user));
   }
 
+  @Post(':id/assign-from-crm')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_EDIT)
+  @ApiOperation({ summary: "XATO to'lovga CRM'dan topilgan shartnomani biriktirish + CRM grafigi bo'yicha split (boshlang'ich/oylik)" })
+  assignFromCrm(
+    @Param('id') id: string,
+    @Body() body: { contractNo?: string },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.assignFromCrm(id, String(body?.contractNo || ''), actorFrom(user));
+  }
+
   @Delete(':id')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: 'Qatorni o\'chirish (history saqlanadi)' })

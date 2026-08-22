@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -49,5 +49,17 @@ export class CrmController {
   })
   findByComposite(@Query('id') id: string) {
     return this.svc.findByComposite(id);
+  }
+
+  @Post('match-composites')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: 'BATCH: kompozit ID ro\'yxati bo\'yicha CRM to\'lovlarni topish (XATO tuzatish moduli)',
+    description:
+      "{ ids: string[] } — har id uchun { id, crm: {contract, initialAmount, monthlyAmount, otherAmount, ...} | null }. " +
+      'Sana bo\'yicha guruhlab tez qidiradi. Faqat aniq (external_id yadrosi) mos qaytadi.',
+  })
+  matchComposites(@Body() body: { ids?: string[] }) {
+    return this.svc.matchComposites(Array.isArray(body?.ids) ? body.ids : []);
   }
 }

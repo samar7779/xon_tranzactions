@@ -336,6 +336,98 @@ export class CrmService {
     return { ok: true, parsed, via, candidates, sameDate, sample, sampleKeys, matchSample, scanned };
   }
 
+  /** Kompozit ID/external_id yadrosi = general_id_num_ddate (yagona, barqaror match kaliti). */
+  private compositeCore(s: string): string {
+    const t = (s || '').trim();
+    const body = t.startsWith('IP_') ? t.slice(3) : t;
+    const parts = body.split('_');
+    if (parts.length < 3) return '';
+    return `${parts[0]}_${parts[1]}_${parts[2]}`;
+  }
+
+  /** CRM maydonining o'zbekcha/ruscha nomi ({name:{ru,uz}} yoki string). */
+  private ruName(v: any): string | null {
+    if (v == null) return null;
+    if (typeof v === 'string') return v || null;
+    if (typeof v === 'object') {
+      if (v.ru || v.uz || v.en) return v.ru || v.uz || v.en;
+      if (v.name) {
+        if (typeof v.name === 'string') return v.name || null;
+        if (typeof v.name === 'object') return v.name.ru || v.name.uz || v.name.en || null;
+      }
+      if (typeof v.value === 'string') return v.value || null;
+      return null;
+    }
+    return String(v);
+  }
+
+  /** CRM to'lov qatoridan qisqa xulosa (batch-match uchun). */
+  private crmRowSummary(p: any) {
+    return {
+      contract: String(p.contract || '').trim(),
+      initialAmount: Number(p.initial_amount || 0),
+      monthlyAmount: Number(p.monthly_amount || 0),
+      otherAmount: Number(p.other_amount || 0),
+      amount: Number(p.amount || 0),
+      date: p.date_paid ? String(p.date_paid).slice(0, 10) : '',
+      object: this.ruName(p.object_name),
+      externalId: String(p.external_id ?? '').trim(),
+      purpose: p.purpose || '',
+      orderId: p.order_id != null ? String(p.order_id) : null,
+    };
+  }
+
+  /**
+   * BATCH: bir nechta kompozit ID (XATO to'lovlar id'lari) bo'yicha CRM'dan mos to'lovni topadi.
+   * ID'lar SANA bo'yicha guruhlanadi → har sana uchun BITTA payment-history/excel so'rov
+   * (date_from=date_to) → external_id yadrosi (general_id_num_ddate) bo'yicha map → tez match.
+   * Faqat ANIQ (yadro mos) natija qaytadi. Har id uchun { id, crm|null }.
+   */
+  async matchComposites(ids: string[]): Promise<Array<{ id: string; crm: any | null }>> {
+    const uniqIds = Array.from(new Set((ids || []).map((s) => String(s || '').trim()).filter(Boolean))).slice(0, 300);
+    const byDate = new Map<string, string[]>();
+    for (const id of uniqIds) {
+      const p = this.parseComposite(id);
+      if (!p?.isoDate) continue;
+      const arr = byDate.get(p.isoDate) || [];
+      arr.push(id);
+      byDate.set(p.isoDate, arr);
+    }
+
+    const resultMap = new Map<string, any | null>();
+    for (const [isoDate, dateIds] of byDate) {
+      const coreMap = new Map<string, any>();
+      let page = 1;
+      let prevSig = '';
+      const MAX = 6;
+      while (page <= MAX) {
+        const r: any = await this.callClient('/payment-history/excel', { page, limit: 5000, date_from: isoDate, date_to: isoDate }, 90_000);
+        if (!r?.ok) break;
+        const raw: any = r.data?.data ?? r.data;
+        const rows: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+        if (!rows.length) break;
+        const sig = `${rows.length}:${rows[0]?.external_id ?? ''}:${rows[rows.length - 1]?.external_id ?? ''}`;
+        if (sig === prevSig) break;
+        prevSig = sig;
+        for (const p of rows) {
+          const c = this.compositeCore(String(p.external_id ?? ''));
+          if (c && !coreMap.has(c)) coreMap.set(c, p);
+        }
+        const pg = raw?.pagination;
+        const totalPage = Number(pg?.totalPage || pg?.total_page || 0);
+        if (totalPage && page >= totalPage) break;
+        if (rows.length < 5000) break;
+        page++;
+      }
+      for (const id of dateIds) {
+        const c = this.compositeCore(id);
+        const row = c ? coreMap.get(c) : null;
+        resultMap.set(id, row ? this.crmRowSummary(row) : null);
+      }
+    }
+    return uniqIds.map((id) => ({ id, crm: resultMap.get(id) ?? null }));
+  }
+
   /**
    * Chek sahifasi uchun — shartnoma bo'yicha menejer / sotuv ofisi / obyekt.
    * Bu maydonlar FAQAT /order/index javobida keladi (created_by, branch),

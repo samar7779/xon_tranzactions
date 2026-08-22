@@ -526,6 +526,27 @@ export class OplataKvService {
     return { ok: true, contractNo: finalNo, client: cc?.customerName ?? null, object: cc?.objectName ?? null, found: !!cc?.found };
   }
 
+  /**
+   * XATO tuzatish moduli — CRM'dan topilgan shartnomani XATO to'lovga biriktiradi
+   * VA CRM grafigi bo'yicha split qiladi (boshlang'ich/oylik). Ketma-ketlik muhim:
+   * avval shartnoma (botAssignContract split'ni tozalaydi), keyin splitSingleRow.
+   */
+  async assignFromCrm(
+    id: string, contractNo: string, actor?: Actor,
+  ): Promise<{ ok: boolean; error?: string; assign?: any; split?: any; found?: boolean }> {
+    if (!id || !String(contractNo || '').trim()) return { ok: false, error: 'id va contractNo kerak' };
+    const assign = await this.botAssignContract(id, String(contractNo).trim(), actor?.name || 'web');
+    if (!assign.ok) return { ok: false, error: assign.error || 'Biriktirib bo\'lmadi', assign };
+    // Shartnoma biriktirilgach — CRM grafigi bo'yicha split (found bo'lsa ishlaydi)
+    let split: any = null;
+    try {
+      split = await this.splitSingleRow(id, actor);
+    } catch (e: any) {
+      split = { ok: false, error: e?.message || 'split xatosi' };
+    }
+    return { ok: true, assign, split, found: assign.found };
+  }
+
   async getXatoContractNumbers(): Promise<string[]> {
     const xatoFilter = await this.buildXatoFilter();
     const rows = await this.prisma.oplataKv.findMany({
