@@ -180,6 +180,14 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   crmStatuses?: string;
 
+  @ApiPropertyOptional({ description: "Тип (vergul bilan): parking,apartment,__none__" })
+  @IsOptional() @IsString()
+  crmPropertyTypes?: string;
+
+  @ApiPropertyOptional({ description: "Сотув бўлими nomlari (vergul bilan), '__none__' = bo'sh" })
+  @IsOptional() @IsString()
+  crmBranches?: string;
+
   @ApiPropertyOptional({ description: "Faqat XATO qatorlar: 'true' bo'lsa CRM da topilmaganlar ko'rsatiladi" })
   @IsOptional() @IsString()
   xatoOnly?: string;

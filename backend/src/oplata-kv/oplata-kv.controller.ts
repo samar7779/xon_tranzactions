@@ -91,8 +91,9 @@ export class OplataKvController {
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Turi (parking/uy) + sotuv bo'limi ustunlarini to'ldirish. XATO/topilmagan shartnomalar skip." })
   crmMetaBackfill() {
-    // Turi darrov (barcha), sotuv bo'limi 300/bosish (CRM /index). Qolganini cron avtomat to'ldiradi.
-    return this.crmCache.runMetaBackfill(300);
+    // Turi darrov (barcha), sotuv bo'limi 120/bosish (CRM /index, parallel — 15s ichida ulguradi).
+    // Qolganini cron avtomat to'ldiradi; qayta bossa yana 120 ta.
+    return this.crmCache.runMetaBackfill(120);
   }
 
   @Get('export')

@@ -488,6 +488,42 @@ export class OplataKvService {
     };
   }
 
+  /** Тип (parking/apartment) filtri — CrmContract.propertyType bo'yicha contractNo IN/NOT IN. */
+  private async buildPropertyTypeFilter(csv: string): Promise<Prisma.OplataKvWhereInput | null> {
+    const wanted = csv.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!wanted.length) return null;
+    const wantNone = wanted.includes('__none__');
+    const named = wanted.filter((w) => w === 'parking' || w === 'apartment');
+    const rows = await this.prisma.crmContract.findMany({
+      where: { found: true, propertyType: { not: null } },
+      select: { contractNumber: true, propertyType: true },
+    });
+    const allTyped = rows.map((r) => r.contractNumber);
+    const matchNos = rows.filter((r) => (named as string[]).includes(r.propertyType as string)).map((r) => r.contractNumber);
+    if (wantNone && named.length === 0) return { contractNo: { notIn: allTyped } };
+    if (!wantNone) return { contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } };
+    return { OR: [{ contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } }, { contractNo: { notIn: allTyped } }] };
+  }
+
+  /** Сотув бўлими filtri — CrmContract.branchName bo'yicha contractNo IN/NOT IN. */
+  private async buildBranchFilter(csv: string): Promise<Prisma.OplataKvWhereInput | null> {
+    const wanted = csv.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!wanted.length) return null;
+    const wantNone = wanted.includes('__none__');
+    const named = wanted.filter((w) => w !== '__none__');
+    const rows = await this.prisma.crmContract.findMany({
+      where: { found: true, branchName: { not: null } },
+      select: { contractNumber: true, branchName: true },
+    });
+    const withBranch = rows.filter((r) => r.branchName && r.branchName.trim());
+    const allWithBranch = withBranch.map((r) => r.contractNumber);
+    const namedLc = new Set(named.map((s) => s.toLowerCase()));
+    const matchNos = withBranch.filter((r) => namedLc.has((r.branchName as string).toLowerCase())).map((r) => r.contractNumber);
+    if (wantNone && named.length === 0) return { contractNo: { notIn: allWithBranch } };
+    if (!wantNone) return { contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } };
+    return { OR: [{ contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } }, { contractNo: { notIn: allWithBranch } }] };
+  }
+
   /**
    * Hozir XATO bo'lgan oplata_kv qatorlarining DISTINCT shartnoma raqamlari.
    * "Qayta tekshirish" shu ro'yxatni CRM'ga tekshiradi — butun DB'даги 5000+
@@ -696,6 +732,14 @@ export class OplataKvService {
         if (where.AND) (where.AND as any[]).push(crmFilter);
         else where.AND = [crmFilter];
       }
+    }
+    if (q.crmPropertyTypes && q.crmPropertyTypes.trim()) {
+      const f = await this.buildPropertyTypeFilter(q.crmPropertyTypes);
+      if (f) { if (where.AND) (where.AND as any[]).push(f); else where.AND = [f]; }
+    }
+    if (q.crmBranches && q.crmBranches.trim()) {
+      const f = await this.buildBranchFilter(q.crmBranches);
+      if (f) { if (where.AND) (where.AND as any[]).push(f); else where.AND = [f]; }
     }
 
     const sortBy = q.sortBy || 'date';
@@ -3369,6 +3413,14 @@ export class OplataKvService {
         else where.AND = [crmFilter];
       }
     }
+    if (q.crmPropertyTypes && q.crmPropertyTypes.trim()) {
+      const f = await this.buildPropertyTypeFilter(q.crmPropertyTypes);
+      if (f) { if (where.AND) (where.AND as any[]).push(f); else where.AND = [f]; }
+    }
+    if (q.crmBranches && q.crmBranches.trim()) {
+      const f = await this.buildBranchFilter(q.crmBranches);
+      if (f) { if (where.AND) (where.AND as any[]).push(f); else where.AND = [f]; }
+    }
 
     const sortBy = q.sortBy || 'date';
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
@@ -3501,6 +3553,32 @@ export class OplataKvService {
         const s = search.toLowerCase();
         values = values.filter((v) => v.name.toLowerCase().includes(s));
       }
+      return { ok: true, values };
+    }
+
+    // Тип (уй/парковка) — CrmContract.propertyType (2 qiymat + bo'sh)
+    if (column === 'crmPropertyType') {
+      let values: Array<{ id: string; name: string }> = [
+        { id: 'apartment', name: 'Жилой' },
+        { id: 'parking',   name: 'Парковка' },
+        { id: '__none__',  name: "— (bo'sh)" },
+      ];
+      if (search) { const s = search.toLowerCase(); values = values.filter((v) => v.name.toLowerCase().includes(s)); }
+      return { ok: true, values };
+    }
+
+    // Сотув бўлими — CrmContract.branchName (distinct) + bo'sh
+    if (column === 'crmBranch') {
+      const rows = await this.prisma.crmContract.findMany({
+        where: { found: true, branchName: { not: null } },
+        select: { branchName: true }, distinct: ['branchName'], take: 300,
+      });
+      let values: Array<{ id: string; name: string }> = rows
+        .map((r) => r.branchName)
+        .filter((v): v is string => !!v && !!v.trim())
+        .map((v) => ({ id: v, name: v }));
+      values.push({ id: '__none__', name: "— (bo'sh)" });
+      if (search) { const s = search.toLowerCase(); values = values.filter((v) => v.name.toLowerCase().includes(s)); }
       return { ok: true, values };
     }
 

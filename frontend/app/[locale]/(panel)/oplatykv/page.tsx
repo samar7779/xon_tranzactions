@@ -246,17 +246,23 @@ export default function OplataKvPage() {
   const [crmLookupOpen, setCrmLookupOpen] = useState(false);
 
   // CRM qo'shimcha ustunlar — turi (parking/uy) va sotuv bo'limi. Default YASHIRIN.
-  const [showTypeCol, setShowTypeCol] = useState(false);
-  const [showBranchCol, setShowBranchCol] = useState(false);
+  const [showTypeCol, setShowTypeCol] = useState(false);     // default YASHIRIN
+  const [showBranchCol, setShowBranchCol] = useState(false);  // default YASHIRIN
+  const [showCrmStatusCol, setShowCrmStatusCol] = useState(true);  // default ko'rinadi
+  const [showManbaCol, setShowManbaCol] = useState(true);          // default ko'rinadi
   const [colMenuOpen, setColMenuOpen] = useState(false);
   useEffect(() => {
     try {
       setShowTypeCol(localStorage.getItem('oplatykv-col-type-v1') === '1');
       setShowBranchCol(localStorage.getItem('oplatykv-col-branch-v1') === '1');
+      setShowCrmStatusCol(localStorage.getItem('oplatykv-col-crmstatus-v1') !== '0');
+      setShowManbaCol(localStorage.getItem('oplatykv-col-manba-v1') !== '0');
     } catch { /* ignore */ }
   }, []);
   useEffect(() => { try { localStorage.setItem('oplatykv-col-type-v1', showTypeCol ? '1' : '0'); } catch {} }, [showTypeCol]);
   useEffect(() => { try { localStorage.setItem('oplatykv-col-branch-v1', showBranchCol ? '1' : '0'); } catch {} }, [showBranchCol]);
+  useEffect(() => { try { localStorage.setItem('oplatykv-col-crmstatus-v1', showCrmStatusCol ? '1' : '0'); } catch {} }, [showCrmStatusCol]);
+  useEffect(() => { try { localStorage.setItem('oplatykv-col-manba-v1', showManbaCol ? '1' : '0'); } catch {} }, [showManbaCol]);
 
   // Per-column filter (Google Sheets style)
   const [columnFilterMode, setColumnFilterMode] = useState(false);
@@ -381,6 +387,8 @@ export default function OplataKvPage() {
     txType:          'txTypes',
     source:          'sources',
     crmStatus:       'crmStatuses',
+    crmPropertyType: 'crmPropertyTypes',
+    crmBranch:       'crmBranches',
   };
 
   // columnFilters Set object — JSON serialization uchun
@@ -506,7 +514,7 @@ export default function OplataKvPage() {
 
   // CRM turi + sotuv bo'limi ustunlarini to'ldirish (XATO/topilmagan shartnomalar skip)
   const fillMetaMut = useMutation({
-    mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number }>('/oplata-kv/crm-meta/backfill'),
+    mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number }>('/oplata-kv/crm-meta/backfill', undefined, { timeout: 60000 }),
     onSuccess: (r) => {
       toast.success(
         `To'ldirildi — turi ${r.typeFilled} ta, sotuv bo'limi ${r.branchFilled} ta` +
@@ -642,39 +650,32 @@ export default function OplataKvPage() {
                 <DropdownMenuTrigger asChild>
                   <button
                     className={cn(
-                      'relative h-10 w-10 rounded-xl ring-1 grid place-items-center transition-colors shrink-0',
-                      (showTypeCol || showBranchCol)
-                        ? 'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
-                        : 'bg-slate-50/60 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
+                      'relative h-10 w-10 rounded-xl grid place-items-center transition-all shrink-0 active:scale-95',
+                      (showTypeCol || showBranchCol || !showCrmStatusCol || !showManbaCol)
+                        ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/30 ring-1 ring-indigo-400/50'
+                        : 'bg-slate-50/60 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-105',
                     )}
-                    title="CRM ustunlar — turi va sotuv bo'limi"
+                    title="Ustunlar — ko'rsatish / yashirish"
                   >
                     <Columns3 className="h-4 w-4" />
-                    {(showTypeCol || showBranchCol) && (
-                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-2 ring-white dark:ring-slate-900" />
-                    )}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64 p-2">
-                  <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">CRM ustunlar</div>
-                  <button
-                    onClick={() => setShowTypeCol((v) => !v)}
-                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-[13px] text-left"
-                  >
-                    <span className={cn('w-4 h-4 rounded grid place-items-center ring-1 shrink-0', showTypeCol ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600')}>
-                      {showTypeCol && <Check className="h-3 w-3" />}
-                    </span>
-                    <Car className="h-4 w-4 text-slate-400 shrink-0" /> Turi (parking / uy)
-                  </button>
-                  <button
-                    onClick={() => setShowBranchCol((v) => !v)}
-                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-[13px] text-left"
-                  >
-                    <span className={cn('w-4 h-4 rounded grid place-items-center ring-1 shrink-0', showBranchCol ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600')}>
-                      {showBranchCol && <Check className="h-3 w-3" />}
-                    </span>
-                    <Building2 className="h-4 w-4 text-slate-400 shrink-0" /> Sotuv bo'limi
-                  </button>
+                  <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Ustunlar (ko'rsatish)</div>
+                  {[
+                    { on: showCrmStatusCol, set: setShowCrmStatusCol, icon: <Hash className="h-4 w-4 text-slate-400 shrink-0" />, label: 'crm_status' },
+                    { on: showManbaCol, set: setShowManbaCol, icon: <ArrowUpRight className="h-4 w-4 text-slate-400 shrink-0" />, label: 'Манба' },
+                    { on: showTypeCol, set: setShowTypeCol, icon: <Car className="h-4 w-4 text-slate-400 shrink-0" />, label: 'Тип (жилой / парковка)' },
+                    { on: showBranchCol, set: setShowBranchCol, icon: <Building2 className="h-4 w-4 text-slate-400 shrink-0" />, label: 'Сотув бўлими' },
+                  ].map((c, idx) => (
+                    <button key={idx} onClick={() => c.set((v: boolean) => !v)}
+                      className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-[13px] text-left">
+                      <span className={cn('w-4 h-4 rounded grid place-items-center ring-1 shrink-0', c.on ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600')}>
+                        {c.on && <Check className="h-3 w-3" />}
+                      </span>
+                      {c.icon} {c.label}
+                    </button>
+                  ))}
                   <div className="h-px bg-slate-100 dark:bg-slate-800 my-1.5" />
                   <button
                     onClick={() => fillMetaMut.mutate()}
@@ -869,31 +870,39 @@ export default function OplataKvPage() {
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
                     activeFilterParams={activeFilterParams} />
-                  <ColumnTh label="crm_status" column="crmStatus"
+                  {showCrmStatusCol && <ColumnTh label="crm_status" column="crmStatus"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
-                    activeFilterParams={activeFilterParams} />
-                  {showTypeCol && <Th>Тип (уй/пар)</Th>}
-                  {showBranchCol && <Th>Сотув бўлими</Th>}
-                  <ColumnTh label={t('columnManba')} column="source"
+                    activeFilterParams={activeFilterParams} />}
+                  {showTypeCol && <ColumnTh label="Тип (жил/пар)" column="crmPropertyType"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
-                    activeFilterParams={activeFilterParams} />
+                    activeFilterParams={activeFilterParams} />}
+                  {showBranchCol && <ColumnTh label="Сотув бўлими" column="crmBranch"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />}
+                  {showManbaCol && <ColumnTh label={t('columnManba')} column="source"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />}
                   <Th align="center">ID</Th>
                 </tr>
               </thead>
               <tbody>
                 {listQuery.isLoading && Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
-                    {Array.from({ length: 11 + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0) }).map((__, j) => (
+                    {Array.from({ length: 9 + (showCrmStatusCol ? 1 : 0) + (showManbaCol ? 1 : 0) + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0) }).map((__, j) => (
                       <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
-                  <tr><td colSpan={11 + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0)} className="p-12 text-center text-slate-400 dark:text-slate-500">
+                  <tr><td colSpan={9 + (showCrmStatusCol ? 1 : 0) + (showManbaCol ? 1 : 0) + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0)} className="p-12 text-center text-slate-400 dark:text-slate-500">
                     {t('noRowsFound')}
                   </td></tr>
                 )}
@@ -959,19 +968,21 @@ export default function OplataKvPage() {
                     </td>
                     <td className="px-3 py-2.5 max-w-[200px] truncate" title={it.object || ''}>{it.object || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
                     <td className="px-3 py-2.5">{it.txType || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
-                    <td className="px-3 py-2.5">
-                      {it.crmStatus ? (
-                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 whitespace-nowrap', crmStatusCls(it.crmStatus))}>
-                          {it.crmStatus}
-                        </span>
-                      ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
-                    </td>
+                    {showCrmStatusCol && (
+                      <td className="px-3 py-2.5">
+                        {it.crmStatus ? (
+                          <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 whitespace-nowrap', crmStatusCls(it.crmStatus))}>
+                            {it.crmStatus}
+                          </span>
+                        ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
+                      </td>
+                    )}
                     {showTypeCol && (
                       <td className="px-3 py-2.5">
                         {it.crmPropertyType === 'parking' ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900 whitespace-nowrap"><Car className="h-3 w-3" /> Паркинг</span>
                         ) : it.crmPropertyType === 'apartment' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900 whitespace-nowrap"><Building2 className="h-3 w-3" /> Уй</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900 whitespace-nowrap"><Building2 className="h-3 w-3" /> Жилой</span>
                         ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
                       </td>
                     )}
@@ -980,11 +991,13 @@ export default function OplataKvPage() {
                         {it.crmBranch || <span className="text-slate-400 dark:text-slate-500">—</span>}
                       </td>
                     )}
-                    <td className="px-3 py-2.5">
-                      <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ring-1 whitespace-nowrap', SOURCE_CLS[src])}>
-                        {SOURCE_LABEL_KEY[src] ? t(SOURCE_LABEL_KEY[src]!) : 'Excel'}
-                      </span>
-                    </td>
+                    {showManbaCol && (
+                      <td className="px-3 py-2.5">
+                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ring-1 whitespace-nowrap', SOURCE_CLS[src])}>
+                          {SOURCE_LABEL_KEY[src] ? t(SOURCE_LABEL_KEY[src]!) : 'Excel'}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex items-center gap-1">
                         <PurposeInfoButton data={{

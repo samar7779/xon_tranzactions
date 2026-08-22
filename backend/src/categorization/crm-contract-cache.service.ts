@@ -101,20 +101,27 @@ export class CrmContractCacheService {
       select: { contractNumber: true },
       take: Math.max(1, branchLimit),
     });
+    // PARALLEL (6 ta bir vaqtda) — ketma-ket bo'lsa 15s HTTP timeout'dan oshib ketardi.
     let branchFilled = 0;
-    for (const c of needBranch) {
-      try {
-        const meta: any = await this.crm.getContractMeta(c.contractNumber);
-        if (meta?.ok) {
-          const branch = meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
-          await this.prisma.crmContract.update({
-            where: { contractNumber: c.contractNumber },
-            data: { branchName: branch },
-          });
-          branchFilled++;
-        }
-        // meta.ok=false (CRM xatosi) → NULL qoladi, keyingi safar qayta urinamiz
-      } catch { /* keyingi safar */ }
+    const CONC = 6;
+    for (let i = 0; i < needBranch.length; i += CONC) {
+      const slice = needBranch.slice(i, i + CONC);
+      const res = await Promise.all(slice.map(async (c) => {
+        try {
+          const meta: any = await this.crm.getContractMeta(c.contractNumber);
+          if (meta?.ok) {
+            const branch = meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
+            await this.prisma.crmContract.update({
+              where: { contractNumber: c.contractNumber },
+              data: { branchName: branch },
+            });
+            return true;
+          }
+          // meta.ok=false (CRM xatosi) → NULL qoladi, keyingi safar qayta urinamiz
+        } catch { /* keyingi safar */ }
+        return false;
+      }));
+      branchFilled += res.filter(Boolean).length;
     }
     const branchRemaining = await this.prisma.crmContract.count({
       where: { found: true, branchName: null },
