@@ -92,13 +92,14 @@ export class CrmContractCacheService {
       const res = await this.crm.listContractBranchesPage(this.branchPage, 100);
       if (!res.ok) break;
       if (res.totalPage) this.branchTotalPage = res.totalPage;
-      // Bo'lim bo'yicha guruhlab, NULL bo'lgan qatorlarni updateMany bilan to'ldiramiz
+      // Bo'lim + TURI bo'yicha guruhlab updateMany. Branch faqat NULL'ga; turi (type.key)
+      // esa OVERWRITE — eski obyekt-nomli qiymatlar noto'g'ri edi (parking → жилой chiqardi).
       const byBranch = new Map<string, string[]>();
+      const byType = new Map<string, string[]>();
       for (const it of res.items) {
         const key = it.contract.toUpperCase().slice(0, 128);
-        const arr = byBranch.get(it.branchName) || [];
-        arr.push(key);
-        byBranch.set(it.branchName, arr);
+        const b = byBranch.get(it.branchName) || []; b.push(key); byBranch.set(it.branchName, b);
+        if (it.propertyType) { const t = byType.get(it.propertyType) || []; t.push(key); byType.set(it.propertyType, t); }
       }
       for (const [branch, keys] of byBranch) {
         const r = await this.prisma.crmContract.updateMany({
@@ -106,6 +107,12 @@ export class CrmContractCacheService {
           data: { branchName: branch },
         });
         branchFilled += r.count;
+      }
+      for (const [pt, keys] of byType) {
+        await this.prisma.crmContract.updateMany({
+          where: { contractNumber: { in: keys } },
+          data: { propertyType: pt },
+        });
       }
       this.branchPage++;
       if (this.branchTotalPage && this.branchPage > this.branchTotalPage) { this.branchPage = 1; break; } // aylanib chiqdi
@@ -299,13 +306,13 @@ export class CrmContractCacheService {
             create: {
               contractNumber: contractKey,
               customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
-              propertyType: derivePropertyType(objectName), // turi (parking/apartment) — obyekt nomidan
+              propertyType: crmTypeKey(detail) ?? derivePropertyType(objectName), // CRM type.key (ishonchli) → zaxira: obyekt nomi // turi (parking/apartment) — obyekt nomidan
               rawSnapshot: pickSnapshot(detail),
               found: true,
             },
             update: {
               customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
-              propertyType: derivePropertyType(objectName),
+              propertyType: crmTypeKey(detail) ?? derivePropertyType(objectName), // CRM type.key (ishonchli) → zaxira: obyekt nomi
               rawSnapshot: pickSnapshot(detail),
               found: true,
               lastVerifiedAt: new Date(),
@@ -746,14 +753,21 @@ function extractVirtualStatus(detail: any): string {
 }
 
 /**
- * Obyekt nomidan shartnoma turini aniqlaydi: parkovka kalit so'zlari bo'lsa 'parking',
- * aks holda 'apartment' (uy). CRM'da alohida "type" maydoni yo'q — obyekt nomidan
- * kelib chiqamiz (categorization ham shu mantiqni ishlatadi: Взносы за автостоянку).
+ * Shartnoma turi — CRM /show javobidagi ISHONCHLI `type.key` maydonidan.
+ * "parking" → parking (avtoturargoh), boshqasi → apartment (жилой/уй).
+ * (Obyekt nomi kompleks nomi bo'lgani uchun ishonchsiz edi — endi CRM type.key.)
  */
+export function crmTypeKey(detail: any): 'parking' | 'apartment' | null {
+  const k = detail?.type?.key;
+  if (!k) return null;
+  return String(k).toLowerCase() === 'parking' ? 'parking' : 'apartment';
+}
+
+/** Obyekt nomidan zaxira aniqlash (type.key bo'lmaganda) — parking kalit so'zlari. */
 export function derivePropertyType(objectName: string | null | undefined): string | null {
   if (!objectName) return null;
   const o = String(objectName).toUpperCase();
-  if (o.includes('ПАРКОВКА') || o.includes('ПАРКИНГ') || o.includes('АВТОСТОЯН') || o.includes('PARKING')) return 'parking';
+  if (o.includes('ПАРКОВКА') || o.includes('ПАРКИНГ') || o.includes('АВТОСТОЯН') || o.includes('АВТОТУРАРГ') || o.includes('PARKING')) return 'parking';
   return 'apartment';
 }
 

@@ -514,21 +514,20 @@ export class OplataKvService {
    * parking kalit so'zlariga qarab (obyekt/kompleks nomi ishonchsiz edi — frontend display bilan bir xil).
    * parking = kalit so'z bor; apartment (жилой) = kalit so'z yo'q (NOT).
    */
-  private buildPropertyTypeFilter(csv: string): Prisma.OplataKvWhereInput | null {
+  private async buildPropertyTypeFilter(csv: string): Promise<Prisma.OplataKvWhereInput | null> {
     const wanted = csv.split(',').map((s) => s.trim()).filter(Boolean);
     if (!wanted.length) return null;
     const wantParking = wanted.includes('parking');
     const wantApartment = wanted.includes('apartment');
     if (wantParking === wantApartment) return null; // ikkalasi yoki hech biri → filtr shart emas
-    const kws = ['парковк', 'паркинг', 'автостоян', 'машиномест', 'паркомест', 'parking'];
-    const parkingCond: Prisma.OplataKvWhereInput = {
-      OR: kws.flatMap((k) => [
-        { purpose: { contains: k, mode: 'insensitive' } },
-        { txType: { contains: k, mode: 'insensitive' } },
-        { object: { contains: k, mode: 'insensitive' } },
-      ]) as any,
-    };
-    return wantParking ? parkingCond : { NOT: parkingCond };
+    // Parking shartnomalar OZ — ularni olamiz; apartment = NOT parking (ikkalasi ham kichik IN/NOT IN).
+    const rows = await this.prisma.crmContract.findMany({
+      where: { found: true, propertyType: 'parking' },
+      select: { contractNumber: true },
+    });
+    const parkingNos = rows.map((r) => r.contractNumber);
+    if (wantParking) return { contractNo: { in: parkingNos.length ? parkingNos : ['__no_match__'] } };
+    return { contractNo: { notIn: parkingNos } }; // apartment
   }
 
   /**

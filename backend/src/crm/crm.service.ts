@@ -1176,15 +1176,19 @@ export class CrmService {
    */
   async listContractBranchesPage(page = 1, perPage = 100): Promise<{
     ok: boolean;
-    items: Array<{ contract: string; branchName: string }>;
+    items: Array<{ contract: string; branchName: string; propertyType: 'parking' | 'apartment' | null }>;
     totalPage: number;
   }> {
     const r = await this.call('/index', { page, 'per-page': perPage, is_trashed: 1, trashed_status: 1, with_trashed: 1 });
     if (!r.ok) return { ok: false, items: [], totalPage: 0 };
-    const items = ((r.data?.data as any[]) || []).map((it) => ({
-      contract: String(it.contract || '').trim(),
-      branchName: it.created_by?.branch?.name ? String(it.created_by.branch.name).slice(0, 255) : '',
-    })).filter((x) => x.contract);
+    const items = ((r.data?.data as any[]) || []).map((it) => {
+      const tk = it.type?.key ? String(it.type.key).toLowerCase() : null; // CRM turi (ishonchli)
+      return {
+        contract: String(it.contract || '').trim(),
+        branchName: it.created_by?.branch?.name ? String(it.created_by.branch.name).slice(0, 255) : '',
+        propertyType: (tk ? (tk === 'parking' ? 'parking' : 'apartment') : null) as 'parking' | 'apartment' | null,
+      };
+    }).filter((x) => x.contract);
     const pg = (r.data?.pagination as any) || {};
     return { ok: true, items, totalPage: Number(pg.totalPage || pg.total_page || 0) };
   }

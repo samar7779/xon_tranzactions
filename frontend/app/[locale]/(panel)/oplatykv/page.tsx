@@ -112,12 +112,14 @@ const CATEGORY_CLS: Record<Category, string> = {
 // Shartnoma turi — parking / жилой. Obyekt nomi (kompleks) ishonchsiz, shuning uchun
 // to'lov MAQSAD matni (purpose) + txType + obyektni ham tekshiramiz: parking kalit
 // so'zlari bo'lsa 'parking', aks holda (ma'lumot bor bo'lsa) 'apartment'.
-const PARKING_RE = /ПАРКОВК|ПАРКИНГ|АВТОСТОЯН|PARKING|МАШИНО[-\s]?МЕСТ|ПАРКОМЕСТ|МАШИНОМЕСТ/i;
+const PARKING_RE = /ПАРКОВК|ПАРКИНГ|АВТОСТОЯН|АВТОТУРАРГ|AVTOTURARG|PARKING|МАШИНО[-\s]?МЕСТ|ПАРКОМЕСТ|МАШИНОМЕСТ/i;
 function rowPropType(it: { crmPropertyType?: string | null; txType?: string | null; object?: string | null; purpose?: string | null }): 'parking' | 'apartment' | null {
+  // 1) Maqsad matni parking bo'lsa — parking (backfill kutmaydi)
   const hay = `${it.txType || ''} ${it.object || ''} ${it.purpose || ''}`;
   if (PARKING_RE.test(hay)) return 'parking';
+  // 2) CRM type.key (ishonchli, backfill to'ldiradi) — matnsiz parkinglar uchun
   if (it.crmPropertyType === 'parking') return 'parking';
-  if (it.crmPropertyType || it.object || it.txType) return 'apartment';
+  if (it.crmPropertyType === 'apartment' || it.object || it.txType) return 'apartment';
   return null;
 }
 
