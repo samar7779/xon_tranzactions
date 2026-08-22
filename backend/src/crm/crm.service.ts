@@ -146,39 +146,40 @@ export class CrmService {
 
   /**
    * XATO to'lovni CRM'dan topish — kompozit bank ID orqali.
-   * CRM'da bu ID bo'yicha to'g'ridan-to'g'ri qidirib bo'lmaydi (u bank ID'si),
-   * shuning uchun payment-history sahifama-sahifa tortilib, ID ichidagi ma'lumot
-   * (general_id / num / sana+summa) bo'yicha mos to'lov(lar) topiladi. Har nomzod
-   * uchun contract + purpose + external_id qaytadi; `matchedBy` qaysi maydon mos
-   * kelganini ko'rsatadi (external_id === general_id bo'lsa — aniq ID-match).
+   * CRM `/payment-history` index endpointi SERVER-SIDE filtrlarni oladi
+   * (transaction_id, contract, object_id, date_from/to, amount_min/max, ...).
+   * Shu bois skanerlash SHART EMAS — `transaction_id = general_id` bilan bitta
+   * so'rovda aniq to'lov(lar) olinadi. Topilmasa — sana bo'yicha zaxira qidiruv.
+   * CRM external_id = bizning kompozit ID (general_id_num_ddate_..._sign) bilan bir xil.
    */
-  async findByComposite(compositeId: string, opts: { maxPages?: number; limit?: number } = {}): Promise<{
+  async findByComposite(compositeId: string): Promise<{
     ok: boolean;
     error?: string;
     parsed?: any;
+    via?: string;
     candidates: Array<any>;
     sameDate: Array<any>;
     sample?: any;
     sampleKeys?: string[];
     scanned: number;
-    pages: number;
-    aborted: boolean;
   }> {
     const parsed = this.parseComposite(compositeId);
-    if (!parsed) return { ok: false, error: "ID formati noto'g'ri", candidates: [], sameDate: [], scanned: 0, pages: 0, aborted: false };
+    if (!parsed) return { ok: false, error: "ID formati noto'g'ri", candidates: [], sameDate: [], scanned: 0 };
     const { generalId, num, isoDate, amount } = parsed;
 
-    const LIMIT = opts.limit || 5000;
-    const MAX_PAGES = opts.maxPages || 120;
     const ru = (v: any): string | null => {
       if (v == null) return null;
       if (typeof v === 'string') return v;
       if (typeof v === 'object') return v.ru || v.uz || v.en || null;
       return String(v);
     };
-    // Summa: composite so'm yoki tiyin bo'lishi mumkin — ikkovini ham sinaymiz
+    // Summa: composite tiyinda bo'lishi mumkin (615000000 = 6 150 000 so'm) — 3 variant
     const amtMatch = (pamt: number) =>
       Math.abs(pamt - amount) < 1 || Math.abs(pamt * 100 - amount) < 1 || Math.abs(pamt - amount / 100) < 1;
+    // ANIQ match = CRM external_id boshi general_id_num_ddate ga to'g'ri kelishi (yagona)
+    const core = [generalId, num, parsed.ddate]
+      .filter((x) => x && !String(x).startsWith('no_'))
+      .join('_');
     const rowOut = (p: any, matchedBy: string[]) => ({
       contract: String(p.contract || '').trim(),
       purpose: p.purpose || '',
@@ -189,49 +190,60 @@ export class CrmService {
       method: ru(p.payment_method),
       status: ru(p.status),
       matchedBy,
+      strong: matchedBy.includes('external_id') || matchedBy.includes('general_id') || matchedBy.includes('transaction_id'),
     });
+    const rowsOf = (r: any): any[] => {
+      if (!r?.ok) return [];
+      const raw: any = r.data?.data ?? r.data;
+      return raw?.data ?? (Array.isArray(raw) ? raw : []);
+    };
+    const evaluate = (p: any): string[] => {
+      const ext = String(p.external_id ?? '').trim();
+      const pur = String(p.purpose ?? '');
+      const pdate = p.date_paid ? String(p.date_paid).slice(0, 10) : '';
+      const pamt = Number(p.amount || 0);
+      const mb: string[] = [];
+      if (core && ext.startsWith(core)) mb.push('external_id');
+      if (!mb.includes('external_id') && generalId && generalId !== 'no_general_id' && (ext === generalId || ext.includes(generalId) || pur.includes(generalId))) mb.push('general_id');
+      if (num && num !== 'no_num' && (ext.includes(num) || pur.includes(num))) mb.push('num');
+      if (isoDate && pdate === isoDate && amtMatch(pamt)) mb.push('sana+summa');
+      return mb;
+    };
 
     const candidates: Array<any> = [];
     const sameDate: Array<any> = [];
-    let sample: any = undefined;
-    let sampleKeys: string[] | undefined = undefined;
+    let sample: any; let sampleKeys: string[] | undefined;
     let scanned = 0;
-    let page = 1;
-    let aborted = false;
-    let prevSig = '';
-    while (page <= MAX_PAGES) {
-      const r: any = await this.getPaymentHistory(page, LIMIT, 120_000);
-      if (!r?.ok) { aborted = true; break; } // sahifa olinmadi — to'xtaymiz (qisman natija)
-      const raw: any = r.data?.data ?? r.data;
-      const rows: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
-      if (!rows.length) break;
-      // API page paramni e'tiborsiz qoldirsa — bir xil sahifa qaytadi: to'xtaymiz
-      const sig = `${rows.length}:${rows[0]?.external_id ?? ''}:${rows[rows.length - 1]?.external_id ?? ''}`;
-      if (sig === prevSig) break;
-      prevSig = sig;
+    let via = '';
 
-      if (!sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); }
+    // 1) SERVER-SIDE: transaction_id = general_id (aniq, bitta so'rov)
+    if (generalId && generalId !== 'no_general_id' && /^\d+$/.test(generalId)) {
+      const r: any = await this.callClient('/payment-history', { transaction_id: generalId, limit: 50 }, 60_000);
+      const rows = rowsOf(r);
       scanned += rows.length;
+      if (rows.length) { via = 'transaction_id'; if (!sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); } }
       for (const p of rows) {
-        const ext = String(p.external_id ?? '').trim();
-        const pur = String(p.purpose ?? '');
-        const pdate = p.date_paid ? String(p.date_paid).slice(0, 10) : '';
-        const pamt = Number(p.amount || 0);
-        const matchedBy: string[] = [];
-        if (generalId && generalId !== 'no_general_id' && (ext === generalId || ext.includes(generalId) || pur.includes(generalId))) matchedBy.push('general_id');
-        if (num && num !== 'no_num' && (ext.includes(num) || pur.includes(num))) matchedBy.push('num');
-        if (isoDate && pdate === isoDate && amtMatch(pamt)) matchedBy.push('sana+summa');
-        if (matchedBy.length) candidates.push(rowOut(p, matchedBy));
-        // Diagnostika: shu sanadagi to'lovlar (summa mos kelmasa ham) — CRM nima borligini ko'rish uchun
-        else if (isoDate && pdate === isoDate && sameDate.length < 12) sameDate.push(rowOut(p, ['shu sana']));
+        const mb = evaluate(p);
+        if (!mb.includes('external_id') && !mb.includes('general_id')) mb.push('transaction_id');
+        candidates.push(rowOut(p, mb));
       }
-      if (candidates.some((c) => c.matchedBy.includes('general_id'))) break; // kuchli match — to'xtaymiz
-      const pg = raw?.pagination;
-      const totalPage = Number(pg?.totalPage || pg?.total_page || 0);
-      if (totalPage && page >= totalPage) break;
-      page++;
     }
-    return { ok: true, parsed, candidates, sameDate, sample, sampleKeys, scanned, pages: page, aborted };
+
+    // 2) ZAXIRA: sana bo'yicha server filter (transaction_id bermasa) + diagnostika
+    if (candidates.length === 0 && isoDate) {
+      const r: any = await this.callClient('/payment-history', { date_from: isoDate, date_to: isoDate, limit: 500 }, 90_000);
+      const rows = rowsOf(r);
+      scanned += rows.length;
+      if (rows.length && !sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); }
+      for (const p of rows) {
+        const mb = evaluate(p);
+        if (mb.length) { via = via || 'sana'; candidates.push(rowOut(p, mb)); }
+        else if (sameDate.length < 15) sameDate.push(rowOut(p, ['shu sana']));
+      }
+    }
+
+    candidates.sort((a, b) => (b.strong ? 1 : 0) - (a.strong ? 1 : 0)); // aniq (strong) tepaga
+    return { ok: true, parsed, via, candidates, sameDate, sample, sampleKeys, scanned };
   }
 
   /**

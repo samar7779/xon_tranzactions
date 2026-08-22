@@ -1035,13 +1035,14 @@ interface CrmCandidate {
   method: string | null;
   status: string | null;
   matchedBy: string[];
+  strong?: boolean;
 }
 
 function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [id, setId] = useState('');
   const lookup = useMutation({
     mutationFn: (compositeId: string) =>
-      api.get<{ ok: boolean; error?: string; parsed?: any; candidates: CrmCandidate[]; sameDate?: CrmCandidate[]; sample?: any; sampleKeys?: string[]; scanned: number; pages: number; aborted?: boolean }>(
+      api.get<{ ok: boolean; error?: string; parsed?: any; via?: string; candidates: CrmCandidate[]; sameDate?: CrmCandidate[]; sample?: any; sampleKeys?: string[]; scanned: number }>(
         `/crm/find-by-composite?id=${encodeURIComponent(compositeId)}`,
         { timeout: 180_000 },
       ),
@@ -1095,8 +1096,8 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
           <div className="space-y-3 max-h-[55vh] overflow-y-auto">
             {res.parsed && (
               <div className="text-[11px] text-slate-500 dark:text-slate-400 rounded-lg bg-slate-50 dark:bg-slate-900 px-3 py-2 space-y-0.5">
-                <div>general_id: <b className="text-slate-700 dark:text-slate-300">{res.parsed.generalId}</b> · sana: <b className="text-slate-700 dark:text-slate-300">{res.parsed.isoDate || res.parsed.ddate}</b> · summa: <b className="text-slate-700 dark:text-slate-300">{formatMoney(res.parsed.amount)}</b></div>
-                <div>Skaner qilindi: <b className="text-slate-700 dark:text-slate-300">{res.scanned}</b> ta to'lov · {res.pages} sahifa{res.aborted ? ' · ⚠️ to‘liq skanerlanmadi (CRM javob bermadi)' : ''}</div>
+                <div>general_id: <b className="text-slate-700 dark:text-slate-300">{res.parsed.generalId}</b> · sana: <b className="text-slate-700 dark:text-slate-300">{res.parsed.isoDate || res.parsed.ddate}</b> · summa: <b className="text-slate-700 dark:text-slate-300">{formatMoney((res.parsed.amount || 0) / 100)}</b></div>
+                <div>{res.via ? <>Topildi: <b className="text-slate-700 dark:text-slate-300">{res.via}</b> bo'yicha</> : 'Server filtri'} · {res.scanned} ta to'lov ko'rildi</div>
               </div>
             )}
 
@@ -1139,34 +1140,47 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
             ) : null}
 
             {candidates.map((c, i) => (
-              <div key={i} className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-1.5 bg-white dark:bg-slate-950">
+              <div key={i} className={cn(
+                'rounded-xl ring-1 p-3 space-y-1.5',
+                c.strong
+                  ? 'ring-emerald-300 dark:ring-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20'
+                  : 'ring-amber-200 dark:ring-amber-900 bg-amber-50/30 dark:bg-amber-950/10',
+              )}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 font-semibold">
-                      Shartnoma: {c.contract || '—'}
-                    </span>
-                    {c.contract && (
-                      <button
-                        onClick={() => { navigator.clipboard?.writeText(c.contract); toast.success('Shartnoma nusxalandi'); }}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                        title="Nusxalash"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <span className={cn(
+                    'text-[10.5px] px-2 py-0.5 rounded-full font-semibold',
+                    c.strong
+                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400',
+                  )}>
+                    {c.strong ? '✅ Rosa shu (aniq)' : '⚠️ tasodifiy bo\'lishi mumkin'}
+                  </span>
                   <div className="flex flex-wrap gap-1 justify-end">
                     {c.matchedBy.map((m) => (
                       <span key={m} className={cn(
                         'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                        m === 'general_id'
+                        (m === 'general_id' || m === 'external_id' || m === 'transaction_id')
                           ? 'bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-400'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
                       )}>
-                        {m === 'general_id' ? '🎯 general_id (aniq)' : m}
+                        {(m === 'general_id' || m === 'external_id' || m === 'transaction_id') ? `🎯 ${m}` : m}
                       </span>
                     ))}
                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 font-semibold text-slate-800 dark:text-slate-200">
+                    Shartnoma: {c.contract || '—'}
+                  </span>
+                  {c.contract && (
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText(c.contract); toast.success('Shartnoma nusxalandi'); }}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                      title="Nusxalash"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
                   <div className="text-slate-500 dark:text-slate-400">Summa: <span className="text-slate-800 dark:text-slate-200 font-medium">{formatMoney(c.amount)}</span></div>
