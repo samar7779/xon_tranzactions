@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Loader2, Check, AlertTriangle, ArrowRight, ChevronDown,
-  ChevronLeft, ChevronRight, RefreshCw, Building2, Scissors, Search, Copy, X,
+  ChevronLeft, ChevronRight, RefreshCw, Building2, Scissors, Search, Copy, X, Download,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatMoney, cn } from '@/lib/utils';
@@ -34,6 +34,7 @@ interface CrmMatch {
   externalId: string;
   purpose: string;
   orderId: string | null;
+  viaXonpay?: boolean;
 }
 
 const PER_PAGE = 20;
@@ -104,7 +105,11 @@ function ListView({ mode }: { mode: Mode }) {
   const matchQ = useQuery({
     queryKey: ['crm-match', idsKey],
     enabled: ids.length > 0,
-    queryFn: () => api.post<Array<{ id: string; crm: CrmMatch | null }>>('/crm/match-composites', { ids }, { timeout: 180_000 }),
+    queryFn: () => api.post<Array<{ id: string; crm: CrmMatch | null }>>(
+      '/crm/match-composites',
+      { items: items.map((it) => ({ id: compositeOf(it), purpose: it.purpose || '' })) },
+      { timeout: 180_000 },
+    ),
   });
   const matchMap = useMemo(() => {
     const m = new Map<string, CrmMatch | null>();
@@ -158,6 +163,37 @@ function ListView({ mode }: { mode: Mode }) {
     qc.invalidateQueries({ queryKey: ['oplata-kv'] });
   };
 
+  // Joriy ko'rinishni CSV (Excel) qilib yuklab olish
+  const downloadCsv = () => {
+    const rows = displayItems.map((it) => {
+      const crm = matchMap.get(compositeOf(it));
+      return {
+        summa: Number(it.paymentAmount || 0),
+        sana: String(it.date).slice(0, 10),
+        shartnoma_oplatakv: it.contractNo || '',
+        obyekt: it.object || '',
+        mijoz: it.client || '',
+        ix_id: compositeOf(it),
+        crm_topildi: crm ? 'ha' : "yo'q",
+        crm_shartnoma: crm?.contract || '',
+        boshlangich: crm ? crm.initialAmount : '',
+        oylik: crm ? crm.monthlyAmount : '',
+        xonpay: crm?.viaXonpay ? 'ha' : '',
+      };
+    });
+    if (!rows.length) { toast.message('Yuklab olishga qator yo\'q'); return; }
+    const headers = Object.keys(rows[0]);
+    const esc = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => esc((r as any)[h])).join(','))].join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `xato-crm-${mode}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-3">
       {/* Qidiruv (ix_id / shartnoma / mijoz / purpose bo'yicha) */}
@@ -205,12 +241,21 @@ function ListView({ mode }: { mode: Mode }) {
           ))}
         </div>
 
+        {/* Yuklab olish (CSV/Excel) */}
+        <button
+          onClick={downloadCsv}
+          className="ml-auto px-2.5 py-1.5 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-[12px] font-medium flex items-center gap-1.5"
+          title="Joriy ko'rinishni CSV (Excel) qilib yuklab olish"
+        >
+          <Download className="h-3.5 w-3.5" /> Yuklab olish
+        </button>
+
         {/* Bulk — barchasini (topilganlar) to'g'irlash */}
         {matchedCount > 0 && (
           <button
             onClick={runBulk}
             disabled={bulk.running}
-            className="ml-auto px-3 py-1.5 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-[12px] font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-70"
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-[12px] font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-70"
           >
             {bulk.running ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {bulk.done}/{bulk.total}…</> : <><Check className="h-3.5 w-3.5" /> Barchasini to'g'irlash ({matchedCount})</>}
           </button>
@@ -270,8 +315,13 @@ function ListView({ mode }: { mode: Mode }) {
                     <div className="flex items-center gap-1.5 text-[12px] text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> CRM…</div>
                   ) : crm ? (
                     <div className="space-y-1">
-                      <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 font-semibold inline-flex items-center gap-1">
-                        <Building2 className="h-3 w-3" /> {crm.contract}
+                      <span className="inline-flex items-center gap-1 flex-wrap">
+                        <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 font-semibold inline-flex items-center gap-1">
+                          <Building2 className="h-3 w-3" /> {crm.contract}
+                        </span>
+                        {crm.viaXonpay && (
+                          <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-400 font-semibold">XonPay</span>
+                        )}
                       </span>
                       <div className="flex flex-wrap gap-1 text-[10px]">
                         <span className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400">bosh: <b>{formatMoney(crm.initialAmount)}</b></span>

@@ -59,7 +59,10 @@ export class CrmController {
       "{ ids: string[] } — har id uchun { id, crm: {contract, initialAmount, monthlyAmount, otherAmount, ...} | null }. " +
       'Sana bo\'yicha guruhlab tez qidiradi. Faqat aniq (external_id yadrosi) mos qaytadi.',
   })
-  matchComposites(@Body() body: { ids?: string[] }) {
-    return this.svc.matchComposites(Array.isArray(body?.ids) ? body.ids : []);
+  matchComposites(@Body() body: { items?: Array<{ id: string; purpose?: string }>; ids?: string[] }) {
+    const items = Array.isArray(body?.items)
+      ? body.items
+      : (Array.isArray(body?.ids) ? body.ids.map((id) => ({ id })) : []);
+    return this.svc.matchComposites(items);
   }
 }

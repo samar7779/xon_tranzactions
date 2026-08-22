@@ -383,18 +383,27 @@ export class CrmService {
    * (date_from=date_to) → external_id yadrosi (general_id_num_ddate) bo'yicha map → tez match.
    * Faqat ANIQ (yadro mos) natija qaytadi. Har id uchun { id, crm|null }.
    */
-  async matchComposites(ids: string[]): Promise<Array<{ id: string; crm: any | null }>> {
-    const uniqIds = Array.from(new Set((ids || []).map((s) => String(s || '').trim()).filter(Boolean))).slice(0, 300);
-    const byDate = new Map<string, string[]>();
-    for (const id of uniqIds) {
-      const p = this.parseComposite(id);
-      if (!p?.isoDate) continue;
-      const arr = byDate.get(p.isoDate) || [];
-      arr.push(id);
-      byDate.set(p.isoDate, arr);
-    }
+  async matchComposites(input: Array<{ id: string; purpose?: string }>): Promise<Array<{ id: string; crm: any | null }>> {
+    const list = Array.from(
+      new Map(
+        (input || [])
+          .map((x) => ({ id: String(x?.id || '').trim(), purpose: String(x?.purpose || '') }))
+          .filter((x) => x.id)
+          .map((x) => [x.id, x] as const),
+      ).values(),
+    ).slice(0, 300);
 
     const resultMap = new Map<string, any | null>();
+
+    // ── 1) Kompozit yadro (general_id_num_ddate) bo'yicha — sana guruhli CRM excel ──
+    const byDate = new Map<string, string[]>();
+    for (const it of list) {
+      const p = this.parseComposite(it.id);
+      if (!p?.isoDate) continue;
+      const arr = byDate.get(p.isoDate) || [];
+      arr.push(it.id);
+      byDate.set(p.isoDate, arr);
+    }
     for (const [isoDate, dateIds] of byDate) {
       const coreMap = new Map<string, any>();
       let page = 1;
@@ -422,10 +431,45 @@ export class CrmService {
       for (const id of dateIds) {
         const c = this.compositeCore(id);
         const row = c ? coreMap.get(c) : null;
-        resultMap.set(id, row ? this.crmRowSummary(row) : null);
+        if (row) resultMap.set(id, this.crmRowSummary(row));
       }
     }
-    return uniqIds.map((id) => ({ id, crm: resultMap.get(id) ?? null }));
+
+    // ── 2) XonPay UUID (purpose'dagi XONPAY:(UUID)) bo'yicha — lokal XonpayTransaction ──
+    const XONPAY_RE = /XONPAY[:\s]*\(?([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\)?/i;
+    const uuidOf = (purpose: string): string | null => {
+      const m = (purpose || '').match(XONPAY_RE);
+      return m ? m[1].toUpperCase() : null;
+    };
+    const pending = list.filter((it) => !resultMap.get(it.id) && uuidOf(it.purpose));
+    if (pending.length) {
+      const uuids = Array.from(new Set(pending.map((it) => uuidOf(it.purpose)!)));
+      const variants = uuids.flatMap((u) => [u, u.toLowerCase(), u.toUpperCase()]);
+      const xps = await this.prisma.xonpayTransaction.findMany({
+        where: { xonpayUuid: { in: variants }, contract: { not: null } },
+        select: { xonpayUuid: true, contract: true, amount: true, datePaid: true, objectName: true, externalId: true, purpose: true },
+      });
+      const xpMap = new Map<string, any>();
+      for (const xp of xps) if (xp.xonpayUuid) xpMap.set(String(xp.xonpayUuid).toUpperCase(), xp);
+      for (const it of pending) {
+        const xp = xpMap.get(uuidOf(it.purpose)!);
+        if (xp?.contract) {
+          resultMap.set(it.id, {
+            contract: String(xp.contract).trim(),
+            initialAmount: 0, monthlyAmount: 0, otherAmount: 0,
+            amount: Number(xp.amount || 0),
+            date: xp.datePaid ? new Date(xp.datePaid).toISOString().slice(0, 10) : '',
+            object: xp.objectName || null,
+            externalId: String(xp.externalId || ''),
+            purpose: xp.purpose || '',
+            orderId: null,
+            viaXonpay: true,
+          });
+        }
+      }
+    }
+
+    return list.map((it) => ({ id: it.id, crm: resultMap.get(it.id) ?? null }));
   }
 
   /**
