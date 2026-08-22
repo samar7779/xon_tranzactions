@@ -109,6 +109,18 @@ const CATEGORY_CLS: Record<Category, string> = {
   GENERAL: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900',
 };
 
+// Shartnoma turi — parking / жилой. Obyekt nomi (kompleks) ishonchsiz, shuning uchun
+// to'lov MAQSAD matni (purpose) + txType + obyektni ham tekshiramiz: parking kalit
+// so'zlari bo'lsa 'parking', aks holda (ma'lumot bor bo'lsa) 'apartment'.
+const PARKING_RE = /ПАРКОВК|ПАРКИНГ|АВТОСТОЯН|PARKING|МАШИНО[-\s]?МЕСТ|ПАРКОМЕСТ|МАШИНОМЕСТ/i;
+function rowPropType(it: { crmPropertyType?: string | null; txType?: string | null; object?: string | null; purpose?: string | null }): 'parking' | 'apartment' | null {
+  const hay = `${it.txType || ''} ${it.object || ''} ${it.purpose || ''}`;
+  if (PARKING_RE.test(hay)) return 'parking';
+  if (it.crmPropertyType === 'parking') return 'parking';
+  if (it.crmPropertyType || it.object || it.txType) return 'apartment';
+  return null;
+}
+
 // crm_status (virtual_status) badge rangi — Бартер ajralib tursin
 function crmStatusCls(status: string): string {
   const s = status.toLowerCase();
@@ -977,15 +989,18 @@ export default function OplataKvPage() {
                         ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
                       </td>
                     )}
-                    {showTypeCol && (
-                      <td className="px-3 py-2.5">
-                        {it.crmPropertyType === 'parking' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900 whitespace-nowrap"><Car className="h-3 w-3" /> Паркинг</span>
-                        ) : it.crmPropertyType === 'apartment' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900 whitespace-nowrap"><Building2 className="h-3 w-3" /> Жилой</span>
-                        ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
-                      </td>
-                    )}
+                    {showTypeCol && (() => {
+                      const pt = rowPropType(it);
+                      return (
+                        <td className="px-3 py-2.5">
+                          {pt === 'parking' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900 whitespace-nowrap"><Car className="h-3 w-3" /> Парковка</span>
+                          ) : pt === 'apartment' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900 whitespace-nowrap"><Building2 className="h-3 w-3" /> Жилой</span>
+                          ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
+                        </td>
+                      );
+                    })()}
                     {showBranchCol && (
                       <td className="px-3 py-2.5 max-w-[180px] truncate" title={it.crmBranch || ''}>
                         {it.crmBranch || <span className="text-slate-400 dark:text-slate-500">—</span>}
