@@ -45,6 +45,11 @@ export function allocatePayment(
   schedule: ScheduleBucket[],
   alreadyPaid: number,
   amount: number,
+  /**
+   * Shu shartnomada BOSHLANG'ICHGA allaqachon yozilgan jami (running first).
+   * Berilsa — boshlang'ich ulushi reja qoldig'idan OSHMAYDI (pastdagi clamp).
+   */
+  paidInitial?: number,
 ): { firstInstallment: number; monthlyAmount: number } {
   const lo = Math.min(alreadyPaid, alreadyPaid + amount);
   const hi = Math.max(alreadyPaid, alreadyPaid + amount);
@@ -64,6 +69,25 @@ export function allocatePayment(
   }
   // Grafikdan tashqari (oshiq to'lov yoki grafik yetmadi) → oylik
   if (hi > cum) monthly += sign * (hi - Math.max(lo, cum));
+
+  // ── CLAMP: yopilgan boshlang'ichga yangi pul tushmasin ──
+  // Waterfall grafikni SANA tartibida to'ldiradi. Agar mijoz grafikdan chetga chiqib
+  // to'lagan bo'lsa (yoki boshlang'ich qadamlari grafik OXIRIDA tursa), kumulyativ
+  // pozitsiya boshlang'ich qadamiga tushib qolishi mumkin — holbuki boshlang'ich reja
+  // allaqachon to'liq yopilgan bo'ladi. Real hodisa (1220ORZ23FP, 2026-08): boshlang'ich
+  // 100% yopilgan, keyingi 9 035 000 to'lov "1 взнос" bo'lib chiqqan.
+  // Shuning uchun boshlang'ich ulushi REJA QOLDIG'idan oshmaydi; ortiqchasi oylikka o'tadi.
+  if (amount > 0 && paidInitial != null && first > 0) {
+    const initialPlan = schedule.reduce((s, b) => (b.kind === 'initial' ? s + b.amount : s), 0);
+    const remaining = Math.max(0, initialPlan - paidInitial);
+    if (first > remaining) {
+      // 1 so'mdan kichik qoldiq — yaxlitlash chiqindisi, boshlang'ichga yozmaymiz
+      const capped = remaining < 1 ? 0 : remaining;
+      monthly += first - capped;
+      first = capped;
+    }
+  }
+
   return { firstInstallment: first, monthlyAmount: monthly };
 }
 
