@@ -449,12 +449,13 @@ export class OplataKvService {
       select: { contractNumber: true },
     });
     const verifiedNos = verified.map((c) => c.contractNumber);
+    // "Оплата ustuni bo'sh" = paymentCategory null (asosiy belgi). first/monthly
+    // 0 yoki null bo'lishi mumkin — shu bois ularni SHARTGA qo'shmaymiz (aks holda
+    // 0 bo'lganlar tushib qoladi). Shartnoma CRM'da FOUND (splitlash mumkin).
     return {
       sourceTxId: { not: null },
       contractNo: { in: verifiedNos.length ? verifiedNos : ['__no_match__'] },
       paymentCategory: null,
-      firstInstallment: null,
-      monthlyAmount: null,
     };
   }
 
