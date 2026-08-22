@@ -189,6 +189,8 @@ export class CrmService {
       object: ru(p.object_name),
       method: ru(p.payment_method),
       status: ru(p.status),
+      type: ru(p.type),         // boshlang'ich / oylik (initial / monthly)
+      category: ru(p.category),
       matchedBy,
       strong: matchedBy.includes('external_id') || matchedBy.includes('general_id') || matchedBy.includes('transaction_id'),
     });
@@ -216,30 +218,28 @@ export class CrmService {
     let scanned = 0;
     let via = '';
 
-    // 1) SERVER-SIDE: transaction_id = general_id (aniq, bitta so'rov)
-    if (generalId && generalId !== 'no_general_id' && /^\d+$/.test(generalId)) {
-      const r: any = await this.callClient('/payment-history', { transaction_id: generalId, limit: 50 }, 60_000);
+    // TEZKOR: /payment-history/excel'ni FILTR bilan chaqiramiz. Endpoint filtrni
+    // respekt qilsa — kichik natija, darrov topiladi; qilmasa — mos qator chiqmaydi,
+    // keyingi bosqichga o'tamiz (to'liq skaner). FAQAT mos qatorlarni olamiz (agar
+    // filtr e'tiborsiz qoldirilib 5000 ta kelsa, notog'ri nomzod qo'shilmasin).
+    const fastTry = async (filters: Record<string, any>, viaLabel: string) => {
+      if (candidates.length) return;
+      const r: any = await this.callClient('/payment-history/excel', { page: 1, ...filters }, 60_000);
       const rows = rowsOf(r);
-      scanned += rows.length;
-      if (rows.length) { via = 'transaction_id'; if (!sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); } }
-      for (const p of rows) {
-        const mb = evaluate(p);
-        if (!mb.includes('external_id') && !mb.includes('general_id')) mb.push('transaction_id');
-        candidates.push(rowOut(p, mb));
-      }
-    }
-
-    // 2) ZAXIRA: sana bo'yicha server filter (transaction_id bermasa) + diagnostika
-    if (candidates.length === 0 && isoDate) {
-      const r: any = await this.callClient('/payment-history', { date_from: isoDate, date_to: isoDate, limit: 500 }, 90_000);
-      const rows = rowsOf(r);
-      scanned += rows.length;
       if (rows.length && !sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); }
+      if (rows.length && rows.length < 4000) scanned += rows.length; // filtr respekt qilingan
       for (const p of rows) {
         const mb = evaluate(p);
-        if (mb.length) { via = via || 'sana'; candidates.push(rowOut(p, mb)); }
-        else if (sameDate.length < 15) sameDate.push(rowOut(p, ['shu sana']));
+        if (mb.length) { via = via || viaLabel; candidates.push(rowOut(p, mb)); }
       }
+    };
+    // 1) transaction_id = general_id
+    if (generalId && generalId !== 'no_general_id' && /^\d+$/.test(generalId)) {
+      await fastTry({ transaction_id: generalId, limit: 500 }, 'transaction_id');
+    }
+    // 2) sana bo'yicha
+    if (candidates.length === 0 && isoDate) {
+      await fastTry({ date_from: isoDate, date_to: isoDate, limit: 3000 }, 'sana');
     }
 
     // 3) OXIRGI ZAXIRA: /payment-history/excel to'liq skaner (server filtr ishlamasa ham topadi).

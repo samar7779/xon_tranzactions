@@ -14,6 +14,7 @@ import {
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
   PlusCircle, Paperclip, Wallet, Building2, BarChart3, RefreshCw,
+  Columns3, Car, Wand2,
   Ruler, Sparkles, Scissors,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -67,6 +68,8 @@ interface OplataKvItem {
   sourceTxId?: string | null;
   crmXato?: boolean;
   crmStatus?: string | null;  // CRM virtual_status (Бартер, Ипотека...) — XATO bo'lsa bo'sh
+  crmBranch?: string | null;        // CRM sotuv bo'limi (created_by.branch)
+  crmPropertyType?: string | null;  // 'parking' | 'apartment' (obyekt nomidan)
   contractSource?: 'manual' | 'ariza' | null;  // Tranzaksiyada qanday qo'yilgan
   perereboskaGroupId?: string | null;
   perereboskaFileName?: string | null;
@@ -241,6 +244,19 @@ export default function OplataKvPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [aktSverkaOpen, setAktSverkaOpen] = useState(false);
   const [crmLookupOpen, setCrmLookupOpen] = useState(false);
+
+  // CRM qo'shimcha ustunlar — turi (parking/uy) va sotuv bo'limi. Default YASHIRIN.
+  const [showTypeCol, setShowTypeCol] = useState(false);
+  const [showBranchCol, setShowBranchCol] = useState(false);
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  useEffect(() => {
+    try {
+      setShowTypeCol(localStorage.getItem('oplatykv-col-type-v1') === '1');
+      setShowBranchCol(localStorage.getItem('oplatykv-col-branch-v1') === '1');
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { try { localStorage.setItem('oplatykv-col-type-v1', showTypeCol ? '1' : '0'); } catch {} }, [showTypeCol]);
+  useEffect(() => { try { localStorage.setItem('oplatykv-col-branch-v1', showBranchCol ? '1' : '0'); } catch {} }, [showBranchCol]);
 
   // Per-column filter (Google Sheets style)
   const [columnFilterMode, setColumnFilterMode] = useState(false);
@@ -488,6 +504,19 @@ export default function OplataKvPage() {
     placeholderData: (prev) => prev,
   });
 
+  // CRM turi + sotuv bo'limi ustunlarini to'ldirish (XATO/topilmagan shartnomalar skip)
+  const fillMetaMut = useMutation({
+    mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number }>('/oplata-kv/crm-meta/backfill'),
+    onSuccess: (r) => {
+      toast.success(
+        `To'ldirildi — turi ${r.typeFilled} ta, sotuv bo'limi ${r.branchFilled} ta` +
+        (r.branchRemaining > 0 ? ` · ${r.branchRemaining} ta qoldi (avtomat davom etadi)` : ' · hammasi tayyor'),
+      );
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'To\'ldirishda xato'),
+  });
+
   // Oxirgi sync vaqti (UI'da ko'rsatish)
   const lastSyncQuery = useQuery({
     queryKey: ['oplata-kv-last-sync'],
@@ -607,6 +636,59 @@ export default function OplataKvPage() {
                   </button>
                 )}
               </div>
+
+              {/* CRM ustunlar — turi (parking/uy) + sotuv bo'limi: ko'rsatish/yashirish + to'ldirish */}
+              <DropdownMenu open={colMenuOpen} onOpenChange={setColMenuOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      'relative h-10 w-10 rounded-xl ring-1 grid place-items-center transition-colors shrink-0',
+                      (showTypeCol || showBranchCol)
+                        ? 'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+                        : 'bg-slate-50/60 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
+                    )}
+                    title="CRM ustunlar — turi va sotuv bo'limi"
+                  >
+                    <Columns3 className="h-4 w-4" />
+                    {(showTypeCol || showBranchCol) && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-2 ring-white dark:ring-slate-900" />
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64 p-2">
+                  <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">CRM ustunlar</div>
+                  <button
+                    onClick={() => setShowTypeCol((v) => !v)}
+                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-[13px] text-left"
+                  >
+                    <span className={cn('w-4 h-4 rounded grid place-items-center ring-1 shrink-0', showTypeCol ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600')}>
+                      {showTypeCol && <Check className="h-3 w-3" />}
+                    </span>
+                    <Car className="h-4 w-4 text-slate-400 shrink-0" /> Turi (parking / uy)
+                  </button>
+                  <button
+                    onClick={() => setShowBranchCol((v) => !v)}
+                    className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-[13px] text-left"
+                  >
+                    <span className={cn('w-4 h-4 rounded grid place-items-center ring-1 shrink-0', showBranchCol ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600')}>
+                      {showBranchCol && <Check className="h-3 w-3" />}
+                    </span>
+                    <Building2 className="h-4 w-4 text-slate-400 shrink-0" /> Sotuv bo'limi
+                  </button>
+                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1.5" />
+                  <button
+                    onClick={() => fillMetaMut.mutate()}
+                    disabled={fillMetaMut.isPending}
+                    className="w-full flex items-center justify-center gap-2 px-2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-semibold disabled:opacity-60 transition-colors"
+                  >
+                    {fillMetaMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                    Ustunlarni to'ldirish
+                  </button>
+                  <div className="px-2 pt-1.5 text-[10.5px] text-slate-400 leading-snug">
+                    CRM'dan turi va sotuv bo'limini oladi. XATO to'lovlar o'tkazib yuboriladi.
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Akt Sverka — shartnoma bo'yicha tarix (kalendardan oldin, neytral stil) */}
               <button
@@ -780,6 +862,8 @@ export default function OplataKvPage() {
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
                     activeFilterParams={activeFilterParams} />
+                  {showTypeCol && <Th>Тип (уй/пар)</Th>}
+                  {showBranchCol && <Th>Сотув бўлими</Th>}
                   <ColumnTh label={t('columnManba')} column="source"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}
@@ -791,13 +875,13 @@ export default function OplataKvPage() {
               <tbody>
                 {listQuery.isLoading && Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
-                    {Array.from({ length: 11 }).map((__, j) => (
+                    {Array.from({ length: 11 + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0) }).map((__, j) => (
                       <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
-                  <tr><td colSpan={11} className="p-12 text-center text-slate-400 dark:text-slate-500">
+                  <tr><td colSpan={11 + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0)} className="p-12 text-center text-slate-400 dark:text-slate-500">
                     {t('noRowsFound')}
                   </td></tr>
                 )}
@@ -870,6 +954,20 @@ export default function OplataKvPage() {
                         </span>
                       ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
                     </td>
+                    {showTypeCol && (
+                      <td className="px-3 py-2.5">
+                        {it.crmPropertyType === 'parking' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900 whitespace-nowrap"><Car className="h-3 w-3" /> Паркинг</span>
+                        ) : it.crmPropertyType === 'apartment' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900 whitespace-nowrap"><Building2 className="h-3 w-3" /> Уй</span>
+                        ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
+                      </td>
+                    )}
+                    {showBranchCol && (
+                      <td className="px-3 py-2.5 max-w-[180px] truncate" title={it.crmBranch || ''}>
+                        {it.crmBranch || <span className="text-slate-400 dark:text-slate-500">—</span>}
+                      </td>
+                    )}
                     <td className="px-3 py-2.5">
                       <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ring-1 whitespace-nowrap', SOURCE_CLS[src])}>
                         {SOURCE_LABEL_KEY[src] ? t(SOURCE_LABEL_KEY[src]!) : 'Excel'}
@@ -1034,6 +1132,8 @@ interface CrmCandidate {
   object: string | null;
   method: string | null;
   status: string | null;
+  type?: string | null;
+  category?: string | null;
   matchedBy: string[];
   strong?: boolean;
 }
@@ -1187,8 +1287,10 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
                   <div className="text-slate-500 dark:text-slate-400">Sana: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.date || '—'}</span></div>
                   <div className="text-slate-500 dark:text-slate-400">Obyekt: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.object || '—'}</span></div>
                   <div className="text-slate-500 dark:text-slate-400">Metod: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.method || '—'}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400">Turi (bosh./oylik): <span className="text-violet-700 dark:text-violet-400 font-semibold">{c.type || '—'}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400">Kategoriya: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.category || '—'}</span></div>
                   <div className="text-slate-500 dark:text-slate-400">Status: <span className="text-slate-800 dark:text-slate-200 font-medium">{c.status || '—'}</span></div>
-                  <div className="text-slate-500 dark:text-slate-400 truncate">external_id: <span className="text-slate-800 dark:text-slate-200 font-mono text-[11px]">{c.externalId || '—'}</span></div>
+                  <div className="text-slate-500 dark:text-slate-400 truncate col-span-2">external_id: <span className="text-slate-800 dark:text-slate-200 font-mono text-[11px]">{c.externalId || '—'}</span></div>
                 </div>
                 {c.purpose && (
                   <div className="text-[11.5px] text-slate-600 dark:text-slate-300 rounded-lg bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5 whitespace-pre-wrap break-words">
