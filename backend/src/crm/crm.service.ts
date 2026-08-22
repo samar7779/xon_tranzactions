@@ -64,6 +64,36 @@ export class CrmService {
     return this.callUrl(`${XONSAROY_CLIENT_BASE}${path}`, body, timeoutMs);
   }
 
+  /**
+   * GET so'rov (query string bilan) — index endpointlar uchun (Laravel index odatda GET).
+   * /payment-history INDEX to'liq maydonlar (type/category/payment_method) qaytaradi.
+   */
+  private async callClientGet(path: string, params: Record<string, any>, timeoutMs = 60_000) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v != null) qs.set(k, String(v));
+    const url = `${XONSAROY_CLIENT_BASE}${path}?${qs.toString()}`;
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { Authorization: this.auth(), Accept: 'application/json' },
+        signal: ctrl.signal,
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        this.log.warn(`XonSaroy GET ${url} -> ${res.status}: ${text.slice(0, 150)}`);
+        return { ok: false as const, status: res.status, error: text };
+      }
+      try { return { ok: true as const, data: JSON.parse(text) }; }
+      catch { return { ok: false as const, status: 200, error: 'Invalid JSON', raw: text }; }
+    } catch (e: any) {
+      return { ok: false as const, error: e?.message || 'Network error' };
+    } finally {
+      clearTimeout(tm);
+    }
+  }
+
   private async callUrl(url: string, body: Record<string, any>, timeoutMs: number) {
     const form = new URLSearchParams();
     for (const [k, v] of Object.entries(body)) {
@@ -249,14 +279,25 @@ export class CrmService {
         if (mb.length) pushMatch(p, mb, viaLabel);
       }
     };
-    // 1) transaction_id = general_id
-    if (generalId && generalId !== 'no_general_id' && /^\d+$/.test(generalId)) {
-      await fastTry({ transaction_id: generalId, limit: 500 }, 'transaction_id');
-    }
-    // 2) sana bo'yicha
-    if (candidates.length === 0 && isoDate) {
-      await fastTry({ date_from: isoDate, date_to: isoDate, limit: 3000 }, 'sana');
-    }
+    // INDEX endpoint (GET) — TO'LIQ maydonlar (type/category/payment_method) shu yerdan keladi.
+    const indexTry = async (filters: Record<string, any>, viaLabel: string) => {
+      if (candidates.length) return;
+      const r: any = await this.callClientGet('/payment-history', { ...filters }, 60_000);
+      const rows = rowsOf(r);
+      if (rows.length && !sample) { sample = rows[0]; sampleKeys = Object.keys(rows[0] || {}); }
+      if (rows.length && rows.length < 4000) scanned += rows.length;
+      for (const p of rows) {
+        const mb = evaluate(p);
+        if (mb.length) pushMatch(p, mb, viaLabel);
+      }
+    };
+    const gidOk = generalId && generalId !== 'no_general_id' && /^\d+$/.test(generalId);
+    // 1) INDEX (GET) — to'liq maydonli: avval transaction_id, keyin sana
+    if (gidOk) await indexTry({ transaction_id: generalId, limit: 50 }, 'transaction_id');
+    if (candidates.length === 0 && isoDate) await indexTry({ date_from: isoDate, date_to: isoDate, limit: 1000 }, 'sana');
+    // 2) EXCEL (zaxira) — filtr bilan (contract topadi; type bo'lmasligi mumkin)
+    if (candidates.length === 0 && gidOk) await fastTry({ transaction_id: generalId, limit: 500 }, 'transaction_id');
+    if (candidates.length === 0 && isoDate) await fastTry({ date_from: isoDate, date_to: isoDate, limit: 3000 }, 'sana');
 
     // 3) OXIRGI ZAXIRA: /payment-history/excel to'liq skaner (server filtr ishlamasa ham topadi).
     //    external_id core (general_id_num_ddate) bo'yicha ANIQ mos topilsa to'xtaydi.
