@@ -509,21 +509,26 @@ export class OplataKvService {
     };
   }
 
-  /** Тип (parking/apartment) filtri — CrmContract.propertyType bo'yicha contractNo IN/NOT IN. */
-  private async buildPropertyTypeFilter(csv: string): Promise<Prisma.OplataKvWhereInput | null> {
+  /**
+   * Тип (parking/apartment) filtri — to'lovning MAQSAD matni (purpose) + txType + obyektidagi
+   * parking kalit so'zlariga qarab (obyekt/kompleks nomi ishonchsiz edi — frontend display bilan bir xil).
+   * parking = kalit so'z bor; apartment (жилой) = kalit so'z yo'q (NOT).
+   */
+  private buildPropertyTypeFilter(csv: string): Prisma.OplataKvWhereInput | null {
     const wanted = csv.split(',').map((s) => s.trim()).filter(Boolean);
     if (!wanted.length) return null;
-    const wantNone = wanted.includes('__none__');
-    const named = wanted.filter((w) => w === 'parking' || w === 'apartment');
-    const rows = await this.prisma.crmContract.findMany({
-      where: { found: true, propertyType: { not: null } },
-      select: { contractNumber: true, propertyType: true },
-    });
-    const allTyped = rows.map((r) => r.contractNumber);
-    const matchNos = rows.filter((r) => (named as string[]).includes(r.propertyType as string)).map((r) => r.contractNumber);
-    if (wantNone && named.length === 0) return { contractNo: { notIn: allTyped } };
-    if (!wantNone) return { contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } };
-    return { OR: [{ contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } }, { contractNo: { notIn: allTyped } }] };
+    const wantParking = wanted.includes('parking');
+    const wantApartment = wanted.includes('apartment');
+    if (wantParking === wantApartment) return null; // ikkalasi yoki hech biri → filtr shart emas
+    const kws = ['парковк', 'паркинг', 'автостоян', 'машиномест', 'паркомест', 'parking'];
+    const parkingCond: Prisma.OplataKvWhereInput = {
+      OR: kws.flatMap((k) => [
+        { purpose: { contains: k, mode: 'insensitive' } },
+        { txType: { contains: k, mode: 'insensitive' } },
+        { object: { contains: k, mode: 'insensitive' } },
+      ]) as any,
+    };
+    return wantParking ? parkingCond : { NOT: parkingCond };
   }
 
   /** Сотув бўлими filtri — CrmContract.branchName bo'yicha contractNo IN/NOT IN. */
@@ -3585,12 +3590,11 @@ export class OplataKvService {
       return { ok: true, values };
     }
 
-    // Тип (уй/парковка) — CrmContract.propertyType (2 qiymat + bo'sh)
+    // Тип — maqsad matni bo'yicha: жилой / парковка (har qator biriga tegishli)
     if (column === 'crmPropertyType') {
       let values: Array<{ id: string; name: string }> = [
         { id: 'apartment', name: 'Жилой' },
         { id: 'parking',   name: 'Парковка' },
-        { id: '__none__',  name: "— (bo'sh)" },
       ];
       if (search) { const s = search.toLowerCase(); values = values.filter((v) => v.name.toLowerCase().includes(s)); }
       return { ok: true, values };

@@ -529,7 +529,7 @@ export default function OplataKvPage() {
     mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number }>('/oplata-kv/crm-meta/backfill', undefined, { timeout: 60000 }),
     onSuccess: (r) => {
       toast.success(
-        `To'ldirildi — turi ${r.typeFilled} ta, sotuv bo'limi ${r.branchFilled} ta` +
+        `Sotuv bo'limi ${r.branchFilled} ta to'ldirildi` +
         (r.branchRemaining > 0 ? ` · ${r.branchRemaining} ta qoldi (avtomat davom etadi)` : ' · hammasi tayyor'),
       );
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
@@ -695,7 +695,7 @@ export default function OplataKvPage() {
                     className="w-full flex items-center justify-center gap-2 px-2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-semibold disabled:opacity-60 transition-colors"
                   >
                     {fillMetaMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                    {fillMetaMut.isPending ? "To'ldirilyapti…" : "Ustunlarni to'ldirish"}
+                    {fillMetaMut.isPending ? "To'ldirilyapti…" : "Sotuv bo'limini to'ldirish"}
                   </button>
                   {fillMetaMut.isError && (
                     <div className="mt-1.5 px-2.5 py-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900 text-[11.5px] text-rose-700 dark:text-rose-300">
@@ -704,12 +704,12 @@ export default function OplataKvPage() {
                   )}
                   {fillMetaMut.data && !fillMetaMut.isPending && (
                     <div className="mt-1.5 px-2.5 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-200 dark:ring-emerald-900 text-[11.5px] text-emerald-800 dark:text-emerald-300 space-y-0.5">
-                      <div className="flex items-center justify-between"><span>Turi to'ldirildi</span><b className="tabular-nums">{fillMetaMut.data.typeFilled} ta</b></div>
-                      <div className="flex items-center justify-between"><span>Sotuv bo'limi</span><b className="tabular-nums">{fillMetaMut.data.branchFilled} ta</b></div>
+                      <div className="flex items-center justify-between"><span>Sotuv bo'limi to'ldirildi</span><b className="tabular-nums">{fillMetaMut.data.branchFilled} ta</b></div>
                       <div className="flex items-center justify-between border-t border-emerald-200/60 dark:border-emerald-900/60 mt-1 pt-1">
                         <span>Qoldi</span>
-                        <b className="tabular-nums">{fillMetaMut.data.branchRemaining > 0 ? `${fillMetaMut.data.branchRemaining} ta · avtomat` : 'tayyor ✓'}</b>
+                        <b className="tabular-nums">{fillMetaMut.data.branchRemaining > 0 ? `${fillMetaMut.data.branchRemaining} ta · avtomat davom etadi` : 'tayyor ✓'}</b>
                       </div>
+                      <div className="text-[10.5px] text-emerald-700/70 dark:text-emerald-400/70 pt-0.5">Turi (жилой/парковка) — avtomat, to'ldirish kerak emas.</div>
                     </div>
                   )}
                 </DropdownMenuContent>
