@@ -520,6 +520,8 @@ model CrmContract {
   apartmentNumber String?  @map("apartment_number") @db.VarChar(64)
   phone           String?  @db.VarChar(64)
   crmOrderId      String?  @map("crm_order_id") @db.VarChar(64) // CRM order/shartnoma ID (API'da order_id)
+  branchName      String?  @map("branch_name") @db.VarChar(255) // CRM sotuv bo'limi (created_by.branch.name, /index). NULL=tekshirilmagan, ''=yo'q, qiymat=bor
+  propertyType    String?  @map("property_type") @db.VarChar(32) // 'parking' | 'apartment' — obyekt nomidan aniqlanadi. NULL=aniqlanmagan
   rawSnapshot     Json?    @map("raw_snapshot") // CRM javobining qisqartmasi
   found           Boolean  @default(true) // false → CRM'da topilmadi, kelajakda yana urinma
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")

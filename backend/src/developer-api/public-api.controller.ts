@@ -18,6 +18,9 @@ import type { ValidatedApiKey } from './api-key.service';
  *   - Foydalanuvchi parollari, hashlar
  *   - Sezgir tizim sozlamalari
  */
+/** CrmContract'dan olingan qo'shimcha ma'lumot (contractNo bo'yicha). */
+type CrmMeta = { orderId: string | null; branch: string | null; propertyType: string | null };
+
 @ApiTags('developer-api · public')
 @UseGuards(ApiKeyAuthGuard)
 @UseInterceptors(ApiLoggerInterceptor)
@@ -208,26 +211,30 @@ export class PublicApiController {
         take: perPageN,
       }),
     ]);
-    const orderIdMap = await this.orderIdMapForContracts(items.map((it) => it.contractNo));
+    const crmMap = await this.crmMetaForContracts(items.map((it) => it.contractNo));
     return {
       ok: true,
       total,
       page: pageN,
       perPage: perPageN,
-      items: items.map((it) => this.oplataKvShape(it, orderIdMap.get((it.contractNo || '').toUpperCase()) ?? null)),
+      items: items.map((it) => this.oplataKvShape(it, crmMap.get((it.contractNo || '').toUpperCase()) ?? null)),
     };
   }
 
   /** contractNo -> CRM order_id xaritasi (CrmContract'dan, katta harf bilan mos) */
-  private async orderIdMapForContracts(contractNos: (string | null)[]): Promise<Map<string, string | null>> {
+  private async crmMetaForContracts(contractNos: (string | null)[]): Promise<Map<string, CrmMeta>> {
     const keys = [...new Set(contractNos.filter(Boolean).map((c) => (c as string).toUpperCase()))];
-    const map = new Map<string, string | null>();
+    const map = new Map<string, CrmMeta>();
     if (!keys.length) return map;
     const rows = await this.prisma.crmContract.findMany({
       where: { contractNumber: { in: keys } },
-      select: { contractNumber: true, crmOrderId: true },
+      select: { contractNumber: true, crmOrderId: true, branchName: true, propertyType: true },
     });
-    for (const r of rows) map.set(r.contractNumber.toUpperCase(), r.crmOrderId ?? null);
+    for (const r of rows) map.set(r.contractNumber.toUpperCase(), {
+      orderId: r.crmOrderId ?? null,
+      branch: r.branchName ? r.branchName : null,   // '' (sentinel: yo'q) → null
+      propertyType: r.propertyType ?? null,         // 'parking' | 'apartment'
+    });
     return map;
   }
 
@@ -272,14 +279,14 @@ export class PublicApiController {
       const pv = this.snapVal(priorMap.get(r.oplataKvId), 'contractNo');
       return typeof pv === 'string' ? pv : null;
     };
-    const orderIdMap = await this.orderIdMapForContracts(rows.map((r) => rCn(r)));
-    const oid = (cn: any) => orderIdMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
+    const crmMap = await this.crmMetaForContracts(rows.map((r) => rCn(r)));
+    const meta = (cn: any): CrmMeta | null => crmMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
     return {
       ok: true,
       total,
       page: pageN,
       perPage: perPageN,
-      items: rows.map((r) => this.deletedTombstone(r, oid, priorMap.get(r.oplataKvId))),
+      items: rows.map((r) => this.deletedTombstone(r, meta, priorMap.get(r.oplataKvId))),
     };
   }
 
@@ -355,8 +362,8 @@ export class PublicApiController {
       ...aRows.map((a) => a.contractNo),
       ...bRows.map((b) => bCn(b)),
     ];
-    const orderIdMap = await this.orderIdMapForContracts(contractNos);
-    const oid = (cn: any) => orderIdMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
+    const crmMap = await this.crmMetaForContracts(contractNos);
+    const meta = (cn: any): CrmMeta | null => crmMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
 
     const items = taken.map((e) => {
       if (e.src === 'A') {
@@ -366,20 +373,22 @@ export class PublicApiController {
         // real pul harakati: manba −summa, maqsad +summa). Aks holda → tombstone.
         const isActive = it.paymentCategory != null || it.perereboskaGroupId != null;
         if (isActive) {
-          return { ...this.oplataKvShapeMoney(it, oid(it.contractNo)), deleted: false };
+          return { ...this.oplataKvShapeMoney(it, meta(it.contractNo)), deleted: false };
         }
         // Split emas / olib tashlangan → tombstone. Qator hali bazada — to'liq aniqlovchi
         // maydonlar bilan beramiz (mijoz aynan qaysi to'lovligini biladi).
+        const m = meta(it.contractNo);
         return {
           id: it.id, sourceTxId: it.sourceTxId ?? null,
-          contractNo: it.contractNo, order_id: oid(it.contractNo),
+          contractNo: it.contractNo, order_id: m?.orderId ?? null,
+          crm_branch: m?.branch ?? null, crm_property_type: m?.propertyType ?? null,
           client: it.client, object: it.object,
           paymentAmount: it.paymentAmount != null ? String(it.paymentAmount) : null,
           date: it.date, purpose: it.purpose, txType: it.txType,
           deleted: true, reason: 'inactive', updatedAt: this.clampFuture(it.updatedAt),
         };
       }
-      return this.deletedTombstone(e.b, oid, priorMap.get(e.b.oplataKvId));
+      return this.deletedTombstone(e.b, meta, priorMap.get(e.b.oplataKvId));
     });
 
     // MUHIM: tombstone'larni FILTRLAMAYMIZ. Aniqlovchi ma'lumot (contractNo/client) bo'sh
@@ -413,8 +422,8 @@ export class PublicApiController {
     if (!row) throw new NotFoundException(
       `ОплатыКв qatori topilmadi yoki hali split qilinmagan. Qidirilgan maydonlar: id (cuid), sourceTxId. Berilgan: "${idTrimmed.slice(0, 64)}"`,
     );
-    const orderIdMap = await this.orderIdMapForContracts([row.contractNo]);
-    return { ok: true, item: this.oplataKvShape(row, orderIdMap.get((row.contractNo || '').toUpperCase()) ?? null) };
+    const crmMap = await this.crmMetaForContracts([row.contractNo]);
+    return { ok: true, item: this.oplataKvShape(row, crmMap.get((row.contractNo || '').toUpperCase()) ?? null) };
   }
 
   // ─── ACCOUNTS ────────────────────────────────────────────────────
@@ -785,12 +794,14 @@ export class PublicApiController {
     return t > now ? new Date(now) : d;
   }
 
-  private oplataKvShape(it: any, orderId: string | null = null) {
+  private oplataKvShape(it: any, meta: CrmMeta | null = null) {
     return {
       id: it.id,
       sourceTxId: it.sourceTxId ?? null,   // barqaror bank tranzaksiya id (ix id)
       contractNo: it.contractNo,
-      order_id: orderId,   // CRM order/shartnoma ID (contractNo bo'yicha CrmContract'dan)
+      order_id: meta?.orderId ?? null,     // CRM order/shartnoma ID (contractNo bo'yicha CrmContract'dan)
+      crm_branch: meta?.branch ?? null,               // sotuv bo'limi (CRM /index created_by.branch)
+      crm_property_type: meta?.propertyType ?? null,  // shartnoma turi: 'parking' | 'apartment'
       date: it.date,
       paymentAmount: it.paymentAmount != null ? Number(it.paymentAmount) : null,
       firstInstallment: it.firstInstallment != null ? Number(it.firstInstallment) : null,
@@ -808,12 +819,14 @@ export class PublicApiController {
   }
 
   /** oplataKvShape'ning ANIQ-PUL varianti — summalar string (Decimal → tiyingacha aniq, float emas). */
-  private oplataKvShapeMoney(it: any, orderId: string | null = null) {
+  private oplataKvShapeMoney(it: any, meta: CrmMeta | null = null) {
     return {
       id: it.id,
       sourceTxId: it.sourceTxId ?? null,   // barqaror bank tranzaksiya id (ix id) — mijoz shu bo'yicha solishtiradi
       contractNo: it.contractNo,
-      order_id: orderId,
+      order_id: meta?.orderId ?? null,
+      crm_branch: meta?.branch ?? null,               // sotuv bo'limi (CRM)
+      crm_property_type: meta?.propertyType ?? null,  // shartnoma turi: 'parking' | 'apartment'
       date: it.date,
       paymentAmount: it.paymentAmount != null ? String(it.paymentAmount) : null,
       firstInstallment: it.firstInstallment != null ? String(it.firstInstallment) : null,
@@ -852,13 +865,14 @@ export class PublicApiController {
    * `prior`: agar o'chirish snapshoti bo'sh bo'lsa (eski import o'chirishlari faqat {reason}),
    * to'lovning oldingi (created/imported/edited) tarixidan maydon tiklaymiz.
    */
-  private deletedTombstone(r: any, oid: (cn: any) => string | null, prior?: any): any {
+  private deletedTombstone(r: any, metaFn: (cn: any) => CrmMeta | null, prior?: any): any {
     const g = (field: string) => {
       const v = this.snapVal(r.changes, field);
       if (v != null) return v;
       return prior != null ? this.snapVal(prior, field) : null;
     };
     const cn = g('contractNo');
+    const meta = metaFn(cn);
     const amt = g('paymentAmount');
     const fi = g('firstInstallment');
     const mo = g('monthlyAmount');
@@ -866,7 +880,9 @@ export class PublicApiController {
       id: r.oplataKvId,                    // sync = bank kompozit (Transaction.externalId)
       sourceTxId: g('sourceTxId'),         // barqaror bank tranzaksiya id (mijoz shu bo'yicha solishtiradi)
       contractNo: typeof cn === 'string' ? cn : null,
-      order_id: oid(cn),
+      order_id: meta?.orderId ?? null,
+      crm_branch: meta?.branch ?? null,
+      crm_property_type: meta?.propertyType ?? null,
       client: g('client'),
       object: g('object'),
       paymentAmount: amt != null ? String(amt) : null,

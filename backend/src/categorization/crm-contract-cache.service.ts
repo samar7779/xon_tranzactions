@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
@@ -56,6 +57,59 @@ export class CrmContractCacheService {
   private inflight = new Map<string, Promise<CachedContract | null>>();
 
   constructor(private prisma: PrismaService, private crm: CrmService) {}
+
+  // ─── Backfill: turi (property_type) + sotuv bo'limi (branch_name) — konvergent, tugagach bo'sh yuradi ───
+  private crmMetaBackfillRunning = false;
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async crmMetaBackfillTick() {
+    if (this.crmMetaBackfillRunning) return;
+    this.crmMetaBackfillRunning = true;
+    try {
+      // 1) TURI — bepul: cached objectName'dan aniqlaymiz (500/tsikl)
+      const needType = await this.prisma.crmContract.findMany({
+        where: { found: true, propertyType: null, objectName: { not: null } },
+        select: { contractNumber: true, objectName: true },
+        take: 500,
+      });
+      for (const c of needType) {
+        await this.prisma.crmContract.update({
+          where: { contractNumber: c.contractNumber },
+          data: { propertyType: derivePropertyType(c.objectName) },
+        }).catch(() => {});
+      }
+
+      // 2) SOTUV BO'LIMI — /index (getContractMeta) orqali, NULL bo'lganlar (60/tsikl — CRM yukini tejash).
+      //    NULL=tekshirilmagan; qiymat yoki '' (yo'q) yozilgach qayta so'ramaymiz (konvergent).
+      const needBranch = await this.prisma.crmContract.findMany({
+        where: { found: true, branchName: null },
+        select: { contractNumber: true },
+        take: 60,
+      });
+      let branchFilled = 0;
+      for (const c of needBranch) {
+        try {
+          const meta: any = await this.crm.getContractMeta(c.contractNumber);
+          if (meta?.ok) {
+            const branch = meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
+            await this.prisma.crmContract.update({
+              where: { contractNumber: c.contractNumber },
+              data: { branchName: branch },
+            });
+            branchFilled++;
+          }
+          // meta.ok=false (CRM xatosi) → keyingi tsiklda qayta urinamiz (NULL qoladi)
+        } catch { /* keyingi tsikl */ }
+      }
+      if (needType.length || branchFilled) {
+        this.log.log(`crmMetaBackfill: turi ${needType.length}, sotuv bo'limi ${branchFilled} to'ldirildi`);
+      }
+    } catch (e: any) {
+      this.log.warn(`crmMetaBackfillTick xato: ${e?.message}`);
+    } finally {
+      this.crmMetaBackfillRunning = false;
+    }
+  }
 
   /**
    * Shartnoma raqami bo'yicha kesh + CRM lookup.
@@ -237,11 +291,13 @@ export class CrmContractCacheService {
             create: {
               contractNumber: contractKey,
               customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
+              propertyType: derivePropertyType(objectName), // turi (parking/apartment) — obyekt nomidan
               rawSnapshot: pickSnapshot(detail),
               found: true,
             },
             update: {
               customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
+              propertyType: derivePropertyType(objectName),
               rawSnapshot: pickSnapshot(detail),
               found: true,
               lastVerifiedAt: new Date(),
@@ -279,6 +335,9 @@ export class CrmContractCacheService {
               objectName: hit.object ? String(hit.object).slice(0, 255) : null,
               apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
               crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
+              // /index sotuv bo'limini beradi (created_by.branch.name) + turi obyekt nomidan
+              branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : '',
+              propertyType: derivePropertyType(hit.object),
               found: true,
             },
             update: {
@@ -287,6 +346,8 @@ export class CrmContractCacheService {
               objectName: hit.object ? String(hit.object).slice(0, 255) : null,
               apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
               crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
+              branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : '',
+              propertyType: derivePropertyType(hit.object),
               found: true,
               lastVerifiedAt: new Date(),
               lastError: null,
@@ -674,6 +735,18 @@ function extractVirtualStatus(detail: any): string {
   if (!s) return '';
   s = repairMojibake(String(s));
   return s.length > 64 ? s.slice(0, 64) : s;
+}
+
+/**
+ * Obyekt nomidan shartnoma turini aniqlaydi: parkovka kalit so'zlari bo'lsa 'parking',
+ * aks holda 'apartment' (uy). CRM'da alohida "type" maydoni yo'q — obyekt nomidan
+ * kelib chiqamiz (categorization ham shu mantiqni ishlatadi: Взносы за автостоянку).
+ */
+export function derivePropertyType(objectName: string | null | undefined): string | null {
+  if (!objectName) return null;
+  const o = String(objectName).toUpperCase();
+  if (o.includes('ПАРКОВКА') || o.includes('ПАРКИНГ') || o.includes('АВТОСТОЯН') || o.includes('PARKING')) return 'parking';
+  return 'apartment';
 }
 
 function pickSnapshot(detail: any): any {
