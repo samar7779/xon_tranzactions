@@ -2619,7 +2619,7 @@ export class OplataKvService {
 
             // WATERFALL — grafik bo'ylab taqsimlash (auto = qo'lda tugma, BIR XIL shared qoida).
             // alreadyPaid = shu shartnomada shu to'lovgacha jami NET (running first + monthly).
-            const { firstInstallment, monthlyAmount } = allocatePayment(schedule, runningInitial + runningMonthly, amount, runningInitial);
+            const { firstInstallment, monthlyAmount } = allocatePayment(schedule, runningInitial + runningMonthly, amount);
             runningInitial += firstInstallment;
             runningMonthly += monthlyAmount;
             const category = categoryOf(firstInstallment, monthlyAmount);
@@ -2738,7 +2738,7 @@ export class OplataKvService {
 
     // WATERFALL — grafik bo'ylab taqsimlash (auto splitInstallments bilan BIR XIL shared qoida).
     // alreadyPaid = shu qatorgacha jami NET (running first + monthly).
-    const { firstInstallment, monthlyAmount } = allocatePayment(schedule, runningInitial + runningMonthly, amount, runningInitial);
+    const { firstInstallment, monthlyAmount } = allocatePayment(schedule, runningInitial + runningMonthly, amount);
     const category = categoryOf(firstInstallment, monthlyAmount);
 
     await this.prisma.oplataKv.update({
