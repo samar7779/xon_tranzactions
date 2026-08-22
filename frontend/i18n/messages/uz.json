@@ -2338,6 +2338,9 @@
     },
     "eps": {
       "whoamiT": "Whoami",
+      "dbgCrmRawT": "DEBUG: CRM xom javob",
+      "dbgCrmRawD": "Shartnoma bo’yicha CRM /show + /index xom javobi (turi/parking maydonini aniqlash uchun). ?contract=",
+      "dbgContract": "Shartnoma raqami",
       "whoamiD": "Hozirgi API kalit ma'lumotini va sizning IP'ngizni qaytaradi.",
       "metaAllT": "Hammasi (banks, accounts, categories, enums)",
       "metaAllD": "Filter UI qurish uchun barcha ma'lumotlar bitta javobda. Scope kerak emas.",

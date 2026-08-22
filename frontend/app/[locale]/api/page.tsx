@@ -52,6 +52,8 @@ interface Endpoint {
 
 const ENDPOINTS: Endpoint[] = [
   { method: 'GET', path: '/api/v1/_whoami', groupKey: 'start', titleKey: 'whoamiT', descKey: 'whoamiD' },
+  { method: 'GET', path: '/api/v1/_debug/crm-raw', groupKey: 'start', titleKey: 'dbgCrmRawT', descKey: 'dbgCrmRawD', scope: 'oplatakv:read',
+    params: [{ name: 'contract', in: 'query', required: true, descKey: 'dbgContract', example: '262VTNP26VM' }] },
 
   { method: 'GET', path: '/api/v1/_meta/all', groupKey: 'meta', titleKey: 'metaAllT', descKey: 'metaAllD' },
   { method: 'GET', path: '/api/v1/_meta/banks', groupKey: 'meta', titleKey: 'metaBanksT', descKey: 'metaBanksD' },
