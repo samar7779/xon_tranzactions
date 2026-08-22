@@ -108,7 +108,7 @@ function ListView({ mode }: { mode: Mode }) {
     enabled: ids.length > 0,
     queryFn: () => api.post<Array<{ id: string; crm: CrmMatch | null }>>(
       '/crm/match-composites',
-      { items: items.map((it) => ({ id: compositeOf(it), purpose: it.purpose || '' })) },
+      { items: items.map((it) => ({ id: compositeOf(it), purpose: it.purpose || '', date: String(it.date || '').slice(0, 10) })) },
       { timeout: 180_000 },
     ),
   });

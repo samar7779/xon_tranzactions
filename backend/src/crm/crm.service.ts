@@ -383,11 +383,11 @@ export class CrmService {
    * (date_from=date_to) → external_id yadrosi (general_id_num_ddate) bo'yicha map → tez match.
    * Faqat ANIQ (yadro mos) natija qaytadi. Har id uchun { id, crm|null }.
    */
-  async matchComposites(input: Array<{ id: string; purpose?: string }>): Promise<Array<{ id: string; crm: any | null }>> {
+  async matchComposites(input: Array<{ id: string; purpose?: string; date?: string }>): Promise<Array<{ id: string; crm: any | null }>> {
     const list = Array.from(
       new Map(
         (input || [])
-          .map((x) => ({ id: String(x?.id || '').trim(), purpose: String(x?.purpose || '') }))
+          .map((x) => ({ id: String(x?.id || '').trim(), purpose: String(x?.purpose || ''), date: String(x?.date || '').slice(0, 10) }))
           .filter((x) => x.id)
           .map((x) => [x.id, x] as const),
       ).values(),
@@ -395,19 +395,20 @@ export class CrmService {
 
     const resultMap = new Map<string, any | null>();
 
-    // ── 1) Kompozit yadro (general_id_num_ddate) bo'yicha — sana guruhli CRM excel ──
-    //     (har DISTINCT sana bir marta so'raladi; excel endpoint faqat bitta kunlik
-    //      date_from=date_to filtrni ishonchli qabul qiladi — ko'p-kunlik oraliq emas.)
-    const byDate = new Map<string, string[]>();
+    // ── 1) SANA bo'yicha guruh — CRM excel (har DISTINCT sana bir marta). Sana avval
+    //     qatorning o'z DATE'idan (eski oddiy-raqamli id'larda kompozitdan sana chiqmaydi),
+    //     bo'lmasa kompozit ddate'dan. Match: TO'LIQ external_id (aniq) YOKI kompozit yadro.
+    const byDate = new Map<string, Array<{ id: string; purpose: string; date: string }>>();
     for (const it of list) {
-      const p = this.parseComposite(it.id);
-      if (!p?.isoDate) continue;
-      const arr = byDate.get(p.isoDate) || [];
-      arr.push(it.id);
-      byDate.set(p.isoDate, arr);
+      const iso = it.date || this.parseComposite(it.id)?.isoDate || '';
+      if (!iso) continue;
+      const arr = byDate.get(iso) || [];
+      arr.push(it);
+      byDate.set(iso, arr);
     }
-    for (const [isoDate, dateIds] of byDate) {
+    for (const [isoDate, dateItems] of byDate) {
       const coreMap = new Map<string, any>();
+      const exactMap = new Map<string, any>();
       let page = 1;
       let prevSig = '';
       const MAX = 6;
@@ -421,8 +422,10 @@ export class CrmService {
         if (sig === prevSig) break;
         prevSig = sig;
         for (const p of rows) {
-          const c = this.compositeCore(String(p.external_id ?? ''));
-          if (c && !coreMap.has(c)) coreMap.set(c, p);
+          const ext = String(p.external_id ?? '').trim();
+          if (ext && !exactMap.has(ext)) exactMap.set(ext, p);   // to'liq external_id (oddiy raqamli id'lar uchun)
+          const c = this.compositeCore(ext);
+          if (c && !coreMap.has(c)) coreMap.set(c, p);           // kompozit yadro
         }
         const pg = raw?.pagination;
         const totalPage = Number(pg?.totalPage || pg?.total_page || 0);
@@ -430,10 +433,10 @@ export class CrmService {
         if (rows.length < 5000) break;
         page++;
       }
-      for (const id of dateIds) {
-        const c = this.compositeCore(id);
-        const row = c ? coreMap.get(c) : null;
-        if (row) resultMap.set(id, this.crmRowSummary(row));
+      for (const it of dateItems) {
+        let row = exactMap.get(it.id);
+        if (!row) { const c = this.compositeCore(it.id); row = c ? coreMap.get(c) : null; }
+        if (row) resultMap.set(it.id, this.crmRowSummary(row));
       }
     }
 

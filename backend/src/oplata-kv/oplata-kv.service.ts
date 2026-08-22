@@ -683,13 +683,17 @@ export class OplataKvService {
     const where = mode === 'xato' ? await this.buildXatoFilter() : await this.buildUnsplitFilter();
     const rows = await this.prisma.oplataKv.findMany({
       where,
-      select: { id: true, sourceTxId: true, purpose: true },
+      select: { id: true, sourceTxId: true, purpose: true, date: true },
       take: 8000,
       orderBy: { date: 'desc' },
     });
     if (!rows.length) return { ok: true, total: 0, matched: 0, fixed: 0 };
 
-    const items = rows.map((r) => ({ id: r.sourceTxId || r.id, purpose: r.purpose || '' }));
+    const items = rows.map((r) => ({
+      id: r.sourceTxId || r.id,
+      purpose: r.purpose || '',
+      date: r.date ? new Date(r.date).toISOString().slice(0, 10) : '',
+    }));
     const matches = await this.crmService.matchComposites(items);
     const matchMap = new Map(matches.map((m) => [m.id, m.crm]));
 
