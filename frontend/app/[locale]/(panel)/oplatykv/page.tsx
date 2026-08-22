@@ -1142,7 +1142,7 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
   const [id, setId] = useState('');
   const lookup = useMutation({
     mutationFn: (compositeId: string) =>
-      api.get<{ ok: boolean; error?: string; parsed?: any; via?: string; candidates: CrmCandidate[]; sameDate?: CrmCandidate[]; sample?: any; sampleKeys?: string[]; scanned: number }>(
+      api.get<{ ok: boolean; error?: string; parsed?: any; via?: string; candidates: CrmCandidate[]; sameDate?: CrmCandidate[]; sample?: any; sampleKeys?: string[]; matchSample?: any; scanned: number }>(
         `/crm/find-by-composite?id=${encodeURIComponent(compositeId)}`,
         { timeout: 180_000 },
       ),
@@ -1299,6 +1299,21 @@ function CrmLookupDialog({ open, onClose }: { open: boolean; onClose: () => void
                 )}
               </div>
             ))}
+
+            {/* Diagnostika: topilgan to'lovning BARCHA CRM maydonlari (bosh./oylik va h.k. shu yerda) */}
+            {candidates.length > 0 && res.matchSample && (
+              <details className="text-[11px] text-slate-500 dark:text-slate-400">
+                <summary className="cursor-pointer select-none">Barcha CRM maydonlari (diagnostika)</summary>
+                <div className="mt-1 space-y-0.5 rounded-lg bg-slate-50 dark:bg-slate-900 px-2.5 py-1.5 max-h-52 overflow-y-auto">
+                  {Object.entries(res.matchSample).map(([k, v]) => (
+                    <div key={k} className="break-words">
+                      <span className="font-mono text-slate-400">{k}:</span>{' '}
+                      <span className="text-slate-700 dark:text-slate-300">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
       </DialogContent>

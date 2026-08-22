@@ -161,6 +161,7 @@ export class CrmService {
     sameDate: Array<any>;
     sample?: any;
     sampleKeys?: string[];
+    matchSample?: any;
     scanned: number;
   }> {
     const parsed = this.parseComposite(compositeId);
@@ -169,8 +170,17 @@ export class CrmService {
 
     const ru = (v: any): string | null => {
       if (v == null) return null;
-      if (typeof v === 'string') return v;
-      if (typeof v === 'object') return v.ru || v.uz || v.en || null;
+      if (typeof v === 'string') return v || null;
+      if (typeof v === 'object') {
+        if (v.ru || v.uz || v.en) return v.ru || v.uz || v.en;
+        // CRM maydonlari ko'pincha { id, name: "..." } yoki { name: { ru, uz } }
+        if (v.name) {
+          if (typeof v.name === 'string') return v.name || null;
+          if (typeof v.name === 'object') return v.name.ru || v.name.uz || v.name.en || null;
+        }
+        if (typeof v.value === 'string') return v.value || null;
+        return null;
+      }
       return String(v);
     };
     // Summa: composite tiyinda bo'lishi mumkin (615000000 = 6 150 000 so'm) — 3 variant
@@ -215,8 +225,14 @@ export class CrmService {
     const candidates: Array<any> = [];
     const sameDate: Array<any> = [];
     let sample: any; let sampleKeys: string[] | undefined;
+    let matchSample: any; // topilgan to'lovning XOM qatori (diagnostika — barcha maydon)
     let scanned = 0;
     let via = '';
+    const pushMatch = (p: any, mb: string[], viaLabel: string) => {
+      via = via || viaLabel;
+      candidates.push(rowOut(p, mb));
+      if (!matchSample) matchSample = p;
+    };
 
     // TEZKOR: /payment-history/excel'ni FILTR bilan chaqiramiz. Endpoint filtrni
     // respekt qilsa — kichik natija, darrov topiladi; qilmasa — mos qator chiqmaydi,
@@ -230,7 +246,7 @@ export class CrmService {
       if (rows.length && rows.length < 4000) scanned += rows.length; // filtr respekt qilingan
       for (const p of rows) {
         const mb = evaluate(p);
-        if (mb.length) { via = via || viaLabel; candidates.push(rowOut(p, mb)); }
+        if (mb.length) pushMatch(p, mb, viaLabel);
       }
     };
     // 1) transaction_id = general_id
@@ -259,7 +275,7 @@ export class CrmService {
         scanned += rows.length;
         for (const p of rows) {
           const mb = evaluate(p);
-          if (mb.length) { via = via || 'scan'; candidates.push(rowOut(p, mb)); }
+          if (mb.length) pushMatch(p, mb, 'scan');
           else if (isoDate && (p.date_paid ? String(p.date_paid).slice(0, 10) : '') === isoDate && sameDate.length < 15) {
             sameDate.push(rowOut(p, ['shu sana']));
           }
@@ -270,7 +286,7 @@ export class CrmService {
     }
 
     candidates.sort((a, b) => (b.strong ? 1 : 0) - (a.strong ? 1 : 0)); // aniq (strong) tepaga
-    return { ok: true, parsed, via, candidates, sameDate, sample, sampleKeys, scanned };
+    return { ok: true, parsed, via, candidates, sameDate, sample, sampleKeys, matchSample, scanned };
   }
 
   /**
