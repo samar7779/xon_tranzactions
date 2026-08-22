@@ -449,11 +449,11 @@ export class OplataKvService {
       select: { contractNumber: true },
     });
     const verifiedNos = verified.map((c) => c.contractNumber);
-    // "Оплата ustuni bo'sh" = paymentCategory null (asosiy belgi). first/monthly
-    // 0 yoki null bo'lishi mumkin — shu bois ularni SHARTGA qo'shmaymiz (aks holda
-    // 0 bo'lganlar tushib qoladi). Shartnoma CRM'da FOUND (splitlash mumkin).
+    // "Оплата ustuni bo'sh" = paymentCategory null (asosiy belgi — main ro'yxat ham
+    // shunday filtrlaydi). `sourceTxId not null` SHART QILINMAYDI — Excel-import
+    // qatorlarda u null bo'lishi mumkin (o'shalar tushib qolardi). Shartnoma CRM'da
+    // FOUND bo'lishi kifoya (splitlash mumkin).
     return {
-      sourceTxId: { not: null },
       contractNo: { in: verifiedNos.length ? verifiedNos : ['__no_match__'] },
       paymentCategory: null,
     };
