@@ -505,6 +505,16 @@ export class OplataKvController {
     return this.svc.syncNowRespectingSettings(actorFrom(user));
   }
 
+  @Get('orphans')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({
+    summary: "Orfan qatorlar — manba tranzaksiyasi o'chib ketgan ОплатыКв yozuvlari",
+    description: 'FAQAT sanaydi va namuna ko\'rsatadi, hech narsani o\'chirmaydi.',
+  })
+  async orphans(@Query('limit') limit?: string) {
+    return this.svc.findOrphanTxRows(limit ? Number(limit) : 50);
+  }
+
   @Get('last-sync-info')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Oxirgi tx-manba sync vaqti — UI'da ko'rsatish uchun" })

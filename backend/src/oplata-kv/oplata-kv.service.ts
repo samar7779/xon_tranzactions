@@ -3082,6 +3082,59 @@ export class OplataKvService {
   }
 
   /**
+   * ORFAN QATORLAR — tranzaksiyadan kelgan (sourceTxId bor), lekin manba
+   * tranzaksiya endi mavjud EMAS bo'lgan ОплатыКв qatorlari.
+   *
+   * Bunday qatorlar bank to'lovni bekor qilганда paydo bo'lgan: tranzaksiya
+   * o'chgan, ОплатыКв qatori esa qolib ketgan (cascade kategoriya sharti bilan
+   * cheklangan edi — 2026-08-22 da tuzatildi). Bu funksiya FAQAT SANAYDI va
+   * namuna ko'rsatadi, hech narsani o'chirmaydi.
+   */
+  async findOrphanTxRows(limit = 50) {
+    const rows = await this.prisma.$queryRaw<Array<{
+      id: string; contract_no: string; date: Date; payment_amount: any;
+      source_tx_id: string; client: string | null; object: string | null; created_at: Date;
+    }>>(Prisma.sql`
+      SELECT o.id, o.contract_no, o.date, o.payment_amount, o.source_tx_id,
+             o.client, o.object, o.created_at
+        FROM oplata_kv o
+       WHERE o.source_tx_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM transactions t
+            WHERE t.external_id = o.source_tx_id OR t.id = o.source_tx_id
+         )
+       ORDER BY o.date DESC
+       LIMIT ${Math.min(Math.max(limit, 1), 500)}
+    `);
+
+    const agg = await this.prisma.$queryRaw<Array<{ n: bigint; sum: any }>>(Prisma.sql`
+      SELECT COUNT(*)::bigint AS n, COALESCE(SUM(o.payment_amount), 0) AS sum
+        FROM oplata_kv o
+       WHERE o.source_tx_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM transactions t
+            WHERE t.external_id = o.source_tx_id OR t.id = o.source_tx_id
+         )
+    `);
+
+    return {
+      ok: true as const,
+      count: Number(agg[0]?.n || 0),
+      totalAmount: Number(agg[0]?.sum || 0),
+      items: rows.map((r) => ({
+        id: r.id,
+        contractNo: r.contract_no,
+        date: r.date ? new Date(r.date).toISOString().slice(0, 10) : null,
+        amount: Number(r.payment_amount || 0),
+        sourceTxId: r.source_tx_id,
+        client: r.client,
+        object: r.object,
+        createdAt: r.created_at,
+      })),
+    };
+  }
+
+  /**
    * Mavjud OplatyKv qatorlardan CRM da topilmaganlarni (XATO) topib o'chirish.
    * Foydalanish: avval sync XATO contractlarni ham olardi, endi olmaydi —
    * eski xato yozuvlarni tozalash uchun.

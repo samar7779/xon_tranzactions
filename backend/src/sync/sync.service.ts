@@ -1032,10 +1032,13 @@ export class SyncService implements OnModuleInit {
               note: `Bank ro'yxatida yo'q (${minDay.toISOString().slice(0, 10)} → ${maxDay.toISOString().slice(0, 10)} oralig'i tekshirildi)`,
             },
           });
-          // OplatyKv cascade — CLIENT (Клиент/Физ.Л/Юр.Л) bo'lsa, OplatyKv'dan ham o'chiramiz
-          if (this.isClientTx(tx)) {
-            await this.cascadeOplataKvDelete(tx.externalId, tx.id, actor);
-          }
+          // OplatyKv cascade — BOG'LANGAN qator bo'lsa o'chiramiz.
+          // MUHIM: ilgari bu faqat isClientTx(tx) bo'lganda ishlardi. Lekin qator
+          // ОплатыКв'ga tushgandan KEYIN tranzaksiya kategoriyasi o'zgargan bo'lishi
+          // mumkin (masalan "Возврат взносов"), o'shanda bank to'lovni bekor qilsa
+          // tranzaksiya o'chib, ОплатыКв'dagi qator QOLIB ketardi.
+          // Endi mezon — kategoriya emas, sourceTxId bog'lanishining o'zi.
+          await this.cascadeOplataKvDelete(tx.externalId, tx.id, actor);
           await this.prisma.transaction.delete({ where: { id: tx.id } });
           deletedCount++;
         } catch (e: any) {
@@ -1132,8 +1135,9 @@ export class SyncService implements OnModuleInit {
             syncedAt: new Date(),
           },
         });
-        // OplatyKv cascade — CLIENT bo'lsa va summa/yo'nalish o'zgargan bo'lsa
-        if (this.isClientTx(tx) && (changes.amount || changes.direction)) {
+        // OplatyKv cascade — summa/yo'nalish o'zgargan bo'lsa (kategoriyadan qat'i nazar;
+        // bog'lanish sourceTxId orqali aniqlanadi, o'chirish bilan bir xil mantiq)
+        if (changes.amount || changes.direction) {
           await this.cascadeOplataKvEdit(tx.externalId, tx.id, {
             newAmount: newAmountSom,
             newDirection,
@@ -1170,12 +1174,14 @@ export class SyncService implements OnModuleInit {
    */
   private async cascadeOplataKvDelete(externalId: string, txId: string, actor: string): Promise<void> {
     try {
-      const row = await this.prisma.oplataKv.findFirst({
-        where: { sourceTxId: { in: [externalId, txId] } },
+      // findFirst emas findMany: qator externalId bo'yicha ham, cuid bo'yicha ham
+      // bog'langan bo'lishi mumkin — ikkalasi ham tozalanadi
+      const rows = await this.prisma.oplataKv.findMany({
+        where: { sourceTxId: { in: [externalId, txId].filter(Boolean) } },
       });
-      if (!row) return;
-      await this.prisma.oplataKvHistory.create({
-        data: {
+      if (rows.length === 0) return;
+      await this.prisma.oplataKvHistory.createMany({
+        data: rows.map((row) => ({
           oplataKvId: row.id,
           action: 'deleted',
           actorType: 'system',
@@ -1184,10 +1190,10 @@ export class SyncService implements OnModuleInit {
           fieldsChanged: ['*'],
           changes: row as any,
           note: `Bank tomonida tranzaksiya o'chirilgani uchun avtomatik o'chirildi (txId=${txId})`,
-        },
+        })),
       });
-      await this.prisma.oplataKv.delete({ where: { id: row.id } });
-      this.logger.log(`OplataKv ${row.id} cascade-o'chirildi (tx ${txId} DELETED)`);
+      await this.prisma.oplataKv.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+      this.logger.log(`OplataKv cascade-o'chirildi: ${rows.length} qator (tx ${txId} DELETED)`);
     } catch (e: any) {
       this.logger.warn(`OplataKv cascade-delete xato (tx=${txId}): ${e?.message}`);
     }

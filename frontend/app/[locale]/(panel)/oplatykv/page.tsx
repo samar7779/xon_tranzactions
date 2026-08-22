@@ -117,9 +117,11 @@ function rowPropType(it: { crmPropertyType?: string | null; txType?: string | nu
   // 1) Maqsad matni parking bo'lsa — parking (backfill kutmaydi)
   const hay = `${it.txType || ''} ${it.object || ''} ${it.purpose || ''}`;
   if (PARKING_RE.test(hay)) return 'parking';
-  // 2) CRM type.key (ishonchli, backfill to'ldiradi) — matnsiz parkinglar uchun
+  // 2) CRM type.key (ishonchli /show manbadan) — FAQAT shu bo'lsa ko'rsatamiz
   if (it.crmPropertyType === 'parking') return 'parking';
-  if (it.crmPropertyType === 'apartment' || it.object || it.txType) return 'apartment';
+  if (it.crmPropertyType === 'apartment') return 'apartment';
+  // Noma'lum — TAXMIN QILMAYMIZ (obyekt/txType bor deb "жилой" demaymiz). "—" chiqadi,
+  // /show-backfill CRM type.key bilan to'ldirgach real qiymat ko'rinadi.
   return null;
 }
 
@@ -528,11 +530,11 @@ export default function OplataKvPage() {
 
   // CRM turi + sotuv bo'limi ustunlarini to'ldirish (XATO/topilmagan shartnomalar skip)
   const fillMetaMut = useMutation({
-    mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number }>('/oplata-kv/crm-meta/backfill', undefined, { timeout: 60000 }),
+    mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number; typeRemaining: number }>('/oplata-kv/crm-meta/backfill', undefined, { timeout: 60000 }),
     onSuccess: (r) => {
       toast.success(
-        `Sotuv bo'limi ${r.branchFilled} ta to'ldirildi` +
-        (r.branchRemaining > 0 ? ` · ${r.branchRemaining} ta qoldi (avtomat davom etadi)` : ' · hammasi tayyor'),
+        `Sotuv bo'limi ${r.branchFilled} · Turi ${r.typeFilled} to'ldirildi` +
+        ((r.branchRemaining > 0 || r.typeRemaining > 0) ? ` · qoldi (avtomat davom etadi)` : ' · hammasi tayyor'),
       );
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
     },
@@ -707,11 +709,12 @@ export default function OplataKvPage() {
                   {fillMetaMut.data && !fillMetaMut.isPending && (
                     <div className="mt-1.5 px-2.5 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-200 dark:ring-emerald-900 text-[11.5px] text-emerald-800 dark:text-emerald-300 space-y-0.5">
                       <div className="flex items-center justify-between"><span>Sotuv bo'limi to'ldirildi</span><b className="tabular-nums">{fillMetaMut.data.branchFilled} ta</b></div>
+                      <div className="flex items-center justify-between"><span>Turi (жилой/парковка) to'ldirildi</span><b className="tabular-nums">{fillMetaMut.data.typeFilled} ta</b></div>
                       <div className="flex items-center justify-between border-t border-emerald-200/60 dark:border-emerald-900/60 mt-1 pt-1">
                         <span>Qoldi</span>
-                        <b className="tabular-nums">{fillMetaMut.data.branchRemaining > 0 ? `${fillMetaMut.data.branchRemaining} ta · avtomat davom etadi` : 'tayyor ✓'}</b>
+                        <b className="tabular-nums">{(fillMetaMut.data.branchRemaining > 0 || fillMetaMut.data.typeRemaining > 0) ? `bo'lim ${fillMetaMut.data.branchRemaining} · turi ${fillMetaMut.data.typeRemaining} · avtomat davom etadi` : 'tayyor ✓'}</b>
                       </div>
-                      <div className="text-[10.5px] text-emerald-700/70 dark:text-emerald-400/70 pt-0.5">Turi (жилой/парковка) — avtomat, to'ldirish kerak emas.</div>
+                      <div className="text-[10.5px] text-emerald-700/70 dark:text-emerald-400/70 pt-0.5">Turi CRM /show (type.key) dan aniqlanadi — ishonchli.</div>
                     </div>
                   )}
                 </DropdownMenuContent>

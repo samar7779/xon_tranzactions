@@ -85,21 +85,20 @@ export class CrmContractCacheService {
    * Turi endi maqsad-matndan hisoblanadi (backfill kerak emas). typeFilled har doim 0.
    * @param branchLimit ~ nechta shartnoma (100 ga bo'linadi → sahifa soni).
    */
-  async runMetaBackfill(branchLimit: number): Promise<{ typeFilled: number; branchFilled: number; branchRemaining: number }> {
+  async runMetaBackfill(branchLimit: number): Promise<{ typeFilled: number; branchFilled: number; branchRemaining: number; typeRemaining: number }> {
     const pages = Math.max(1, Math.round(branchLimit / 100));
     let branchFilled = 0;
     for (let p = 0; p < pages; p++) {
       const res = await this.crm.listContractBranchesPage(this.branchPage, 100);
       if (!res.ok) break;
       if (res.totalPage) this.branchTotalPage = res.totalPage;
-      // Bo'lim + TURI bo'yicha guruhlab updateMany. Branch faqat NULL'ga; turi (type.key)
-      // esa OVERWRITE — eski obyekt-nomli qiymatlar noto'g'ri edi (parking → жилой chiqardi).
+      // FAQAT SOTUV BO'LIMI (branch) bulk /index'dan — faqat NULL'ga.
+      // TURI (type) /index'da ishonchsiz (parking → жилой chiqarardi), shu bois
+      // turi ALOHIDA /show type.key orqali to'ldiriladi (backfillPropertyTypeViaShow).
       const byBranch = new Map<string, string[]>();
-      const byType = new Map<string, string[]>();
       for (const it of res.items) {
         const key = it.contract.toUpperCase().slice(0, 128);
         const b = byBranch.get(it.branchName) || []; b.push(key); byBranch.set(it.branchName, b);
-        if (it.propertyType) { const t = byType.get(it.propertyType) || []; t.push(key); byType.set(it.propertyType, t); }
       }
       for (const [branch, keys] of byBranch) {
         const r = await this.prisma.crmContract.updateMany({
@@ -107,12 +106,6 @@ export class CrmContractCacheService {
           data: { branchName: branch },
         });
         branchFilled += r.count;
-      }
-      for (const [pt, keys] of byType) {
-        await this.prisma.crmContract.updateMany({
-          where: { contractNumber: { in: keys } },
-          data: { propertyType: pt },
-        });
       }
       this.branchPage++;
       if (this.branchTotalPage && this.branchPage > this.branchTotalPage) { this.branchPage = 1; break; } // aylanib chiqdi
@@ -123,7 +116,104 @@ export class CrmContractCacheService {
     if (branchFilled) {
       this.log.log(`crmMetaBackfill (bulk): sotuv bo'limi ${branchFilled} to'ldirildi (${branchRemaining} qoldi, page=${this.branchPage})`);
     }
-    return { typeFilled: 0, branchFilled, branchRemaining };
+    // TURI — /show type.key orqali (ishonchli manba). branchLimit ga mutanosib porsiya.
+    const typeRes = await this.backfillPropertyTypeViaShow(Math.min(250, Math.max(100, Math.round(branchLimit / 4))));
+    return { typeFilled: typeRes.filled, branchFilled, branchRemaining, typeRemaining: typeRes.remaining };
+  }
+
+  // ─── TURI (property_type) backfill — CRM /show `type.key` orqali (yagona ishonchli manba) ───
+  // /index turi bermaydi/ishonchsiz. Shu bois har shartnomani /show bilan tekshiramiz.
+  // 2 fazali: (1) BARCHA found=true bo'ylab kursor-sweep — real type.key bilan OVERWRITE
+  // (eski obyekt-nomli TAXMINlar tuzatiladi); sweep tugagach marker qo'yiladi (restartda takror emas).
+  // (2) marker bor bo'lsa — faqat propertyType=NULL qatorlar (yangi fallback qatorlari) to'ldiriladi.
+  private ptCursor = '';
+  private ptSweepDone = false;
+  private static readonly PT_MARKER = '__PT_SWEEP_DONE_V1__';
+
+  async backfillPropertyTypeViaShow(limit: number): Promise<{ filled: number; remaining: number }> {
+    // Faza 2: to'liq sweep tugagan — faqat NULL qatorlar
+    if (this.ptSweepDone || (await this.isPtSweepDone())) {
+      this.ptSweepDone = true;
+      return this.fillNullPropertyTypes(limit);
+    }
+    // Faza 1: BARCHA found=true bo'ylab kursor — real type.key bilan OVERWRITE
+    const batch = await this.prisma.crmContract.findMany({
+      where: { found: true, contractNumber: { gt: this.ptCursor } },
+      orderBy: { contractNumber: 'asc' },
+      take: limit,
+      select: { contractNumber: true },
+    });
+    if (!batch.length) {
+      await this.markPtSweepDone();
+      this.ptSweepDone = true;
+      this.log.log('crmMetaBackfill: turi to\'liq sweep tugadi (barcha shartnoma /show type.key bilan yangilandi)');
+      return { filled: 0, remaining: 0 };
+    }
+    const filled = await this.applyShowTypes(batch.map((b) => b.contractNumber));
+    this.ptCursor = batch[batch.length - 1].contractNumber;
+    const remaining = await this.prisma.crmContract.count({
+      where: { found: true, contractNumber: { gt: this.ptCursor } },
+    });
+    if (filled) this.log.log(`crmMetaBackfill: turi ${filled} yangilandi (~${remaining} qoldi, sweep)`);
+    return { filled, remaining };
+  }
+
+  /** propertyType=NULL qatorlarni /show type.key bilan to'ldiradi (Faza 2). */
+  private async fillNullPropertyTypes(limit: number): Promise<{ filled: number; remaining: number }> {
+    const batch = await this.prisma.crmContract.findMany({
+      where: { found: true, propertyType: null },
+      orderBy: { lastVerifiedAt: 'asc' },
+      take: limit,
+      select: { contractNumber: true },
+    });
+    if (!batch.length) return { filled: 0, remaining: 0 };
+    const filled = await this.applyShowTypes(batch.map((b) => b.contractNumber));
+    const remaining = await this.prisma.crmContract.count({ where: { found: true, propertyType: null } });
+    return { filled, remaining };
+  }
+
+  /** Berilgan shartnomalarni /show orqali (parallel 6) tekshirib, type.key bo'yicha guruhlab updateMany. */
+  private async applyShowTypes(keys: string[]): Promise<number> {
+    const CONC = 8;
+    const byType = new Map<'parking' | 'apartment', string[]>();
+    let idx = 0;
+    const worker = async () => {
+      while (idx < keys.length) {
+        const k = keys[idx++];
+        try {
+          const r: any = await this.crm.show({ contract: k });
+          const pt = r?.ok ? crmTypeKey(r.detail) : null;
+          if (pt) { const a = byType.get(pt) || []; a.push(k); byType.set(pt, a); }
+        } catch { /* skip — keyingi tsiklda qayta uriladi */ }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONC, keys.length) }, () => worker()));
+    let filled = 0;
+    for (const [pt, ks] of byType) {
+      const r = await this.prisma.crmContract.updateMany({
+        where: { contractNumber: { in: ks } },
+        data: { propertyType: pt },
+      });
+      filled += r.count;
+    }
+    return filled;
+  }
+
+  private async isPtSweepDone(): Promise<boolean> {
+    const m = await this.prisma.crmContract
+      .findUnique({ where: { contractNumber: CrmContractCacheService.PT_MARKER } })
+      .catch(() => null);
+    return !!m;
+  }
+
+  private async markPtSweepDone(): Promise<void> {
+    await this.prisma.crmContract
+      .upsert({
+        where: { contractNumber: CrmContractCacheService.PT_MARKER },
+        create: { contractNumber: CrmContractCacheService.PT_MARKER, found: false, propertyType: null },
+        update: {},
+      })
+      .catch(() => { /* ignore */ });
   }
 
   /**
@@ -306,13 +396,13 @@ export class CrmContractCacheService {
             create: {
               contractNumber: contractKey,
               customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
-              propertyType: crmTypeKey(detail) ?? derivePropertyType(objectName), // CRM type.key (ishonchli) → zaxira: obyekt nomi // turi (parking/apartment) — obyekt nomidan
+              propertyType: crmTypeKey(detail), // FAQAT CRM /show type.key (ishonchli). Yo'q bo'lsa null — obyekt nomidan TAXMIN QILMAYMIZ (parking → жилой chiqarardi)
               rawSnapshot: pickSnapshot(detail),
               found: true,
             },
             update: {
               customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
-              propertyType: crmTypeKey(detail) ?? derivePropertyType(objectName), // CRM type.key (ishonchli) → zaxira: obyekt nomi
+              propertyType: crmTypeKey(detail), // FAQAT CRM /show type.key (ishonchli); null bo'lsa /show-backfill qayta uriadi
               rawSnapshot: pickSnapshot(detail),
               found: true,
               lastVerifiedAt: new Date(),
@@ -352,7 +442,7 @@ export class CrmContractCacheService {
               crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
               // /index sotuv bo'limini beradi (created_by.branch.name) + turi obyekt nomidan
               branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : '',
-              propertyType: derivePropertyType(hit.object),
+              propertyType: null, // /index ishonchli type bermaydi → null; /show-backfill to'ldiradi
               found: true,
             },
             update: {
@@ -362,7 +452,7 @@ export class CrmContractCacheService {
               apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
               crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
               branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : '',
-              propertyType: derivePropertyType(hit.object),
+              // propertyType TEGILMAYDI — oldingi /show'dan kelgan ishonchli qiymatni buzmaslik uchun
               found: true,
               lastVerifiedAt: new Date(),
               lastError: null,
