@@ -530,7 +530,7 @@ export default function OplataKvPage() {
 
   // CRM turi + sotuv bo'limi ustunlarini to'ldirish (XATO/topilmagan shartnomalar skip)
   const fillMetaMut = useMutation({
-    mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number; typeRemaining: number }>('/oplata-kv/crm-meta/backfill', undefined, { timeout: 60000 }),
+    mutationFn: () => api.post<{ typeFilled: number; branchFilled: number; branchRemaining: number; typeRemaining: number; probe?: Array<{ contract: string; ok: boolean; found: boolean; branch: string | null }> }>('/oplata-kv/crm-meta/backfill', undefined, { timeout: 120000 }),
     onSuccess: (r) => {
       toast.success(
         `Sotuv bo'limi ${r.branchFilled} · Turi ${r.typeFilled} to'ldirildi` +
@@ -715,6 +715,19 @@ export default function OplataKvPage() {
                         <b className="tabular-nums">{(fillMetaMut.data.branchRemaining > 0 || fillMetaMut.data.typeRemaining > 0) ? `bo'lim ${fillMetaMut.data.branchRemaining} · turi ${fillMetaMut.data.typeRemaining} · avtomat davom etadi` : 'tayyor ✓'}</b>
                       </div>
                       <div className="text-[10.5px] text-emerald-700/70 dark:text-emerald-400/70 pt-0.5">Turi CRM /show (type.key) dan aniqlanadi — ishonchli.</div>
+                      {Array.isArray(fillMetaMut.data.probe) && fillMetaMut.data.probe.length > 0 && (
+                        <div className="mt-1.5 pt-1.5 border-t border-emerald-200/60 dark:border-emerald-900/60 space-y-0.5">
+                          <div className="text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-300">CRM jonli test (sotuv bo'limi keladimi?):</div>
+                          {fillMetaMut.data.probe.map((p) => (
+                            <div key={p.contract} className="flex items-center justify-between gap-2 text-[10.5px]">
+                              <span className="font-mono truncate">{p.contract}</span>
+                              <span className={p.branch ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : 'text-rose-600 dark:text-rose-400 font-semibold'}>
+                                {p.branch ? p.branch : (p.found ? 'branch YO\'Q' : (p.ok ? 'topilmadi' : 'CRM xato'))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </DropdownMenuContent>

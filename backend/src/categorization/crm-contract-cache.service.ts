@@ -186,6 +186,42 @@ export class CrmContractCacheService {
   }
 
   /**
+   * DIAGNOSTIKA — so'nggi found=true shartnomalar uchun CRM /index (getContractMeta) JONLI
+   * sotuv bo'limini qaytaryaptimi tekshiradi. Manba muammosini (branch bor/yo'q) ochish uchun.
+   */
+  async probeBranchSource(limit = 5): Promise<Array<{ contract: string; ok: boolean; found: boolean; branch: string | null }>> {
+    const grp = await this.prisma.oplataKv.groupBy({
+      by: ['contractNo'],
+      _max: { date: true },
+      orderBy: { _max: { date: 'desc' } },
+      take: 80,
+    });
+    const nos = Array.from(new Set(
+      grp.map((g) => (g.contractNo || '').replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').toUpperCase()).filter(Boolean),
+    ));
+    const foundRows = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: nos }, found: true },
+      select: { contractNumber: true },
+      take: limit,
+    });
+    const out: Array<{ contract: string; ok: boolean; found: boolean; branch: string | null }> = [];
+    for (const r of foundRows.slice(0, limit)) {
+      try {
+        const meta: any = await this.crm.getContractMeta(r.contractNumber);
+        out.push({
+          contract: r.contractNumber,
+          ok: !!meta?.ok,
+          found: !!meta?.found,
+          branch: meta?.branchName != null ? String(meta.branchName) : null,
+        });
+      } catch {
+        out.push({ contract: r.contractNumber, ok: false, found: false, branch: null });
+      }
+    }
+    return out;
+  }
+
+  /**
    * Berilgan shartnomalarni /index (getContractMeta) orqali (parallel 8) tekshirib,
    * created_by.branch.name bo'yicha guruhlab updateMany. FAQAT REAL (bo'sh bo'lmagan) branch yoziladi.
    */

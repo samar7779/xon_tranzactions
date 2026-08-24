@@ -90,10 +90,12 @@ export class OplataKvController {
   @Post('crm-meta/backfill')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Turi (parking/uy) + sotuv bo'limi ustunlarini to'ldirish. XATO/topilmagan shartnomalar skip." })
-  crmMetaBackfill() {
-    // Sotuv bo'limi — BULK /index (100/sahifa): bir bosishda ~1000 shartnoma (10 sahifa).
-    // Qolganini cron avtomat to'ldiradi; qayta bossa keyingi sahifalar.
-    return this.crmCache.runMetaBackfill(1000);
+  async crmMetaBackfill() {
+    // Sotuv bo'limi — recency (/index contract-filter) + bulk /index page-walk.
+    // probe: so'nggi found shartnomalar uchun CRM branch JONLI keladimi — diagnostika.
+    const res = await this.crmCache.runMetaBackfill(1000);
+    const probe = await this.crmCache.probeBranchSource(5);
+    return { ...res, probe };
   }
 
   @Get('export')
