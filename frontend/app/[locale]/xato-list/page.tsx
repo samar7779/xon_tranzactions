@@ -132,20 +132,20 @@ function AccountRail({
   );
 
   return (
-    <aside className="hidden xl:block w-[268px] shrink-0">
+    <aside className="hidden xl:block w-[330px] shrink-0">
       <div className="sticky top-2 rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 shadow-[0_18px_50px_-20px_rgba(76,29,149,0.45)] overflow-hidden">
         {/* Sarlavha — gradient */}
-        <div className="relative px-4 py-3.5 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white overflow-hidden">
+        <div className="relative px-5 py-4 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white overflow-hidden">
           <div className="absolute -top-8 -right-6 w-28 h-28 rounded-full bg-white/20 blur-2xl" />
           <div className="absolute inset-0 opacity-[0.12]"
             style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '16px 16px' }} />
           <div className="relative flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur grid place-items-center shadow-inner shrink-0">
-              <Landmark className="w-4 h-4" />
+            <span className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur grid place-items-center shadow-inner shrink-0">
+              <Landmark className="w-5 h-5" />
             </span>
             <div className="min-w-0">
-              <div className="text-[12.5px] font-extrabold tracking-tight">Hisoblar bo&apos;yicha</div>
-              <div className="text-[10.5px] text-white/80 tabular-nums">
+              <div className="text-[14px] font-extrabold tracking-tight">Hisoblar bo&apos;yicha</div>
+              <div className="text-[11.5px] text-white/80 tabular-nums">
                 {items.length} ta hisob · {total} ta XATO
               </div>
             </div>
@@ -155,15 +155,15 @@ function AccountRail({
         {/* Barchasi */}
         <button
           onClick={onClear}
-          className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-all border-b border-slate-100 dark:border-slate-800 ${
+          className={`w-full flex items-center gap-3 px-5 py-3 text-left transition-all border-b border-slate-100 dark:border-slate-800 ${
             selected.length === 0
               ? 'bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/40'
               : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
           }`}
         >
           <Layers className={`w-4 h-4 shrink-0 ${selected.length === 0 ? 'text-violet-600' : 'text-slate-400'}`} />
-          <span className={`flex-1 text-[12.5px] ${selected.length === 0 ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium'}`}>Barchasi</span>
-          <span className="text-[11px] font-extrabold tabular-nums text-slate-400 dark:text-slate-500">{total}</span>
+          <span className={`flex-1 text-[13.5px] ${selected.length === 0 ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium'}`}>Barchasi</span>
+          <span className="text-[12.5px] font-extrabold tabular-nums text-slate-400 dark:text-slate-500">{total}</span>
         </button>
 
         {/* Hisoblar */}
@@ -178,23 +178,23 @@ function AccountRail({
                 onClick={() => onSelect(it.name)}
                 title={`${it.name} — ${it.count} ta XATO`}
                 style={{ animationDelay: `${Math.min(i * 40, 420)}ms` }}
-                className={`xato-rail-item group relative w-full pl-4 pr-3.5 py-2.5 text-left transition-all duration-200 ${
+                className={`xato-rail-item group relative w-full pl-5 pr-4 py-3 text-left transition-all duration-200 ${
                   on
                     ? 'bg-gradient-to-r from-violet-100/80 via-fuchsia-50/50 to-transparent dark:from-violet-950/60 dark:via-fuchsia-950/20'
-                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:pl-5'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:pl-6'
                 }`}
               >
                 {/* Tanlangan — chapda yorqin chiziq */}
                 <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b ${c.bar} transition-opacity ${on ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`} />
 
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full shrink-0 shadow-md ${c.dot} ${c.glow} transition-transform ${on ? 'scale-125' : 'group-hover:scale-110'}`} />
-                  <span className={`flex-1 truncate text-[12.5px] transition-colors ${
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 shadow-md ${c.dot} ${c.glow} transition-transform ${on ? 'scale-125' : 'group-hover:scale-110'}`} />
+                  <span className={`flex-1 truncate text-[13.5px] transition-colors ${
                     on ? 'font-extrabold text-violet-700 dark:text-violet-300' : 'font-semibold text-slate-700 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300'
                   }`}>
                     {it.name}
                   </span>
-                  <span className={`shrink-0 min-w-[24px] h-[21px] px-1.5 grid place-items-center rounded-lg text-[11px] font-extrabold tabular-nums shadow-sm transition-all ${
+                  <span className={`shrink-0 min-w-[28px] h-[25px] px-2 grid place-items-center rounded-xl text-[12.5px] font-extrabold tabular-nums shadow-sm transition-all ${
                     on
                       ? `bg-gradient-to-br ${c.bar} text-white shadow-md ${c.glow}`
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:scale-110'
@@ -204,20 +204,20 @@ function AccountRail({
                 </div>
 
                 {/* Ulush ustuni + summa */}
-                <div className="flex items-center gap-2 mt-1.5 pl-4">
-                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div className="flex items-center gap-2.5 mt-2 pl-5">
+                  <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     <div
                       className={`h-full rounded-full bg-gradient-to-r ${c.bar} transition-all duration-700 ${on ? '' : 'opacity-70 group-hover:opacity-100'}`}
                       style={{ width: `${Math.max(pct, 8)}%` }}
                     />
                   </div>
-                  <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${it.sum < 0 ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span className={`text-[11px] font-semibold tabular-nums shrink-0 ${it.sum < 0 ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'}`}>
                     {money(it.sum)}
                   </span>
                 </div>
 
                 {it.pending > 0 && (
-                  <div className="pl-4 mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                  <div className="pl-5 mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                     {it.pending} ta jarayonda
                   </div>
@@ -586,7 +586,8 @@ export default function XatoListPage() {
     const map = new Map<string, { name: string; count: number; sum: number; pending: number }>();
     for (const r of allRows) {
       if (!matchesBase(r)) continue;
-      const name = rowAccount(r) || '—';
+      const name = rowAccount(r);
+      if (!name) continue; // hisobi aniqlanmagan qatorlar panelda ko'rsatilmaydi
       const cur = map.get(name) || { name, count: 0, sum: 0, pending: 0 };
       cur.count++;
       cur.sum += r.amount ?? 0;
