@@ -960,7 +960,7 @@ export class OplataKvService {
    * Obyektlar bo'yicha to'lovlar yig'indisi — Telegram hisobotidagi kabi:
    * har obyekt uchun Сумма оплаты / 1 взнос / Ойлик, + umumiy ЖАМИ.
    */
-  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean; crmStatuses?: string } = {}) {
+  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean; crmStatuses?: string; propertyTypes?: string; branches?: string } = {}) {
     const where: any = {};
     if (opts.dateFrom || opts.dateTo) {
       const range: any = {};
@@ -994,6 +994,16 @@ export class OplataKvService {
     if (opts.crmStatuses && opts.crmStatuses.trim()) {
       const cf = await this.buildCrmStatusFilter(opts.crmStatuses);
       if (cf) where.AND = [...(where.AND || []), cf];
+    }
+    // Тип (жилой / парковка) — CrmContract.propertyType
+    if (opts.propertyTypes && opts.propertyTypes.trim()) {
+      const pf = await this.buildPropertyTypeFilter(opts.propertyTypes);
+      if (pf) where.AND = [...(where.AND || []), pf];
+    }
+    // Сотув бўлими — CrmContract.branchName
+    if (opts.branches && opts.branches.trim()) {
+      const bf = await this.buildBranchFilter(opts.branches);
+      if (bf) where.AND = [...(where.AND || []), bf];
     }
 
     // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
@@ -1202,6 +1212,8 @@ export class OplataKvService {
     mode?: 'normal' | 'refund';
     includeSchotchik?: boolean;
     crmStatuses?: string;
+    propertyTypes?: string;
+    branches?: string;
   }) {
     const where: any = {};
 
@@ -1252,6 +1264,16 @@ export class OplataKvService {
     if (opts.crmStatuses && opts.crmStatuses.trim()) {
       const cf = await this.buildCrmStatusFilter(opts.crmStatuses);
       if (cf) where.AND = [...(where.AND || []), cf];
+    }
+    // Тип (жилой / парковка) — ОплатыКв jadvalidagi filtr bilan bir xil qoida
+    if (opts.propertyTypes && opts.propertyTypes.trim()) {
+      const pf = await this.buildPropertyTypeFilter(opts.propertyTypes);
+      if (pf) where.AND = [...(where.AND || []), pf];
+    }
+    // Сотув бўлими — CrmContract.branchName
+    if (opts.branches && opts.branches.trim()) {
+      const bf = await this.buildBranchFilter(opts.branches);
+      if (bf) where.AND = [...(where.AND || []), bf];
     }
 
     const ROW_CAP = 5000;
@@ -1307,6 +1329,8 @@ export class OplataKvService {
     mode?: 'normal' | 'refund';
     includeSchotchik?: boolean;
     crmStatuses?: string;
+    propertyTypes?: string;
+    branches?: string;
   }): Promise<{ buffer: Buffer; filename: string }> {
     const { rows, total } = await this.byObjectDetail(opts);
     const isAll = opts.object === '__ALL__';

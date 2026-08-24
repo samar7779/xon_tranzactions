@@ -114,10 +114,25 @@ export default function DashboardPage() {
   const [objInclSchotchik, setObjInclSchotchik] = useState(false);  // "За счетчик" ni hisobga qo'shish
   const [objCrmStatuses, setObjCrmStatuses] = useState<Set<string>>(new Set());  // CRM status filtri (galochka)
   const objCrmKey = useMemo(() => Array.from(objCrmStatuses).sort().join(','), [objCrmStatuses]);
+  const [objTypes, setObjTypes] = useState<Set<string>>(new Set());       // Тип (жил/пар)
+  const [objBranches, setObjBranches] = useState<Set<string>>(new Set()); // Сотув бўлими
+  const objTypeKey = useMemo(() => Array.from(objTypes).sort().join(','), [objTypes]);
+  const objBranchKey = useMemo(() => Array.from(objBranches).sort().join(','), [objBranches]);
   // CRM status opsiyalari (virtual_status distinct + "— (bo'sh)")
   const { data: crmStatusOpts } = useQuery({
     queryKey: ['oplata-distinct-crmStatus'],
     queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>('/oplata-kv/distinct?column=crmStatus'),
+    enabled: has(PERMS.DASHBOARD_OBJECTS),
+  });
+  // Тип va Сотув бўлими opsiyalari (ОплатыКв jadvalidagi bilan bir xil manba)
+  const { data: crmTypeOpts } = useQuery({
+    queryKey: ['oplata-distinct-crmPropertyType'],
+    queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>('/oplata-kv/distinct?column=crmPropertyType'),
+    enabled: has(PERMS.DASHBOARD_OBJECTS),
+  });
+  const { data: crmBranchOpts } = useQuery({
+    queryKey: ['oplata-distinct-crmBranch'],
+    queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>('/oplata-kv/distinct?column=crmBranch'),
     enabled: has(PERMS.DASHBOARD_OBJECTS),
   });
   const [objRange, setObjRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
@@ -136,7 +151,7 @@ export default function DashboardPage() {
 
   interface ObjRow { object: string; paymentAmount: number; firstInstallment: number; monthlyAmount: number; count: number }
   const { data: objReport, isLoading: objLoading } = useQuery({
-    queryKey: ['oplata-by-object', objFrom, objTo, objMode, objInclSchotchik, objCrmKey],
+    queryKey: ['oplata-by-object', objFrom, objTo, objMode, objInclSchotchik, objCrmKey, objTypeKey, objBranchKey],
     queryFn: () => {
       const p = new URLSearchParams();
       if (objFrom) p.set('dateFrom', objFrom);
@@ -144,6 +159,8 @@ export default function DashboardPage() {
       p.set('mode', objMode);
       if (objInclSchotchik) p.set('includeSchotchik', '1');
       if (objCrmKey) p.set('crmStatuses', objCrmKey);
+      if (objTypeKey) p.set('propertyTypes', objTypeKey);
+      if (objBranchKey) p.set('branches', objBranchKey);
       return api.get<{ ok: boolean; rows: ObjRow[]; total: ObjRow }>(`/oplata-kv/by-object?${p}`);
     },
     enabled: has(PERMS.DASHBOARD_OBJECTS) && (objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo)),
@@ -458,6 +475,10 @@ export default function DashboardPage() {
                 inclSchotchik={objInclSchotchik} setInclSchotchik={setObjInclSchotchik}
                 crmStatuses={objCrmStatuses} setCrmStatuses={setObjCrmStatuses}
                 crmOptions={crmStatusOpts?.values || []}
+                propertyTypes={objTypes} setPropertyTypes={setObjTypes}
+                typeOptions={crmTypeOpts?.values || []}
+                branches={objBranches} setBranches={setObjBranches}
+                branchOptions={crmBranchOpts?.values || []}
               />
               <span className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
               <RangeBtn active={objRange === 'today'} onClick={() => setObjRange('today')}>{t('rangeToday')}</RangeBtn>
@@ -575,6 +596,8 @@ export default function DashboardPage() {
           mode={objMode}
           includeSchotchik={objInclSchotchik}
           crmStatuses={objCrmKey}
+          propertyTypes={objTypeKey}
+          branches={objBranchKey}
           onClose={() => setObjDetail(null)}
         />
         </>)}
@@ -1439,9 +1462,103 @@ function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () 
   );
 }
 
+/**
+ * Yig'iladigan filtr guruhi — sarlavha bosilsa ochiladi/yopiladi (default: yopiq).
+ * Sarlavhada tanlanganlar soni ko'rinadi, shuning uchun yopiq holatda ham
+ * nima tanlanganini bilib turadi.
+ */
+function FilterGroup({
+  title, options, selected, onToggle, onClear, searchable,
+}: {
+  title: string;
+  options: Array<{ id: string; name: string }>;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  onClear: () => void;
+  searchable?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const shown = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return s ? options.filter((o) => o.name.toLowerCase().includes(s)) : options;
+  }, [options, search]);
+
+  return (
+    <div className="px-2.5 pb-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-1.5 px-1 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+      >
+        <ChevronRight className={cn('h-3 w-3 text-slate-400 transition-transform', open && 'rotate-90')} />
+        <span className="text-[9.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex-1 text-left">
+          {title}
+        </span>
+        {selected.size > 0 && (
+          <span className="min-w-[16px] h-[16px] px-1 rounded-full bg-indigo-600 text-white text-[9.5px] font-bold grid place-items-center tabular-nums">
+            {selected.size}
+          </span>
+        )}
+        <span className="text-[9.5px] text-slate-300 dark:text-slate-600 tabular-nums">{options.length}</span>
+      </button>
+
+      {open && (
+        <div className="pt-0.5">
+          {selected.size > 0 && (
+            <div className="flex justify-end px-1 pb-1">
+              <button type="button" onClick={onClear} className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline">
+                Tozalash
+              </button>
+            </div>
+          )}
+          {searchable && options.length > 8 && (
+            <div className="px-1 pb-1.5">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Qidirish..."
+                className="w-full h-7 px-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] outline-none ring-1 ring-transparent focus:ring-indigo-300 dark:focus:ring-indigo-700"
+              />
+            </div>
+          )}
+          <div className="max-h-48 overflow-y-auto space-y-0.5 pr-0.5">
+            {shown.length === 0 ? (
+              <div className="text-[11px] text-slate-400 dark:text-slate-500 px-1 py-2">Ma&apos;lumot yo&apos;q</div>
+            ) : shown.map((o) => {
+              const checked = selected.has(o.id);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => onToggle(o.id)}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-1.5 py-1.5 rounded-lg text-left transition-colors',
+                    checked ? 'bg-indigo-50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
+                  )}
+                >
+                  <span className={cn(
+                    'w-4 h-4 rounded grid place-items-center ring-1 shrink-0 transition-colors',
+                    checked ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600',
+                  )}>
+                    {checked && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="text-[12px] truncate">{o.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Obyektlar hisoboti toolbaridagi filtr — За счётчик / Возврат / CRM status galochkalari
 function ObjToolbarFilter({
   mode, setMode, inclSchotchik, setInclSchotchik, crmStatuses, setCrmStatuses, crmOptions,
+  propertyTypes, setPropertyTypes, typeOptions, branches, setBranches, branchOptions,
 }: {
   mode: 'normal' | 'refund';
   setMode: (m: 'normal' | 'refund') => void;
@@ -1450,13 +1567,20 @@ function ObjToolbarFilter({
   crmStatuses: Set<string>;
   setCrmStatuses: (s: Set<string>) => void;
   crmOptions: Array<{ id: string; name: string }>;
+  propertyTypes: Set<string>;
+  setPropertyTypes: (s: Set<string>) => void;
+  typeOptions: Array<{ id: string; name: string }>;
+  branches: Set<string>;
+  setBranches: (s: Set<string>) => void;
+  branchOptions: Array<{ id: string; name: string }>;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
-  const activeCount = (mode === 'refund' ? 1 : 0) + (inclSchotchik ? 1 : 0) + crmStatuses.size;
+  const activeCount = (mode === 'refund' ? 1 : 0) + (inclSchotchik ? 1 : 0)
+    + crmStatuses.size + propertyTypes.size + branches.size;
 
   const openPop = () => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); setOpen(true); };
 
@@ -1486,7 +1610,15 @@ function ObjToolbarFilter({
     if (next.has(id)) next.delete(id); else next.add(id);
     setCrmStatuses(next);
   };
-  const clearAll = () => { setMode('normal'); setInclSchotchik(false); setCrmStatuses(new Set()); };
+  const clearAll = () => {
+    setMode('normal'); setInclSchotchik(false);
+    setCrmStatuses(new Set()); setPropertyTypes(new Set()); setBranches(new Set());
+  };
+  const toggleIn = (set: Set<string>, apply: (s: Set<string>) => void) => (id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    apply(next);
+  };
 
   const width = 288;
   let left = 0, top = 0;
@@ -1553,42 +1685,34 @@ function ObjToolbarFilter({
             />
           </div>
 
-          <div className="px-2.5 pb-1">
-            <div className="flex items-center justify-between px-1 mb-1">
-              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">CRM status</span>
-              {crmStatuses.size > 0 && (
-                <button type="button" onClick={() => setCrmStatuses(new Set())} className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline">
-                  Tozalash
-                </button>
-              )}
-            </div>
-            <div className="max-h-52 overflow-y-auto space-y-0.5 pr-0.5">
-              {crmOptions.length === 0 ? (
-                <div className="text-[11px] text-slate-400 dark:text-slate-500 px-1 py-2">Status yo'q</div>
-              ) : crmOptions.map((o) => {
-                const checked = crmStatuses.has(o.id);
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => toggleStatus(o.id)}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-1.5 py-1.5 rounded-lg text-left transition-colors',
-                      checked ? 'bg-indigo-50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
-                    )}
-                  >
-                    <span className={cn(
-                      'w-4 h-4 rounded grid place-items-center ring-1 shrink-0 transition-colors',
-                      checked ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600',
-                    )}>
-                      {checked && <Check className="h-3 w-3" />}
-                    </span>
-                    <span className="text-[12px] truncate">{o.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Тип (жил/пар) — CRM status'dan OLDIN */}
+          <FilterGroup
+            title="Тип (жил/пар)"
+            options={typeOptions}
+            selected={propertyTypes}
+            onToggle={toggleIn(propertyTypes, setPropertyTypes)}
+            onClear={() => setPropertyTypes(new Set())}
+          />
+
+          {/* CRM status — endi yig'iladigan */}
+          <FilterGroup
+            title="CRM status"
+            options={crmOptions}
+            selected={crmStatuses}
+            onToggle={toggleStatus}
+            onClear={() => setCrmStatuses(new Set())}
+            searchable
+          />
+
+          {/* Сотув бўлими — CRM status'dan KEYIN */}
+          <FilterGroup
+            title="Сотув бўлими"
+            options={branchOptions}
+            selected={branches}
+            onToggle={toggleIn(branches, setBranches)}
+            onClear={() => setBranches(new Set())}
+            searchable
+          />
 
           {activeCount > 0 && (
             <div className="px-2.5 py-2 border-t border-slate-100 dark:border-slate-800">
@@ -1672,7 +1796,7 @@ interface ObjDetailRow {
 }
 
 function ObjectDetailDialog({
-  object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, onClose,
+  object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, propertyTypes, branches, onClose,
 }: {
   object: string | null;
   dateFrom: string;
@@ -1680,6 +1804,8 @@ function ObjectDetailDialog({
   mode: 'normal' | 'refund';
   includeSchotchik: boolean;
   crmStatuses?: string;
+  propertyTypes?: string;
+  branches?: string;
   onClose: () => void;
 }) {
   const t = useTranslations('dashboard');
@@ -1687,7 +1813,7 @@ function ObjectDetailDialog({
   const isAll = object === '__ALL__';
 
   const { data, isLoading } = useQuery({
-    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses],
+    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, propertyTypes, branches],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('object', object || '');
@@ -1696,6 +1822,8 @@ function ObjectDetailDialog({
       p.set('mode', mode);
       if (includeSchotchik) p.set('includeSchotchik', '1');
       if (crmStatuses) p.set('crmStatuses', crmStatuses);
+      if (propertyTypes) p.set('propertyTypes', propertyTypes);
+      if (branches) p.set('branches', branches);
       return api.get<{
         ok: boolean; object: string; count: number; truncated?: boolean;
         rows: ObjDetailRow[];
@@ -1717,6 +1845,8 @@ function ObjectDetailDialog({
       p.set('mode', mode);
       if (includeSchotchik) p.set('includeSchotchik', '1');
       if (crmStatuses) p.set('crmStatuses', crmStatuses);
+      if (propertyTypes) p.set('propertyTypes', propertyTypes);
+      if (branches) p.set('branches', branches);
       const safe = (object === '—' ? 'obyektsiz' : object).replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
       await apiDownload(`/oplata-kv/by-object-detail/export?${p.toString()}`, `obyekt-${safe}.xlsx`);
     } catch {
