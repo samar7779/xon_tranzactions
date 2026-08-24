@@ -123,79 +123,102 @@ function AccountRail({
     if (abs >= 1_000) return `${Math.round(n / 1_000)} ming`;
     return String(Math.round(n));
   };
+  // Reyting bo'yicha rang — eng ko'p XATO'li hisob eng "issiq" rangda
+  const tone = (i: number) => (
+    i === 0 ? { bar: 'from-rose-500 to-orange-400', dot: 'bg-rose-500', glow: 'shadow-rose-500/40' }
+      : i === 1 ? { bar: 'from-orange-500 to-amber-400', dot: 'bg-orange-500', glow: 'shadow-orange-500/40' }
+        : i === 2 ? { bar: 'from-amber-500 to-yellow-400', dot: 'bg-amber-500', glow: 'shadow-amber-500/40' }
+          : { bar: 'from-violet-500 to-fuchsia-400', dot: 'bg-violet-400', glow: 'shadow-violet-500/40' }
+  );
 
   return (
-    <aside className="hidden xl:block w-[248px] shrink-0">
-      <div className="sticky top-2 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg overflow-hidden">
-        {/* Sarlavha */}
-        <div className="px-3.5 py-3 bg-gradient-to-r from-violet-50 to-fuchsia-50/60 dark:from-violet-950/40 dark:to-fuchsia-950/20 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <Landmark className="w-4 h-4 text-violet-500" />
-            <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200">Hisoblar bo'yicha</span>
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-            {items.length} ta hisobda {total} ta XATO
+    <aside className="hidden xl:block w-[268px] shrink-0">
+      <div className="sticky top-2 rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 shadow-[0_18px_50px_-20px_rgba(76,29,149,0.45)] overflow-hidden">
+        {/* Sarlavha — gradient */}
+        <div className="relative px-4 py-3.5 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white overflow-hidden">
+          <div className="absolute -top-8 -right-6 w-28 h-28 rounded-full bg-white/20 blur-2xl" />
+          <div className="absolute inset-0 opacity-[0.12]"
+            style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '16px 16px' }} />
+          <div className="relative flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur grid place-items-center shadow-inner shrink-0">
+              <Landmark className="w-4 h-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-extrabold tracking-tight">Hisoblar bo&apos;yicha</div>
+              <div className="text-[10.5px] text-white/80 tabular-nums">
+                {items.length} ta hisob · {total} ta XATO
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Barchasi */}
         <button
           onClick={onClear}
-          className={`w-full flex items-center gap-2 px-3.5 py-2.5 text-left transition-colors border-b border-slate-100 dark:border-slate-800 ${
+          className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-all border-b border-slate-100 dark:border-slate-800 ${
             selected.length === 0
-              ? 'bg-violet-50/70 dark:bg-violet-950/30'
+              ? 'bg-gradient-to-r from-violet-50 to-transparent dark:from-violet-950/40'
               : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
           }`}
         >
-          <Layers className={`w-4 h-4 shrink-0 ${selected.length === 0 ? 'text-violet-500' : 'text-slate-400'}`} />
-          <span className="flex-1 text-[12.5px] font-medium">Barchasi</span>
-          <span className="text-[11px] font-bold tabular-nums text-slate-500 dark:text-slate-400">{total}</span>
+          <Layers className={`w-4 h-4 shrink-0 ${selected.length === 0 ? 'text-violet-600' : 'text-slate-400'}`} />
+          <span className={`flex-1 text-[12.5px] ${selected.length === 0 ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium'}`}>Barchasi</span>
+          <span className="text-[11px] font-extrabold tabular-nums text-slate-400 dark:text-slate-500">{total}</span>
         </button>
 
         {/* Hisoblar */}
-        <div className="max-h-[calc(100vh-260px)] overflow-y-auto py-1">
+        <div className="max-h-[calc(100vh-250px)] overflow-y-auto py-1.5">
           {items.map((it, i) => {
             const on = selected.includes(it.name);
             const pct = max > 0 ? Math.round((it.count / max) * 100) : 0;
+            const c = tone(i);
             return (
               <button
                 key={it.name}
                 onClick={() => onSelect(it.name)}
                 title={`${it.name} — ${it.count} ta XATO`}
-                style={{ animationDelay: `${Math.min(i * 35, 400)}ms` }}
-                className={`xato-rail-item group w-full px-3.5 py-2 text-left transition-all ${
-                  on ? 'bg-violet-50/80 dark:bg-violet-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                style={{ animationDelay: `${Math.min(i * 40, 420)}ms` }}
+                className={`xato-rail-item group relative w-full pl-4 pr-3.5 py-2.5 text-left transition-all duration-200 ${
+                  on
+                    ? 'bg-gradient-to-r from-violet-100/80 via-fuchsia-50/50 to-transparent dark:from-violet-950/60 dark:via-fuchsia-950/20'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:pl-5'
                 }`}
               >
+                {/* Tanlangan — chapda yorqin chiziq */}
+                <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b ${c.bar} transition-opacity ${on ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`} />
+
                 <div className="flex items-center gap-2">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-transform ${
-                    on ? 'bg-violet-500 scale-125' : it.pending > 0 ? 'bg-amber-400' : 'bg-slate-300 dark:bg-slate-600'
-                  }`} />
-                  <span className={`flex-1 truncate text-[12.5px] ${on ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-slate-700 dark:text-slate-200'}`}>
+                  <span className={`w-2 h-2 rounded-full shrink-0 shadow-md ${c.dot} ${c.glow} transition-transform ${on ? 'scale-125' : 'group-hover:scale-110'}`} />
+                  <span className={`flex-1 truncate text-[12.5px] transition-colors ${
+                    on ? 'font-extrabold text-violet-700 dark:text-violet-300' : 'font-semibold text-slate-700 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300'
+                  }`}>
                     {it.name}
                   </span>
-                  <span className={`shrink-0 min-w-[20px] h-[19px] px-1.5 grid place-items-center rounded-full text-[10.5px] font-bold tabular-nums transition-colors ${
+                  <span className={`shrink-0 min-w-[24px] h-[21px] px-1.5 grid place-items-center rounded-lg text-[11px] font-extrabold tabular-nums shadow-sm transition-all ${
                     on
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-violet-100 dark:group-hover:bg-violet-950/50 group-hover:text-violet-700 dark:group-hover:text-violet-300'
+                      ? `bg-gradient-to-br ${c.bar} text-white shadow-md ${c.glow}`
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:scale-110'
                   }`}>
                     {it.count}
                   </span>
                 </div>
+
                 {/* Ulush ustuni + summa */}
-                <div className="flex items-center gap-2 mt-1 pl-3.5">
-                  <div className="flex-1 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div className="flex items-center gap-2 mt-1.5 pl-4">
+                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${on ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500' : 'bg-gradient-to-r from-violet-300 to-fuchsia-300 dark:from-violet-800 dark:to-fuchsia-800'}`}
-                      style={{ width: `${Math.max(pct, 6)}%` }}
+                      className={`h-full rounded-full bg-gradient-to-r ${c.bar} transition-all duration-700 ${on ? '' : 'opacity-70 group-hover:opacity-100'}`}
+                      style={{ width: `${Math.max(pct, 8)}%` }}
                     />
                   </div>
-                  <span className={`text-[10px] tabular-nums shrink-0 ${it.sum < 0 ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${it.sum < 0 ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'}`}>
                     {money(it.sum)}
                   </span>
                 </div>
+
                 {it.pending > 0 && (
-                  <div className="pl-3.5 mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                  <div className="pl-4 mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                     {it.pending} ta jarayonda
                   </div>
                 )}
@@ -206,9 +229,9 @@ function AccountRail({
       </div>
 
       <style jsx>{`
-        .xato-rail-item { animation: xato-rail-in 0.35s ease-out both; }
+        .xato-rail-item { animation: xato-rail-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
         @keyframes xato-rail-in {
-          from { opacity: 0; transform: translateX(-8px); }
+          from { opacity: 0; transform: translateX(-12px); }
           to { opacity: 1; transform: none; }
         }
       `}</style>
@@ -593,7 +616,7 @@ export default function XatoListPage() {
         <div className="absolute inset-0 opacity-[0.07]"
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
 
-        <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 pt-5 pb-6 text-white">
+        <div className="relative mx-auto max-w-[2200px] px-4 sm:px-6 pt-5 pb-6 text-white">
           {/* Header — bitta qator: title (chap) · kartalar (o'rta) · tab (o'ng) */}
           <div className="flex items-center gap-3 sm:gap-4 flex-wrap xl:flex-nowrap">
             {/* Title — chap burchak */}
@@ -651,7 +674,7 @@ export default function XatoListPage() {
           </div>
         </div>
       ) : (
-        <div className="mx-auto max-w-[1600px] px-3 sm:px-6 mt-4 relative z-10 pb-10">
+        <div className="mx-auto max-w-[2200px] px-3 sm:px-6 mt-4 relative z-10 pb-10">
 
           {mainTab === 'xato' && (
           <>
@@ -704,7 +727,7 @@ export default function XatoListPage() {
 
           {/* ═══ Grid ═══ */}
           {!data ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [@media(min-width:1800px)]:grid-cols-5 [@media(min-width:2100px)]:grid-cols-6 gap-3 mt-4">
               {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : rows.length === 0 ? (
@@ -716,7 +739,7 @@ export default function XatoListPage() {
               <div className="text-[12px] text-slate-400 mt-0.5">Qidiruv yoki filtrni o&apos;zgartiring</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [@media(min-width:1800px)]:grid-cols-5 [@media(min-width:2100px)]:grid-cols-6 gap-3 mt-4">
               {pageRows.map((r) => {
                 const isIn = (r.amount ?? 0) >= 0;
                 return (
@@ -1110,7 +1133,7 @@ function ArizalarView({ data, loading, status, setStatus, q, setQ, submitter, se
 
       {/* ── Ro'yxat ── */}
       {loading && !data ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [@media(min-width:1800px)]:grid-cols-5 [@media(min-width:2100px)]:grid-cols-6 gap-3 mt-4">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : rows.length === 0 ? (
@@ -1122,7 +1145,7 @@ function ArizalarView({ data, loading, status, setStatus, q, setQ, submitter, se
           <div className="text-[12px] text-slate-400 mt-0.5">Filtr yoki qidiruvni o&apos;zgartiring</div>
         </div>
       ) : (
-        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 [@media(min-width:1800px)]:grid-cols-5 [@media(min-width:2100px)]:grid-cols-6 gap-3 mt-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
           {rows.map((r) => <ArizaCard key={r.id} r={r} viewFile={viewFile} onSelect={onSelect} />)}
         </div>
       )}
