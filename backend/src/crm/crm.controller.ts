@@ -40,7 +40,7 @@ export class CrmController {
   }
 
   @Get('find-by-composite')
-  @RequirePermissions(PERMISSIONS.CRM_VIEW, PERMISSIONS.OPLATAKV_VIEW)
+  @RequirePermissions(PERMISSIONS.CRM_VIEW, PERMISSIONS.OPLATAKV_VIEW, PERMISSIONS.OPLATAKV_XATO_CRM)
   @ApiOperation({
     summary: "Kompozit bank ID orqali CRM to'lovini topish (XATO to'lov shartnomasini aniqlash)",
     description:
@@ -52,7 +52,7 @@ export class CrmController {
   }
 
   @Post('match-composites')
-  @RequirePermissions(PERMISSIONS.CRM_VIEW, PERMISSIONS.OPLATAKV_VIEW)
+  @RequirePermissions(PERMISSIONS.CRM_VIEW, PERMISSIONS.OPLATAKV_VIEW, PERMISSIONS.OPLATAKV_XATO_CRM)
   @ApiOperation({
     summary: 'BATCH: kompozit ID ro\'yxati bo\'yicha CRM to\'lovlarni topish (XATO tuzatish moduli)',
     description:

@@ -77,7 +77,7 @@ function SubTab({ active, onClick, icon: Icon, label, hint }: { active: boolean;
 
 function ListView({ mode }: { mode: Mode }) {
   const qc = useQueryClient();
-  const canEdit = useAuth((s) => !!s.user?.permissions?.includes(PERMS.OPLATAKV_EDIT));
+  const canEdit = useAuth((s) => !!s.user?.permissions?.includes(PERMS.OPLATAKV_XATO_CRM));
   const [page, setPage] = useState(1);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);

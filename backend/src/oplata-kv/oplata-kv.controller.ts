@@ -52,7 +52,7 @@ export class OplataKvController {
   ) {}
 
   @Get()
-  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW, PERMISSIONS.OPLATAKV_XATO_CRM)
   @ApiOperation({ summary: 'ОплатыКв ro\'yxati (pagination + filter + sums)' })
   list(@Query() q: ListOplataKvDto) {
     return this.svc.list(q);
@@ -97,7 +97,7 @@ export class OplataKvController {
   }
 
   @Get('export')
-  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW, PERMISSIONS.OPLATAKV_XATO_CRM)
   @ApiOperation({ summary: 'Filtr bo\'yicha barcha qatorlarni Excel sifatida yuklab olish' })
   async exportXlsx(@Query() q: ListOplataKvDto, @Res() res: Response) {
     const { buffer, filename } = await this.svc.exportXlsx(q);
@@ -707,7 +707,7 @@ export class OplataKvController {
   }
 
   @Post(':id/assign-from-crm')
-  @RequirePermissions(PERMISSIONS.OPLATAKV_EDIT)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_EDIT, PERMISSIONS.OPLATAKV_XATO_CRM)
   @ApiOperation({ summary: "XATO to'lovga CRM'dan topilgan shartnomani biriktirish + CRM grafigi bo'yicha split (boshlang'ich/oylik)" })
   assignFromCrm(
     @Param('id') id: string,
@@ -721,7 +721,7 @@ export class OplataKvController {
   }
 
   @Post('bulk-crm-fix')
-  @RequirePermissions(PERMISSIONS.OPLATAKV_EDIT)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_EDIT, PERMISSIONS.OPLATAKV_XATO_CRM)
   @ApiOperation({ summary: "BULK: barcha XATO/Split-yo'q to'lovlarni CRM'dan topib shartnoma + ustun (bosh/oylik) qo'yadi (serverda, tez)" })
   bulkCrmFix(
     @Body() body: { mode?: 'xato' | 'unsplit' },
