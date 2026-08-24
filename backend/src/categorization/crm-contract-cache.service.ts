@@ -79,8 +79,10 @@ export class CrmContractCacheService {
   private branchTotalPage = 0;
   // Recency (ko'rinadigan qatorlar avval) kursori — oplata_kv eng so'nggi shartnomalari.
   private branchRecencyOffset = 0;
-  // Poisoned ('' — bo'sh) branch'larni bir marta NULL'ga qaytarish (process boshida).
+  // Poisoned ('' — bo'sh) branch'larni BIR MARTA (abadiy) NULL'ga qaytarish. Marker DB'da
+  // (restartda takror emas — aks holda drenaj yozgan ishonchli '' sentinel'lar buzilardi).
   private branchResetDone = false;
+  private static readonly BRANCH_RESET_MARKER = '__BRANCH_RESET_DONE_V1__';
 
   /**
    * SOTUV BO'LIMI (branch_name)ni to'ldiradi. Ikki manba:
@@ -104,6 +106,11 @@ export class CrmContractCacheService {
     // (1) RECENCY — ko'rinadigan (so'nggi) shartnomalar avval, ISHONCHLI /index contract-filter.
     const recFilled = await this.backfillBranchRecency(Math.min(120, Math.max(40, Math.round(branchLimit / 8))));
     branchFilled += recFilled;
+    // (1b) DRENAJ — QOLGAN hamma (eski ham) found+NULL branch'ni /index bilan to'ldiradi.
+    //      Bulk page-walk sotuv bo'limini QAYTARMAYDI (probe tasdiqladi) — shu bois eskilar
+    //      faqat shu contract-filter drenaji orqali to'ladi. Genuine bo'limsiz → '' sentinel.
+    const drainFilled = await this.drainNullBranches(Math.min(200, Math.max(80, Math.round(branchLimit / 5))));
+    branchFilled += drainFilled;
     // (2) BULK page-walk — umumiy qamrov. FAQAT bo'sh bo'lmagan branch yoziladi ('' YOZILMAYDI).
     const pages = Math.max(1, Math.round(branchLimit / 100));
     for (let p = 0; p < pages; p++) {
@@ -126,11 +133,12 @@ export class CrmContractCacheService {
       this.branchPage++;
       if (this.branchTotalPage && this.branchPage > this.branchTotalPage) { this.branchPage = 1; break; } // aylanib chiqdi
     }
+    // QOLDI = faqat NULL (hali tekshirilmagan). '' = tekshirildi, bo'lim yo'q (drenajdan chiqqan) → sanamaymiz.
     const branchRemaining = await this.prisma.crmContract.count({
-      where: { found: true, OR: [{ branchName: null }, { branchName: '' }] },
+      where: { found: true, branchName: null },
     });
     if (branchFilled) {
-      this.log.log(`crmMetaBackfill: sotuv bo'limi ${branchFilled} to'ldirildi (recency ${recFilled}; ${branchRemaining} qoldi, page=${this.branchPage})`);
+      this.log.log(`crmMetaBackfill: sotuv bo'limi ${branchFilled} to'ldirildi (recency ${recFilled} · drenaj ${drainFilled}; ${branchRemaining} qoldi, page=${this.branchPage})`);
     }
     // TURI — /show type.key orqali (ishonchli manba). branchLimit ga mutanosib porsiya.
     const typeRes = await this.backfillPropertyTypeViaShow(Math.min(250, Math.max(100, Math.round(branchLimit / 4))));
@@ -144,13 +152,23 @@ export class CrmContractCacheService {
    */
   private async resetPoisonedBranches(): Promise<number> {
     if (this.branchResetDone) return 0;
-    this.branchResetDone = true;
+    // BIR MARTA ABADIY — marker DB'da bo'lsa boshqa qaytarmaymiz (drenaj '' sentinel'larini saqlash).
+    const marker = await this.prisma.crmContract
+      .findUnique({ where: { contractNumber: CrmContractCacheService.BRANCH_RESET_MARKER } })
+      .catch(() => null);
+    if (marker) { this.branchResetDone = true; return 0; }
     try {
       const r = await this.prisma.crmContract.updateMany({
         where: { found: true, branchName: '' },
         data: { branchName: null },
       });
-      if (r.count) this.log.log(`crmMetaBackfill: ${r.count} bo'sh ('') sotuv bo'limi NULL'ga qaytarildi (qayta to'ldiriladi)`);
+      await this.prisma.crmContract.upsert({
+        where: { contractNumber: CrmContractCacheService.BRANCH_RESET_MARKER },
+        create: { contractNumber: CrmContractCacheService.BRANCH_RESET_MARKER, found: false },
+        update: {},
+      }).catch(() => { /* ignore */ });
+      this.branchResetDone = true;
+      if (r.count) this.log.log(`crmMetaBackfill: ${r.count} bo'sh ('') sotuv bo'limi NULL'ga qaytarildi (bir marta, qayta to'ldiriladi)`);
       return 0; // reset'ni "to'ldirildi" deb hisoblamaymiz (haqiqiy to'ldirish keyin bo'ladi)
     } catch (e: any) {
       this.log.warn(`resetPoisonedBranches xato: ${e?.message}`);
@@ -222,21 +240,45 @@ export class CrmContractCacheService {
   }
 
   /**
-   * Berilgan shartnomalarni /index (getContractMeta) orqali (parallel 8) tekshirib,
-   * created_by.branch.name bo'yicha guruhlab updateMany. FAQAT REAL (bo'sh bo'lmagan) branch yoziladi.
+   * OLD/qolgan drenaj — found=true + branchName NULL crm_contracts'ni /index bilan
+   * to'ldiradi (YOSH FARQI YO'Q — eng eski tekshirilganlaridan). Recency (recent) UX uchun;
+   * bu esa qolgan hamma eskini drenajlaydi (427... → 0). Genuine branchsiz → '' sentinel.
+   */
+  private async drainNullBranches(limit: number): Promise<number> {
+    const batch = await this.prisma.crmContract.findMany({
+      where: { found: true, branchName: null },
+      orderBy: { lastVerifiedAt: 'asc' },
+      take: limit,
+      select: { contractNumber: true },
+    });
+    if (!batch.length) return 0;
+    return this.applyIndexBranches(batch.map((b) => b.contractNumber));
+  }
+
+  /**
+   * Berilgan shartnomalarni /index (getContractMeta — ISHONCHLI) orqali (parallel 8) tekshirib,
+   * created_by.branch.name bo'yicha guruhlab updateMany.
+   *   - branch bor  → REAL qiymat yoziladi.
+   *   - /index ok+found LEKIN branch YO'Q → '' sentinel (haqiqatan bo'lim yo'q — qayta so'ramaymiz).
+   *   - /index javob bermadi (ok emas/found emas) → TEGMAYMIZ (NULL qoladi, keyin qayta uriladi).
    */
   private async applyIndexBranches(keys: string[]): Promise<number> {
     if (!keys.length) return 0;
     const CONC = 8;
     const byBranch = new Map<string, string[]>();
+    const branchless: string[] = []; // ishonchli /index: sotuv bo'limi haqiqatan yo'q
     let idx = 0;
     const worker = async () => {
       while (idx < keys.length) {
         const k = keys[idx++];
         try {
           const meta: any = await this.crm.getContractMeta(k);
-          const b = meta?.ok && meta?.found && meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
-          if (b) { const a = byBranch.get(b) || []; a.push(k); byBranch.set(b, a); }
+          if (meta?.ok && meta?.found) {
+            const b = meta?.branchName != null ? String(meta.branchName).slice(0, 255) : '';
+            if (b) { const a = byBranch.get(b) || []; a.push(k); byBranch.set(b, a); }
+            else branchless.push(k);
+          }
+          // ok emas / found emas → NULL qoldiramiz (qayta uriladi)
         } catch { /* skip — keyingi tsiklda qayta uriladi */ }
       }
     };
@@ -248,6 +290,13 @@ export class CrmContractCacheService {
         data: { branchName: b },
       });
       filled += r.count;
+    }
+    // Haqiqatan bo'limsizlarni '' bilan belgilaymiz (faqat NULL'larga) — drenajdan chiqsin.
+    if (branchless.length) {
+      await this.prisma.crmContract.updateMany({
+        where: { contractNumber: { in: branchless }, branchName: null },
+        data: { branchName: '' },
+      });
     }
     return filled;
   }
