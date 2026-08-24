@@ -3242,18 +3242,35 @@ export class OplataKvService {
     }
     const cn = contractNo.trim().toUpperCase();
 
-    // 1) Cache
+    // 0) ASOSIY MANBA: CRM /index (getContractMeta) — shartnoma EGASI (bank to'lovchisi emas),
+    //    _debug/crm-raw "index" bilan AYNAN bir xil manba. Kesh yoki oplata_kv fallback ba'zan
+    //    boshqa (to'lovchi) ismni ko'rsatardi — Переброска endi CRM /index javobiga mos keladi.
+    let metaName: string | null = null;
+    let metaObject: string | null = null;
+    let metaFound = false;
+    try {
+      const meta: any = await this.crmService.getContractMeta(cn);
+      if (meta?.ok && meta?.found) {
+        metaFound = true;
+        const cf = meta.clientFullName ? String(meta.clientFullName).trim() : '';
+        if (cf) metaName = cf;
+        const ob = meta.object ? String(meta.object).trim() : '';
+        if (ob) metaObject = ob;
+      }
+    } catch { /* /index xato — pastdagi kesh/show fallback */ }
+
+    // 1) Cache (fallback — /index bermasa)
     const cached = await this.prisma.crmContract.findFirst({
       where: { contractNumber: cn },
       select: { customerName: true, objectName: true, found: true },
     });
 
-    let customerName: string | null = cached?.customerName || null;
-    let objectNameOriginal: string | null = cached?.objectName || null;
-    let foundInCrm = !!cached?.found;
+    let customerName: string | null = metaName || cached?.customerName || null;
+    let objectNameOriginal: string | null = metaObject || cached?.objectName || null;
+    let foundInCrm = metaFound || !!cached?.found;
 
-    // 2) Cache yo'q yoki ma'lumotlar to'liq emas — live CRM so'rov
-    if (!cached || !customerName || !objectNameOriginal) {
+    // 2) Ma'lumot to'liq emas (na /index, na kesh berdi) — live /show fallback
+    if (!customerName || !objectNameOriginal) {
       try {
         const resp: any = await this.crmService.show({ contract: cn });
         const detail = resp?.detail || null;
