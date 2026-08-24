@@ -77,26 +77,42 @@ export class CrmContractCacheService {
   // /index sahifa kursori (bulk branch backfill) — restartda 1'dan boshlanadi (idempotent).
   private branchPage = 1;
   private branchTotalPage = 0;
+  // Recency (ko'rinadigan qatorlar avval) kursori — oplata_kv eng so'nggi shartnomalari.
+  private branchRecencyOffset = 0;
+  // Poisoned ('' — bo'sh) branch'larni bir marta NULL'ga qaytarish (process boshida).
+  private branchResetDone = false;
 
   /**
-   * SOTUV BO'LIMI (branch_name)ni to'ldiradi — BULK: CRM /index sahifasidan 100 tadan
-   * (avval 1 tadan edi — juda sekin). Har sahifadagi shartnomalar bo'lim bo'yicha guruhlanib
-   * updateMany (faqat NULL bo'lganlar). Konvergent — barcha sahifa aylanib chiqilgach bo'sh yuradi.
-   * Turi endi maqsad-matndan hisoblanadi (backfill kerak emas). typeFilled har doim 0.
-   * @param branchLimit ~ nechta shartnoma (100 ga bo'linadi → sahifa soni).
+   * SOTUV BO'LIMI (branch_name)ni to'ldiradi. Ikki manba:
+   *   (1) RECENCY — oplata_kv eng SO'NGGI to'lovlar shartnomalari AVVAL (foydalanuvchi
+   *       KO'RADIGAN qatorlar tez to'lsin), har birini /index contract-filter (getContractMeta —
+   *       created_by.branch.name ISHONCHLI qaytaradi) bilan aniqlab updateMany. Turi bilan bir xil
+   *       recency yondashuvi (avval turi /show sweep bilan tuzatilgandi, sotuv bo'limi qolib ketgandi).
+   *   (2) BULK page-walk — CRM /index sahifasidan 100 tadan, umumiy qamrov uchun.
+   *
+   * ⚠️ MUHIM: bulk /index ba'zan created_by.branch BERMAYDI (list ko'rinishi relation'ni
+   * eager-load qilmaydi) → branchName='' keladi. Bunda '' YOZMAYMIZ (avval yozilardi →
+   * NULL bo'lmagani uchun boshqa qayta to'lmasdi = qulflanib qolardi). Faqat REAL (bo'sh
+   * bo'lmagan) qiymat yoziladi; '' bo'lsa NULL qoldiriladi (keyingi tsikl yoki recency to'ldiradi).
+   * Turi endi /show type.key orqali (bu yerda emas).
+   * @param branchLimit ~ nechta shartnoma (100 ga bo'linadi → bulk sahifa soni).
    */
   async runMetaBackfill(branchLimit: number): Promise<{ typeFilled: number; branchFilled: number; branchRemaining: number; typeRemaining: number }> {
-    const pages = Math.max(1, Math.round(branchLimit / 100));
     let branchFilled = 0;
+    // (0) Bir marta: eski poisoned ('' bo'sh) sotuv bo'limlarini NULL'ga qaytarish — qayta to'lsin.
+    branchFilled += await this.resetPoisonedBranches();
+    // (1) RECENCY — ko'rinadigan (so'nggi) shartnomalar avval, ISHONCHLI /index contract-filter.
+    const recFilled = await this.backfillBranchRecency(Math.min(120, Math.max(40, Math.round(branchLimit / 8))));
+    branchFilled += recFilled;
+    // (2) BULK page-walk — umumiy qamrov. FAQAT bo'sh bo'lmagan branch yoziladi ('' YOZILMAYDI).
+    const pages = Math.max(1, Math.round(branchLimit / 100));
     for (let p = 0; p < pages; p++) {
       const res = await this.crm.listContractBranchesPage(this.branchPage, 100);
       if (!res.ok) break;
       if (res.totalPage) this.branchTotalPage = res.totalPage;
-      // FAQAT SOTUV BO'LIMI (branch) bulk /index'dan — faqat NULL'ga.
-      // TURI (type) /index'da ishonchsiz (parking → жилой chiqarardi), shu bois
-      // turi ALOHIDA /show type.key orqali to'ldiriladi (backfillPropertyTypeViaShow).
       const byBranch = new Map<string, string[]>();
       for (const it of res.items) {
+        if (!it.branchName) continue; // '' — CRM bermadi → NULL qoldiramiz (qulflab qo'ymaymiz)
         const key = it.contract.toUpperCase().slice(0, 128);
         const b = byBranch.get(it.branchName) || []; b.push(key); byBranch.set(it.branchName, b);
       }
@@ -111,14 +127,93 @@ export class CrmContractCacheService {
       if (this.branchTotalPage && this.branchPage > this.branchTotalPage) { this.branchPage = 1; break; } // aylanib chiqdi
     }
     const branchRemaining = await this.prisma.crmContract.count({
-      where: { found: true, branchName: null },
+      where: { found: true, OR: [{ branchName: null }, { branchName: '' }] },
     });
     if (branchFilled) {
-      this.log.log(`crmMetaBackfill (bulk): sotuv bo'limi ${branchFilled} to'ldirildi (${branchRemaining} qoldi, page=${this.branchPage})`);
+      this.log.log(`crmMetaBackfill: sotuv bo'limi ${branchFilled} to'ldirildi (recency ${recFilled}; ${branchRemaining} qoldi, page=${this.branchPage})`);
     }
     // TURI — /show type.key orqali (ishonchli manba). branchLimit ga mutanosib porsiya.
     const typeRes = await this.backfillPropertyTypeViaShow(Math.min(250, Math.max(100, Math.round(branchLimit / 4))));
     return { typeFilled: typeRes.filled, branchFilled, branchRemaining, typeRemaining: typeRes.remaining };
+  }
+
+  /**
+   * Eski poisoned sotuv bo'limlari — branchName='' (bo'sh) bo'lganlarni NULL'ga qaytaradi,
+   * shunda backfill ularni qayta to'ldiradi. Process boshida BIR marta (biz endi '' yozmaymiz,
+   * shu bois bir marta tozalash yetarli).
+   */
+  private async resetPoisonedBranches(): Promise<number> {
+    if (this.branchResetDone) return 0;
+    this.branchResetDone = true;
+    try {
+      const r = await this.prisma.crmContract.updateMany({
+        where: { found: true, branchName: '' },
+        data: { branchName: null },
+      });
+      if (r.count) this.log.log(`crmMetaBackfill: ${r.count} bo'sh ('') sotuv bo'limi NULL'ga qaytarildi (qayta to'ldiriladi)`);
+      return 0; // reset'ni "to'ldirildi" deb hisoblamaymiz (haqiqiy to'ldirish keyin bo'ladi)
+    } catch (e: any) {
+      this.log.warn(`resetPoisonedBranches xato: ${e?.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * RECENCY sotuv bo'limi — oplata_kv eng so'nggi to'lovlar shartnomalaridan boshlab,
+   * branch'i hali yo'q (NULL yoki '') bo'lganlarni /index contract-filter (getContractMeta —
+   * created_by.branch.name ISHONCHLI) bilan aniqlab to'ldiradi. Ko'rinadigan qatorlar avval.
+   */
+  private async backfillBranchRecency(limit: number): Promise<number> {
+    const grp = await this.prisma.oplataKv.groupBy({
+      by: ['contractNo'],
+      _max: { date: true },
+      orderBy: { _max: { date: 'desc' } },
+      take: limit,
+      skip: this.branchRecencyOffset,
+    });
+    const nos = Array.from(new Set(
+      grp.map((g) => (g.contractNo || '').replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').toUpperCase()).filter(Boolean),
+    ));
+    if (!nos.length) { this.branchRecencyOffset = 0; return 0; } // aylanib chiqdi — boshiga
+    // Faqat branch KERAKLI (found=true + NULL yoki '') shartnomalar — CRM yukini kamaytiradi.
+    const need = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: nos }, found: true, OR: [{ branchName: null }, { branchName: '' }] },
+      select: { contractNumber: true },
+    });
+    const filled = await this.applyIndexBranches(need.map((n) => n.contractNumber));
+    this.branchRecencyOffset += limit;
+    return filled;
+  }
+
+  /**
+   * Berilgan shartnomalarni /index (getContractMeta) orqali (parallel 8) tekshirib,
+   * created_by.branch.name bo'yicha guruhlab updateMany. FAQAT REAL (bo'sh bo'lmagan) branch yoziladi.
+   */
+  private async applyIndexBranches(keys: string[]): Promise<number> {
+    if (!keys.length) return 0;
+    const CONC = 8;
+    const byBranch = new Map<string, string[]>();
+    let idx = 0;
+    const worker = async () => {
+      while (idx < keys.length) {
+        const k = keys[idx++];
+        try {
+          const meta: any = await this.crm.getContractMeta(k);
+          const b = meta?.ok && meta?.found && meta?.branchName ? String(meta.branchName).slice(0, 255) : '';
+          if (b) { const a = byBranch.get(b) || []; a.push(k); byBranch.set(b, a); }
+        } catch { /* skip — keyingi tsiklda qayta uriladi */ }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONC, keys.length) }, () => worker()));
+    let filled = 0;
+    for (const [b, ks] of byBranch) {
+      const r = await this.prisma.crmContract.updateMany({
+        where: { contractNumber: { in: ks } },
+        data: { branchName: b },
+      });
+      filled += r.count;
+    }
+    return filled;
   }
 
   // ─── TURI (property_type) backfill — CRM /show `type.key` orqali (yagona ishonchli manba) ───
@@ -460,8 +555,9 @@ export class CrmContractCacheService {
               objectName: hit.object ? String(hit.object).slice(0, 255) : null,
               apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
               crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
-              // /index sotuv bo'limini beradi (created_by.branch.name) + turi obyekt nomidan
-              branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : '',
+              // /index sotuv bo'limini beradi (created_by.branch.name); yo'q bo'lsa NULL
+              // ('' YOZMAYMIZ — NULL bo'lmasa backfill qayta to'ldirmaydi = qulflanib qolardi)
+              branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : null,
               propertyType: null, // /index ishonchli type bermaydi → null; /show-backfill to'ldiradi
               found: true,
             },
@@ -471,7 +567,9 @@ export class CrmContractCacheService {
               objectName: hit.object ? String(hit.object).slice(0, 255) : null,
               apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
               crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
-              branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : '',
+              // FAQAT REAL branch bo'lsa yozamiz; yo'q bo'lsa undefined (Prisma: TEGMAYDI) —
+              // oldingi /index'dan kelgan haqiqiy sotuv bo'limini '' bilan buzib qo'ymaymiz
+              branchName: hit.branchName ? String(hit.branchName).slice(0, 255) : undefined,
               // propertyType TEGILMAYDI — oldingi /show'dan kelgan ishonchli qiymatni buzmaslik uchun
               found: true,
               lastVerifiedAt: new Date(),
