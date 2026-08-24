@@ -3242,34 +3242,38 @@ export class OplataKvService {
     }
     const cn = contractNo.trim().toUpperCase();
 
-    // 0) ASOSIY MANBA: CRM /index (getContractMeta) — shartnoma EGASI (bank to'lovchisi emas),
-    //    _debug/crm-raw "index" bilan AYNAN bir xil manba. Kesh yoki oplata_kv fallback ba'zan
-    //    boshqa (to'lovchi) ismni ko'rsatardi — Переброска endi CRM /index javobiga mos keladi.
-    let metaName: string | null = null;
-    let metaObject: string | null = null;
-    let metaFound = false;
-    try {
-      const meta: any = await this.crmService.getContractMeta(cn);
-      if (meta?.ok && meta?.found) {
-        metaFound = true;
-        const cf = meta.clientFullName ? String(meta.clientFullName).trim() : '';
-        if (cf) metaName = cf;
-        const ob = meta.object ? String(meta.object).trim() : '';
-        if (ob) metaObject = ob;
-      }
-    } catch { /* /index xato — pastdagi kesh/show fallback */ }
-
-    // 1) Cache (fallback — /index bermasa)
+    // 1) Cache (TEZ — crm_contracts.customerName = CRM shartnoma EGASI; jonli chaqiruvsiz)
     const cached = await this.prisma.crmContract.findFirst({
       where: { contractNumber: cn },
       select: { customerName: true, objectName: true, found: true },
     });
 
-    let customerName: string | null = metaName || cached?.customerName || null;
-    let objectNameOriginal: string | null = metaObject || cached?.objectName || null;
-    let foundInCrm = metaFound || !!cached?.found;
+    let customerName: string | null = cached?.customerName || null;
+    let objectNameOriginal: string | null = cached?.objectName || null;
+    let foundInCrm = !!cached?.found;
 
-    // 2) Ma'lumot to'liq emas (na /index, na kesh berdi) — live /show fallback
+    // 2) Kesh to'liq emas → CRM /index (getContractMeta) — shartnoma EGASI (bank to'lovchisi
+    //    emas), _debug/crm-raw "index" bilan bir xil manba. Bu oplata_kv "client" (to'lovchi)
+    //    fallback'i o'rniga — Переброска mijoz ismi endi CRM egasi bilan mos. Kesh bo'lsa TEZ,
+    //    faqat kesh bermaganda jonli so'rov (avval HAR safar jonli edi → shartnoma sekin chiqardi).
+    if (!customerName || !objectNameOriginal || !foundInCrm) {
+      try {
+        const meta: any = await this.crmService.getContractMeta(cn);
+        if (meta?.ok && meta?.found) {
+          foundInCrm = true;
+          if (!customerName && meta.clientFullName) {
+            const cf = String(meta.clientFullName).trim();
+            if (cf) customerName = cf;
+          }
+          if (!objectNameOriginal && meta.object) {
+            const ob = String(meta.object).trim();
+            if (ob) objectNameOriginal = ob;
+          }
+        }
+      } catch { /* /index xato — pastdagi /show fallback */ }
+    }
+
+    // 3) Ma'lumot hali to'liq emas (na kesh, na /index berdi) — live /show fallback
     if (!customerName || !objectNameOriginal) {
       try {
         const resp: any = await this.crmService.show({ contract: cn });
