@@ -100,6 +100,122 @@ type Flow = 'all' | 'in' | 'out' | 'pending';
  * Masalan: "AFSONA RESIDENCE" MCHJ · МЧЖ "AFSONA RESIDENCE" · ?AFSONA RESIDENCE?MCHJ → AFSONA RESIDENCE
  */
 const DROP_TOKENS = new Set(['MCHJ', 'МЧЖ', 'ООО', 'ОАО', 'АЖ', 'AJ', 'ХК', 'XK', 'ЙТТ', 'YTT', 'ЙТ']);
+/**
+ * Hisob raqamlar paneli (chap ustun) — qaysi hisobda nechta XATO to'lov borligi.
+ * Bosilganda o'sha hisob bo'yicha filtr; qayta bosilsa filtr olib tashlanadi.
+ * Ustun (bar) — hisobning eng ko'p XATO'li hisobga nisbatan ulushi.
+ */
+function AccountRail({
+  items, max, total, selected, onSelect, onClear,
+}: {
+  items: Array<{ name: string; count: number; sum: number; pending: number }>;
+  max: number;
+  total: number;
+  selected: string[];
+  onSelect: (name: string) => void;
+  onClear: () => void;
+}) {
+  if (items.length === 0) return null;
+  const money = (n: number) => {
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)} mlrd`;
+    if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} mln`;
+    if (abs >= 1_000) return `${Math.round(n / 1_000)} ming`;
+    return String(Math.round(n));
+  };
+
+  return (
+    <aside className="hidden xl:block w-[248px] shrink-0">
+      <div className="sticky top-2 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg overflow-hidden">
+        {/* Sarlavha */}
+        <div className="px-3.5 py-3 bg-gradient-to-r from-violet-50 to-fuchsia-50/60 dark:from-violet-950/40 dark:to-fuchsia-950/20 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Landmark className="w-4 h-4 text-violet-500" />
+            <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200">Hisoblar bo'yicha</span>
+          </div>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            {items.length} ta hisobda {total} ta XATO
+          </div>
+        </div>
+
+        {/* Barchasi */}
+        <button
+          onClick={onClear}
+          className={`w-full flex items-center gap-2 px-3.5 py-2.5 text-left transition-colors border-b border-slate-100 dark:border-slate-800 ${
+            selected.length === 0
+              ? 'bg-violet-50/70 dark:bg-violet-950/30'
+              : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
+          }`}
+        >
+          <Layers className={`w-4 h-4 shrink-0 ${selected.length === 0 ? 'text-violet-500' : 'text-slate-400'}`} />
+          <span className="flex-1 text-[12.5px] font-medium">Barchasi</span>
+          <span className="text-[11px] font-bold tabular-nums text-slate-500 dark:text-slate-400">{total}</span>
+        </button>
+
+        {/* Hisoblar */}
+        <div className="max-h-[calc(100vh-260px)] overflow-y-auto py-1">
+          {items.map((it, i) => {
+            const on = selected.includes(it.name);
+            const pct = max > 0 ? Math.round((it.count / max) * 100) : 0;
+            return (
+              <button
+                key={it.name}
+                onClick={() => onSelect(it.name)}
+                title={`${it.name} — ${it.count} ta XATO`}
+                style={{ animationDelay: `${Math.min(i * 35, 400)}ms` }}
+                className={`xato-rail-item group w-full px-3.5 py-2 text-left transition-all ${
+                  on ? 'bg-violet-50/80 dark:bg-violet-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-transform ${
+                    on ? 'bg-violet-500 scale-125' : it.pending > 0 ? 'bg-amber-400' : 'bg-slate-300 dark:bg-slate-600'
+                  }`} />
+                  <span className={`flex-1 truncate text-[12.5px] ${on ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-slate-700 dark:text-slate-200'}`}>
+                    {it.name}
+                  </span>
+                  <span className={`shrink-0 min-w-[20px] h-[19px] px-1.5 grid place-items-center rounded-full text-[10.5px] font-bold tabular-nums transition-colors ${
+                    on
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 group-hover:bg-violet-100 dark:group-hover:bg-violet-950/50 group-hover:text-violet-700 dark:group-hover:text-violet-300'
+                  }`}>
+                    {it.count}
+                  </span>
+                </div>
+                {/* Ulush ustuni + summa */}
+                <div className="flex items-center gap-2 mt-1 pl-3.5">
+                  <div className="flex-1 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${on ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500' : 'bg-gradient-to-r from-violet-300 to-fuchsia-300 dark:from-violet-800 dark:to-fuchsia-800'}`}
+                      style={{ width: `${Math.max(pct, 6)}%` }}
+                    />
+                  </div>
+                  <span className={`text-[10px] tabular-nums shrink-0 ${it.sum < 0 ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                    {money(it.sum)}
+                  </span>
+                </div>
+                {it.pending > 0 && (
+                  <div className="pl-3.5 mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                    {it.pending} ta jarayonda
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <style jsx>{`
+        .xato-rail-item { animation: xato-rail-in 0.35s ease-out both; }
+        @keyframes xato-rail-in {
+          from { opacity: 0; transform: translateX(-8px); }
+          to { opacity: 1; transform: none; }
+        }
+      `}</style>
+    </aside>
+  );
+}
+
 function normAccount(s: string): string {
   if (!s) return '';
   const x = s.toUpperCase()
@@ -416,12 +532,14 @@ export default function XatoListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows]);
 
-  const rows = allRows.filter((r) => {
+  // Hisob filtridan TASHQARI barcha shartlar (oqim + qidiruv).
+  // Hisob paneli sanoqlari shu bo'yicha hisoblanadi — bitta hisob tanlanganda ham
+  // qolgan hisoblarda nechta XATO borligi ko'rinib tursin.
+  const matchesBase = (r: XatoRow) => {
     const a = r.amount ?? 0;
     if (flow === 'in' && a < 0) return false;
     if (flow === 'out' && a >= 0) return false;
     if (flow === 'pending' && !r.pending) return false;
-    if (objSel.length > 0 && !objSel.includes(rowAccount(r))) return false;
     if (!q.trim()) return true;
     const s = q.trim().toLowerCase();
     return (
@@ -432,7 +550,31 @@ export default function XatoListPage() {
       r.account?.toLowerCase().includes(s) ||
       r.purpose?.toLowerCase().includes(s)
     );
+  };
+
+  const rows = allRows.filter((r) => {
+    if (!matchesBase(r)) return false;
+    if (objSel.length > 0 && !objSel.includes(rowAccount(r))) return false;
+    return true;
   });
+
+  // Hisob raqamlar paneli — qaysi hisobda nechta XATO bor (soni bo'yicha kamayish)
+  const accountStats = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; sum: number; pending: number }>();
+    for (const r of allRows) {
+      if (!matchesBase(r)) continue;
+      const name = rowAccount(r) || '—';
+      const cur = map.get(name) || { name, count: 0, sum: 0, pending: 0 };
+      cur.count++;
+      cur.sum += r.amount ?? 0;
+      if (r.pending) cur.pending++;
+      map.set(name, cur);
+    }
+    const arr = Array.from(map.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'ru'));
+    const max = arr.reduce((m, x) => Math.max(m, x.count), 0);
+    return { items: arr, max, total: arr.reduce((s, x) => s + x.count, 0) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRows, flow, q]);
   const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
   const safePage = Math.min(page, totalPages);
   const pageRows = rows.slice((safePage - 1) * perPage, safePage * perPage);
@@ -513,6 +655,21 @@ export default function XatoListPage() {
 
           {mainTab === 'xato' && (
           <>
+          {/* Chapda hisoblar paneli · o'ngda qidiruv + kartalar */}
+          <div className="flex gap-4 items-start">
+            <AccountRail
+              items={accountStats.items}
+              max={accountStats.max}
+              total={accountStats.total}
+              selected={objSel}
+              onSelect={(name) => {
+                // Bosilgan hisob bo'yicha filtr; qayta bosilsa — tozalanadi
+                setObjSel((prev) => (prev.length === 1 && prev[0] === name ? [] : [name]));
+                setPage(1);
+              }}
+              onClear={() => { setObjSel([]); setPage(1); }}
+            />
+            <div className="flex-1 min-w-0">
           {/* ═══ Sticky search bar ═══ */}
           <div className="sticky top-2 z-20">
             <div className="flex items-center gap-2">
@@ -652,6 +809,8 @@ export default function XatoListPage() {
                 className="h-9 px-3 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-semibold shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">{totalPages} »</button>
             </div>
           )}
+            </div>{/* /o'ng ustun */}
+          </div>{/* /flex */}
           </>
           )}
 
