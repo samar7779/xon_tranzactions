@@ -207,36 +207,40 @@ export class CrmContractCacheService {
    * DIAGNOSTIKA — so'nggi found=true shartnomalar uchun CRM /index (getContractMeta) JONLI
    * sotuv bo'limini qaytaryaptimi tekshiradi. Manba muammosini (branch bor/yo'q) ochish uchun.
    */
-  async probeBranchSource(limit = 5): Promise<Array<{ contract: string; ok: boolean; found: boolean; branch: string | null }>> {
+  async probeBranchSource(limit = 6): Promise<Array<{ contract: string; itemCount: number; hasCreatedBy: boolean; createdByKeys: string[] | null; crmBranch: string | null; dbBranch: string | null }>> {
+    // AYNAN muammoli qatorlar: so'nggi found shartnomalar, branch NULL yoki '' bo'lganlar.
     const grp = await this.prisma.oplataKv.groupBy({
       by: ['contractNo'],
       _max: { date: true },
       orderBy: { _max: { date: 'desc' } },
-      take: 80,
+      take: 300,
     });
     const nos = Array.from(new Set(
       grp.map((g) => (g.contractNo || '').replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').toUpperCase()).filter(Boolean),
     ));
-    const foundRows = await this.prisma.crmContract.findMany({
-      where: { contractNumber: { in: nos }, found: true },
-      select: { contractNumber: true },
+    let stuck = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: nos }, found: true, OR: [{ branchName: null }, { branchName: '' }] },
+      select: { contractNumber: true, branchName: true },
       take: limit,
     });
-    const out: Array<{ contract: string; ok: boolean; found: boolean; branch: string | null }> = [];
-    for (const r of foundRows.slice(0, limit)) {
-      try {
-        const meta: any = await this.crm.getContractMeta(r.contractNumber);
-        out.push({
-          contract: r.contractNumber,
-          ok: !!meta?.ok,
-          found: !!meta?.found,
-          branch: meta?.branchName != null ? String(meta.branchName) : null,
-        });
-      } catch {
-        out.push({ contract: r.contractNumber, ok: false, found: false, branch: null });
-      }
+    // Agar "stuck" bo'lmasa (hammasi to'lган) — oddiy so'nggi found'ni ko'rsatamiz (ishlaganini isbot).
+    if (!stuck.length) {
+      stuck = await this.prisma.crmContract.findMany({
+        where: { contractNumber: { in: nos }, found: true },
+        select: { contractNumber: true, branchName: true },
+        take: limit,
+      });
     }
-    return out;
+    const dbMap = new Map(stuck.map((s) => [s.contractNumber, s.branchName]));
+    const diag = await this.crm.diagContractBranch(stuck.map((s) => s.contractNumber));
+    return diag.map((d) => ({
+      contract: d.contract,
+      itemCount: d.itemCount,
+      hasCreatedBy: d.hasCreatedBy,
+      createdByKeys: d.createdByKeys,
+      crmBranch: d.branch,
+      dbBranch: dbMap.get(d.contract) === '' ? '(bo\'sh-belgi)' : (dbMap.get(d.contract) ?? null),
+    }));
   }
 
   /**

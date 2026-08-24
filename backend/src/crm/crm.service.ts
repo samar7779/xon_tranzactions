@@ -1270,6 +1270,42 @@ export class CrmService {
   }
 
   /**
+   * DIAGNOSTIKA — CRM /index JONLI javobini ochib beradi: shartnoma topildimi,
+   * created_by bormi, branch qayerda. Sotuv bo'limi to'lmayotgan sababini aniqlash uchun.
+   */
+  async diagContractBranch(contracts: string[]): Promise<Array<{
+    contract: string; ok: boolean; itemCount: number; matched: string | null;
+    hasCreatedBy: boolean; createdByKeys: string[] | null; branch: string | null;
+  }>> {
+    const out: any[] = [];
+    const norm = (s: any) => String(s || '').replace(/[\s\-_]/g, '').toUpperCase();
+    for (const c of contracts.slice(0, 10)) {
+      const target = (c || '').trim();
+      if (!target) continue;
+      try {
+        const r: any = await this.call('/index', {
+          contract: target, 'per-page': 5, is_trashed: 1, trashed_status: 1, with_trashed: 1,
+        });
+        const items: any[] = r?.data?.data || [];
+        const it = items.find((x) => norm(x.contract) === norm(target)) || null; // FAQAT aniq moslik
+        const cb = it?.created_by || null;
+        out.push({
+          contract: target,
+          ok: !!r?.ok,
+          itemCount: items.length,
+          matched: it?.contract ?? null,
+          hasCreatedBy: !!cb,
+          createdByKeys: cb && typeof cb === 'object' ? Object.keys(cb) : null,
+          branch: cb?.branch?.name != null ? String(cb.branch.name) : null,
+        });
+      } catch (e: any) {
+        out.push({ contract: target, ok: false, itemCount: 0, matched: null, hasCreatedBy: false, createdByKeys: null, branch: null });
+      }
+    }
+    return out;
+  }
+
+  /**
    * Bitta shartnoma to'lov jadvali (grafik) — CRM /order/show'dan.
    * initial.schedules[] + monthly.schedules[] → har installment.
    */
