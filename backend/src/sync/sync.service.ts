@@ -577,10 +577,18 @@ export class SyncService implements OnModuleInit {
             fetchedItems: allFetchedItems,
             fetchedDays: fetchedDayStarts,
             actor: 'sync',
+            // O'chirishdan OLDIN bankdan ±N kun tekshirish uchun (moved vs deleted)
+            bankCtx: {
+              baseUrl: cred.bank.apiBaseUrl!,
+              login,
+              password,
+              branch: acc.branch,
+              useProxy: cred.useProxy === true,
+            },
           });
-          if (changeStats.deleted > 0 || changeStats.edited > 0) {
+          if (changeStats.deleted > 0 || changeStats.edited > 0 || changeStats.moved > 0) {
             this.logger.log(
-              `Change detection (${acc.accountNo}): ${changeStats.deleted} ta o'chirilgan, ${changeStats.edited} ta o'zgartirilgan`,
+              `Change detection (${acc.accountNo}): ${changeStats.deleted} o'chirilgan, ${changeStats.edited} o'zgartirilgan, ${changeStats.moved} ko'chirilgan`,
             );
           }
         } catch (e: any) {
@@ -944,14 +952,17 @@ export class SyncService implements OnModuleInit {
    * olinmagan kunlarda o'chirish noto'g'ri bo'lar edi).
    */
   async detectChanges(opts: {
-    account: { id: string; accountNo: string };
+    account: { id: string; accountNo: string; branch?: string | null };
     bankCode?: string;
     fetchedItems: KbDoc1CItem[];
     fetchedDays: Date[];          // muvaffaqiyatli olingan kunlarning Date list'i
     actor: string;                // 'sync' | 'manual:<email>'
-  }): Promise<{ deleted: number; edited: number }> {
-    const { account, bankCode, fetchedItems, fetchedDays, actor } = opts;
-    if (fetchedDays.length === 0) return { deleted: 0, edited: 0 };
+    // O'chirishdan oldin bankdan ±N kun tekshirish uchun (moved vs deleted). Yo'q bo'lsa
+    // eski xatti-harakat (tekshiruvsiz o'chirish) — lekin sync doim beradi.
+    bankCtx?: { baseUrl: string; login: string; password: string; branch?: string | null; useProxy: boolean };
+  }): Promise<{ deleted: number; edited: number; moved: number }> {
+    const { account, bankCode, fetchedItems, fetchedDays, actor, bankCtx } = opts;
+    if (fetchedDays.length === 0) return { deleted: 0, edited: 0, moved: 0 };
 
     // Tekshirish oralig'i (eng erta va eng kech kun)
     const sortedDays = [...fetchedDays].sort((a, b) => a.getTime() - b.getTime());
@@ -988,6 +999,10 @@ export class SyncService implements OnModuleInit {
 
     let deletedCount = 0;
     let editedCount = 0;
+    let movedCount = 0;
+    // O'chirishga NOMZOD'lar — darhol o'chirmaymiz; loopdan keyin bankdan ±N kun
+    // tekshirib, ko'chirilgan(moved) yoki chindan o'chirilganini aniqlaymiz.
+    const deleteCandidates: Array<{ tx: (typeof dbTxs)[number]; genNumKey: string | null }> = [];
 
     for (const tx of dbTxs) {
       // FIX (B#1): tranzaksiya kuni haqiqatan yozuv kelgan (bo'sh emas) kun bo'lmasa — tegmaymiz.
@@ -1010,40 +1025,9 @@ export class SyncService implements OnModuleInit {
       }
 
       if (!bankItem) {
-        // DELETED — bank ro'yxatida yo'q
-        try {
-          // Snapshot saqlaymiz, keyin tranzaksiyani o'chiramiz
-          await this.prisma.transactionChangeLog.create({
-            data: {
-              txId: tx.id,
-              externalId: tx.externalId,
-              accountId: tx.accountId,
-              changeType: 'DELETED',
-              fieldsChanged: ['*'],
-              oldData: tx as any,
-              newData: null as any,
-              txnDate: tx.txnDate,
-              amount: tx.amount,
-              direction: tx.direction,
-              contractNumber: tx.contractNumber,
-              bankNameSnap: tx.importBankNameText,
-              accountNoSnap: account.accountNo,
-              detectedBy: actor,
-              note: `Bank ro'yxatida yo'q (${minDay.toISOString().slice(0, 10)} → ${maxDay.toISOString().slice(0, 10)} oralig'i tekshirildi)`,
-            },
-          });
-          // OplatyKv cascade — BOG'LANGAN qator bo'lsa o'chiramiz.
-          // MUHIM: ilgari bu faqat isClientTx(tx) bo'lganda ishlardi. Lekin qator
-          // ОплатыКв'ga tushgandan KEYIN tranzaksiya kategoriyasi o'zgargan bo'lishi
-          // mumkin (masalan "Возврат взносов"), o'shanda bank to'lovni bekor qilsa
-          // tranzaksiya o'chib, ОплатыКв'dagi qator QOLIB ketardi.
-          // Endi mezon — kategoriya emas, sourceTxId bog'lanishining o'zi.
-          await this.cascadeOplataKvDelete(tx.externalId, tx.id, actor);
-          await this.prisma.transaction.delete({ where: { id: tx.id } });
-          deletedCount++;
-        } catch (e: any) {
-          this.logger.warn(`Change-DELETED yozishda xato (${tx.id}): ${e?.message}`);
-        }
+        // Bank oynasида topilmadi — DARHOL o'chirmaymiz. Nomzod sifatida yig'amiz;
+        // loopdan keyin bankdan ±N kun so'rab, ko'chirilgan(moved)mi yoki o'chirilganmi aniqlaymiz.
+        deleteCandidates.push({ tx, genNumKey });
         continue;
       }
 
@@ -1152,7 +1136,127 @@ export class SyncService implements OnModuleInit {
       }
     }
 
-    return { deleted: deletedCount, edited: editedCount };
+    // ─── O'CHIRISH NOMZODLARINI TEKSHIRISH (ko'chirilgan vs o'chirilgan) ───
+    // Bank oynasida topilmagan yozuvlarni DARHOL o'chirmaymiz. Bankdan ±VERIFY_DAYS kun
+    // so'rab: boshqa kunda topilsa → KO'CHIRILGAN (sana yangilanadi, o'chmaydi);
+    // faqat butun oyna tekshirilib (bankka ulanib) topilmasa → chindan O'CHIRILGAN.
+    if (deleteCandidates.length > 0) {
+      const VERIFY_DAYS = 3;
+      const MAX_CANDIDATES = 40; // juda ko'p nomzod = bank nuqsoni ehtimoli → hech nima o'chirilmaydi
+      const dayMs = 86_400_000;
+      if (!bankCtx) {
+        this.logger.warn(`detectChanges (${account.accountNo}): ${deleteCandidates.length} nomzod, bankCtx yo'q — xavfsizlik uchun o'chirilmadi`);
+      } else if (deleteCandidates.length > MAX_CANDIDATES) {
+        this.logger.warn(`detectChanges (${account.accountNo}): ${deleteCandidates.length} ta o'chirish nomzodi — juda ko'p (bank nuqsoni?), HECH NIMA o'chirilmadi`);
+      } else {
+        // 1) Tekshiriladigan qo'shimcha kunlar (nomzod sanasi ±VERIFY_DAYS, hali olinmaganlari)
+        const need = new Map<number, Date>();
+        for (const { tx } of deleteCandidates) {
+          const b = new Date(tx.txnDate); b.setHours(0, 0, 0, 0);
+          for (let off = -VERIFY_DAYS; off <= VERIFY_DAYS; off++) {
+            const d = new Date(b.getTime() + off * dayMs); d.setHours(0, 0, 0, 0);
+            if (!fetchedDayKeys.has(d.getTime())) need.set(d.getTime(), d);
+          }
+        }
+        // 2) Qo'shimcha kunlarni bankdan olamiz (batch)
+        const extraByGenNum = new Map<string, { item: KbDoc1CItem; day: Date }>();
+        const extraByB2Id = new Map<string, { item: KbDoc1CItem; day: Date }>();
+        const okDayKeys = new Set<number>(fetchedDayKeys); // muvaffaqiyatli tekshirilgan kunlar
+        const extraDays = Array.from(need.values());
+        const CONC = 5;
+        for (let i = 0; i < extraDays.length; i += CONC) {
+          await Promise.all(extraDays.slice(i, i + CONC).map(async (d) => {
+            const ds = format(d, 'dd.MM.yyyy');
+            try {
+              const res = await this.kb.getDoc1C({
+                baseUrl: bankCtx.baseUrl, login: bankCtx.login, password: bankCtx.password,
+                branch: bankCtx.branch ?? account.branch ?? undefined, account: account.accountNo,
+                date: ds, useProxy: bankCtx.useProxy,
+              });
+              okDayKeys.add(d.getTime());
+              for (const it of (res?.content || [])) {
+                if (it.general_id) extraByGenNum.set(`${it.general_id}_${String(it.num || 'no_num')}`, { item: it, day: d });
+                if (it.b2_id) extraByB2Id.set(String(it.b2_id), { item: it, day: d });
+              }
+            } catch (e: any) {
+              this.logger.warn(`verify getDoc1C xato (${account.accountNo} · ${ds}): ${e?.message?.slice(0, 120)}`);
+            }
+          }));
+        }
+        // 3) Har nomzodni hal qilamiz
+        for (const { tx, genNumKey } of deleteCandidates) {
+          const hit = (genNumKey ? extraByGenNum.get(genNumKey) : undefined)
+            || (tx.bankB2Id ? extraByB2Id.get(tx.bankB2Id) : undefined);
+          if (hit) {
+            try { await this.applyMovedChange(tx, hit.item, hit.day, account.accountNo, actor); movedCount++; }
+            catch (e: any) { this.logger.warn(`Change-MOVED xato (${tx.id}): ${e?.message}`); }
+            continue;
+          }
+          // Topilmadi — faqat butun ±oyna bankka ulanib tekshirilган bo'lsa o'chiramiz
+          const b = new Date(tx.txnDate); b.setHours(0, 0, 0, 0);
+          let fullyChecked = true;
+          for (let off = -VERIFY_DAYS; off <= VERIFY_DAYS; off++) {
+            const d = new Date(b.getTime() + off * dayMs); d.setHours(0, 0, 0, 0);
+            if (!okDayKeys.has(d.getTime())) { fullyChecked = false; break; }
+          }
+          if (!fullyChecked) {
+            this.logger.warn(`detectChanges: ${tx.externalId} — ba'zi kunlar bankka ulanmadi, o'chirilmadi (keyingi sync qayta tekshiradi)`);
+            continue;
+          }
+          try {
+            await this.applyDeletedChange(tx, account.accountNo, actor,
+              `Bank ro'yxatida yo'q (asl kun ±${VERIFY_DAYS} kun tekshirildi, topilmadi)`);
+            deletedCount++;
+          } catch (e: any) {
+            this.logger.warn(`Change-DELETED xato (${tx.id}): ${e?.message}`);
+          }
+        }
+      }
+    }
+
+    return { deleted: deletedCount, edited: editedCount, moved: movedCount };
+  }
+
+  /** Bank tomonida chindan o'chirilган yozuv — snapshot + cascade + o'chirish. */
+  private async applyDeletedChange(tx: any, accountNo: string, actor: string, note: string): Promise<void> {
+    await this.prisma.transactionChangeLog.create({
+      data: {
+        txId: tx.id, externalId: tx.externalId, accountId: tx.accountId,
+        changeType: 'DELETED', fieldsChanged: ['*'], oldData: tx as any, newData: null as any,
+        txnDate: tx.txnDate, amount: tx.amount, direction: tx.direction,
+        contractNumber: tx.contractNumber, bankNameSnap: tx.importBankNameText,
+        accountNoSnap: accountNo, detectedBy: actor, note,
+      },
+    });
+    await this.cascadeOplataKvDelete(tx.externalId, tx.id, actor);
+    await this.prisma.transaction.delete({ where: { id: tx.id } });
+  }
+
+  /** Bank boshqa kunga KO'CHIRGAN — o'chirmaymiz, sanani yangilaymiz + bog'lanish saqlanadi. */
+  private async applyMovedChange(tx: any, item: KbDoc1CItem, newDay: Date, accountNo: string, actor: string): Promise<void> {
+    const newTxnDate = this.parseDdate(item.ddate || '') || newDay;
+    const oldStr = new Date(tx.txnDate).toISOString().slice(0, 10);
+    const newStr = newTxnDate.toISOString().slice(0, 10);
+    await this.prisma.transactionChangeLog.create({
+      data: {
+        txId: tx.id, externalId: tx.externalId, accountId: tx.accountId,
+        changeType: 'MOVED', fieldsChanged: ['txnDate'],
+        oldData: { txnDate: tx.txnDate } as any, newData: { txnDate: newTxnDate } as any,
+        txnDate: newTxnDate, amount: tx.amount, direction: tx.direction,
+        contractNumber: tx.contractNumber, bankNameSnap: tx.importBankNameText,
+        accountNoSnap: accountNo, detectedBy: actor,
+        note: `Boshqa kunga ko'chirilgan: ${oldStr} → ${newStr} (bank so'rovi bilan tasdiqlandi — o'chirilmadi)`,
+      },
+    });
+    await this.prisma.transaction.update({
+      where: { id: tx.id },
+      data: { txnDate: newTxnDate, syncedAt: new Date() },
+    });
+    // Bog'langan ОплатыКв qatorlar sanasi ham yangilanadi (ko'rsatiladigan to'lov sanasi)
+    await this.prisma.oplataKv.updateMany({
+      where: { sourceTxId: { in: [tx.externalId, tx.id].filter(Boolean) } },
+      data: { date: newTxnDate },
+    }).catch(() => { /* ignore — asosiy tuzatish bajarildi */ });
   }
 
   /**
@@ -1261,7 +1365,7 @@ export class SyncService implements OnModuleInit {
     dateFrom: string;         // YYYY-MM-DD
     dateTo: string;           // YYYY-MM-DD
     actor: string;
-  }): Promise<{ ok: boolean; checked: number; deleted: number; edited: number; skippedAccounts: string[] }> {
+  }): Promise<{ ok: boolean; checked: number; deleted: number; edited: number; moved: number; skippedAccounts: string[] }> {
     const { accountId, dateFrom, dateTo, actor } = opts;
     const minDate = await this.settings.getSyncMinDate();
     if (minDate) {
@@ -1288,6 +1392,7 @@ export class SyncService implements OnModuleInit {
     let totalChecked = 0;
     let totalDeleted = 0;
     let totalEdited = 0;
+    let totalMoved = 0;
     const skipped: string[] = [];
 
     for (const acc of accounts) {
@@ -1331,17 +1436,19 @@ export class SyncService implements OnModuleInit {
       }
       totalChecked++;
       const stats = await this.detectChanges({
-        account: { id: acc.id, accountNo: acc.accountNo },
+        account: { id: acc.id, accountNo: acc.accountNo, branch: acc.branch },
         bankCode: cred.bank.code,
         fetchedItems,
         fetchedDays,
         actor,
+        bankCtx: { baseUrl: cred.bank.apiBaseUrl!, login, password, branch: acc.branch, useProxy: cred.useProxy === true },
       });
       totalDeleted += stats.deleted;
       totalEdited += stats.edited;
+      totalMoved += stats.moved;
     }
 
-    return { ok: true, checked: totalChecked, deleted: totalDeleted, edited: totalEdited, skippedAccounts: skipped };
+    return { ok: true, checked: totalChecked, deleted: totalDeleted, edited: totalEdited, moved: totalMoved, skippedAccounts: skipped };
   }
 
   private guessType(purpCode?: string, dtype?: string): TxnType {

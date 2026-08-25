@@ -8,6 +8,7 @@ import {
   AlertOctagon, Trash2, Edit3, Search, Calendar, RefreshCw, Loader2,
   ChevronLeft, ChevronRight, X, CheckCircle2, ArrowRight, FileText,
   Wallet, Activity, Filter, Database, Sparkles, Banknote, ListChecks,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -31,7 +32,7 @@ interface ChangeItem {
   txId: string | null;
   externalId: string;
   accountId: string | null;
-  changeType: 'DELETED' | 'EDITED';
+  changeType: 'DELETED' | 'EDITED' | 'MOVED';
   fieldsChanged: string[];
   oldData: any;
   newData: any;
@@ -50,7 +51,7 @@ interface ChangeItem {
 interface ListResp {
   ok: boolean;
   total: number;
-  totals: { deleted: number; edited: number };
+  totals: { deleted: number; edited: number; moved: number };
   page: number;
   perPage: number;
   items: ChangeItem[];
@@ -93,7 +94,7 @@ export default function ChangesPage() {
 
   const items = listQ.data?.items || [];
   const total = listQ.data?.total || 0;
-  const totals = listQ.data?.totals || { deleted: 0, edited: 0 };
+  const totals = listQ.data?.totals || { deleted: 0, edited: 0, moved: 0 };
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   const hasActiveFilters = !!(dateFrom || dateTo || (accountId !== 'all') || (changeType !== 'all') || q.trim());
@@ -108,7 +109,7 @@ export default function ChangesPage() {
 
       <div className="flex-1 p-3 sm:p-5 lg:p-6 space-y-5 w-full">
         {/* ═══ KPI ROW ═══ */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
           <KpiCard
             label={t('kpiTotal')}
             sub={hasActiveFilters ? t('kpiSubMatch') : t('kpiSubAll')}
@@ -129,6 +130,13 @@ export default function ChangesPage() {
             value={totals.edited.toLocaleString('ru-RU')}
             icon={Edit3}
             tone="amber"
+          />
+          <KpiCard
+            label={t('kpiMoved')}
+            sub={hasActiveFilters ? t('kpiSubMatch') : t('kpiSubAll')}
+            value={(totals.moved ?? 0).toLocaleString('ru-RU')}
+            icon={ArrowRightLeft}
+            tone="sky"
           />
           <KpiCard
             label={t('kpiPageAmount')}
@@ -185,6 +193,7 @@ export default function ChangesPage() {
                   <SelectItem value="all">{t('typeAll')}</SelectItem>
                   <SelectItem value="DELETED">{t('typeDeleted')}</SelectItem>
                   <SelectItem value="EDITED">{t('typeEdited')}</SelectItem>
+                  <SelectItem value="MOVED">{t('typeMoved')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -308,6 +317,7 @@ export default function ChangesPage() {
                 )}
                 {items.map((it, idx) => {
                   const isDel = it.changeType === 'DELETED';
+                  const isMoved = it.changeType === 'MOVED';
                   const rowNum = (page - 1) * perPage + idx + 1;
                   return (
                     <tr
@@ -324,10 +334,12 @@ export default function ChangesPage() {
                           'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ring-1 whitespace-nowrap',
                           isDel
                             ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900'
+                            : isMoved
+                            ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900'
                             : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
                         )}>
-                          {isDel ? <Trash2 className="h-3 w-3" /> : <Edit3 className="h-3 w-3" />}
-                          {isDel ? t('badgeDeleted') : t('badgeEdited')}
+                          {isDel ? <Trash2 className="h-3 w-3" /> : isMoved ? <ArrowRightLeft className="h-3 w-3" /> : <Edit3 className="h-3 w-3" />}
+                          {isDel ? t('badgeDeleted') : isMoved ? t('badgeMoved') : t('badgeEdited')}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap text-[12px]">
@@ -465,9 +477,10 @@ function KpiCard({
   value: string;
   suffix?: string;
   icon: any;
-  tone: 'indigo' | 'rose' | 'amber' | 'slate' | 'emerald';
+  tone: 'indigo' | 'rose' | 'amber' | 'slate' | 'emerald' | 'sky';
 }) {
   const tones: Record<string, { bg: string; ring: string; iconBg: string; iconText: string; valText: string }> = {
+    sky:    { bg: 'from-sky-50/80 to-white dark:from-sky-950/40 dark:to-slate-900',    ring: 'ring-sky-100 dark:ring-sky-900',    iconBg: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300',       iconText: 'text-sky-700 dark:text-sky-300',    valText: 'text-sky-700 dark:text-sky-300' },
     indigo: { bg: 'from-indigo-50/80 to-white dark:from-indigo-950/40 dark:to-slate-900', ring: 'ring-indigo-100 dark:ring-indigo-900', iconBg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300', iconText: 'text-indigo-700 dark:text-indigo-300', valText: 'text-slate-900 dark:text-slate-100' },
     rose:   { bg: 'from-rose-50/80 to-white dark:from-rose-950/40 dark:to-slate-900',   ring: 'ring-rose-100 dark:ring-rose-900',   iconBg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',     iconText: 'text-rose-700 dark:text-rose-300',   valText: 'text-rose-700 dark:text-rose-300' },
     amber:  { bg: 'from-amber-50/80 to-white dark:from-amber-950/40 dark:to-slate-900',  ring: 'ring-amber-100 dark:ring-amber-900',  iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',   iconText: 'text-amber-700 dark:text-amber-300',  valText: 'text-amber-700 dark:text-amber-300' },
@@ -509,6 +522,7 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
   const tc = useTranslations('common');
   if (!item) return null;
   const isDel = item.changeType === 'DELETED';
+  const isMoved = item.changeType === 'MOVED';
   return (
     <Dialog open={!!item} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-[820px] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
@@ -516,15 +530,17 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
           'px-6 pt-5 pb-4 text-white shrink-0',
           isDel
             ? 'bg-gradient-to-br from-rose-600 via-red-600 to-pink-600'
+            : isMoved
+            ? 'bg-gradient-to-br from-sky-600 via-blue-600 to-cyan-600'
             : 'bg-gradient-to-br from-amber-500 via-orange-500 to-yellow-500',
         )}>
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-white/20 grid place-items-center ring-1 ring-white/30">
-              {isDel ? <Trash2 className="h-6 w-6" /> : <Edit3 className="h-6 w-6" />}
+              {isDel ? <Trash2 className="h-6 w-6" /> : isMoved ? <ArrowRightLeft className="h-6 w-6" /> : <Edit3 className="h-6 w-6" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-widest font-bold text-white/80">
-                {isDel ? t('detailDeleted') : t('detailEdited')}
+                {isDel ? t('detailDeleted') : isMoved ? t('detailMoved') : t('detailEdited')}
               </div>
               <div className="text-xl font-black tracking-tight leading-tight">
                 {item.bankNameSnap || item.account?.bank?.name || '—'}
@@ -765,10 +781,11 @@ function ManualCheckDialog({
                 <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
                 <div className="text-[12.5px] text-emerald-900 dark:text-emerald-300">
                   <div className="font-bold mb-1">{t('checkDone')}</div>
-                  <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div className="grid grid-cols-4 gap-2 mt-2">
                     <ResultBadge label={t('resultChecked')} value={result.checked} color="indigo" />
                     <ResultBadge label={t('resultDeleted')} value={result.deleted} color="rose" />
                     <ResultBadge label={t('resultEdited')} value={result.edited} color="amber" />
+                    <ResultBadge label={t('resultMoved')} value={result.moved} color="sky" />
                   </div>
                 </div>
               </div>
@@ -805,11 +822,12 @@ function ManualCheckDialog({
   );
 }
 
-function ResultBadge({ label, value, color }: { label: string; value: number; color: 'indigo' | 'rose' | 'amber' }) {
+function ResultBadge({ label, value, color }: { label: string; value: number; color: 'indigo' | 'rose' | 'amber' | 'sky' }) {
   const styles: Record<string, string> = {
     indigo: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900',
     rose: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
     amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+    sky: 'bg-sky-100 dark:bg-sky-900/30 text-sky-800 dark:text-sky-300 ring-sky-200 dark:ring-sky-900',
   };
   return (
     <div className={cn('rounded-lg px-2.5 py-1.5 ring-1 text-center', styles[color])}>

@@ -413,10 +413,12 @@ export class TransactionsController {
     // Aktiv filter ostida turli statistikalar — KPI cards uchun
     const whereDeleted = { ...where, changeType: 'DELETED' as const };
     const whereEdited = { ...where, changeType: 'EDITED' as const };
-    const [total, totalDeleted, totalEdited, items] = await Promise.all([
+    const whereMoved = { ...where, changeType: 'MOVED' as const };
+    const [total, totalDeleted, totalEdited, totalMoved, items] = await Promise.all([
       this.prisma.transactionChangeLog.count({ where }),
       this.prisma.transactionChangeLog.count({ where: whereDeleted }),
       this.prisma.transactionChangeLog.count({ where: whereEdited }),
+      this.prisma.transactionChangeLog.count({ where: whereMoved }),
       this.prisma.transactionChangeLog.findMany({
         where,
         orderBy: { detectedAt: 'desc' },
@@ -436,7 +438,7 @@ export class TransactionsController {
     return {
       ok: true,
       total,
-      totals: { deleted: totalDeleted, edited: totalEdited },
+      totals: { deleted: totalDeleted, edited: totalEdited, moved: totalMoved },
       page: pageN,
       perPage: perPageN,
       items: items.map((it) => ({

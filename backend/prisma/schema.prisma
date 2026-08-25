@@ -678,6 +678,7 @@ model TransactionChangeLog {
 enum TxChangeType {
   DELETED // bank tomonida o'chirilgan (yoki bekor qilingan)
   EDITED // bank field o'zgartirgan (status, amount, va h.k.)
+  MOVED // bank boshqa kunga ko'chirgan (o'chmagan — sana o'zgargan, bog'lanish saqlanadi)
 }
 
 // ─────────────────────────────────────────────────────────────────
