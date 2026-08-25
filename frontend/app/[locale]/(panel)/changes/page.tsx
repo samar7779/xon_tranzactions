@@ -70,6 +70,7 @@ export default function ChangesPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(50);
   const [checkOpen, setCheckOpen] = useState(false);
+  const [recoverOpen, setRecoverOpen] = useState(false);
   const [detail, setDetail] = useState<ChangeItem | null>(null);
 
   const accountsQ = useQuery({
@@ -260,6 +261,17 @@ export default function ChangesPage() {
                   title={t('manualCheckTitle')}
                 >
                   <Sparkles className="h-3.5 w-3.5" /> {t('manualCheck')}
+                </Button>
+              )}
+              {canCheck && (
+                <Button
+                  onClick={() => setRecoverOpen(true)}
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-1.5 border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                  title="Noto'g'ri o'chirilganlarni bankdan tekshirib tiklash"
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> Tiklash
                 </Button>
               )}
             </div>
@@ -462,7 +474,115 @@ export default function ChangesPage() {
         accounts={accountsQ.data?.items || []}
         onSuccess={() => qc.invalidateQueries({ queryKey: ['transactions-changes'] })}
       />
+      <RecoverDialog
+        open={recoverOpen}
+        onClose={() => setRecoverOpen(false)}
+        onSuccess={() => qc.invalidateQueries({ queryKey: ['transactions-changes'] })}
+      />
     </>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// Recover dialog — noto'g'ri o'chirilganlarni bankdan tekshirib tiklash
+// ════════════════════════════════════════════════════════
+function RecoverDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
+  const tc = useTranslations('common');
+  const [dry, setDry] = useState<any>(null);
+  const [done, setDone] = useState<any>(null);
+
+  const dryMut = useMutation({
+    mutationFn: () => api.post<any>('/transactions/changes/recover', { dryRun: true, limit: 150 }, { timeout: 600_000 }),
+    onSuccess: (r) => { setDone(null); setDry(r); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const doMut = useMutation({
+    mutationFn: () => api.post<any>('/transactions/changes/recover', { dryRun: false, limit: 150 }, { timeout: 600_000 }),
+    onSuccess: (r) => { setDone(r); toast.success(`${r.restored} ta to'lov tiklandi`); onSuccess(); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const reset = () => { setDry(null); setDone(null); };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
+      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden gap-0">
+        <div className="px-6 pt-5 pb-4 text-white bg-gradient-to-br from-sky-600 via-blue-600 to-cyan-600">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 grid place-items-center ring-1 ring-white/30">
+              <ArrowRightLeft className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/80">Tiklash</div>
+              <div className="text-xl font-black tracking-tight leading-tight">Noto'g'ri o'chirilganlar</div>
+            </div>
+          </div>
+          <div className="text-[12px] text-white/85 mt-3 leading-relaxed">
+            O'chirilgan deb belgilangan to'lovlar bankdan qayta tekshiriladi. Bankda hali mavjud
+            bo'lganlari (aslida boshqa kunga ko'chirilgan) tranzaksiya + ОплатыКв bilan tiklanadi.
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {!dry && !done && (
+            <div className="text-[13px] text-slate-600 dark:text-slate-300">
+              Avval <b>tekshirish</b> (dry-run) — nechta to'lov noto'g'ri o'chirilganini sanaydi, hech nimani o'zgartirmaydi.
+            </div>
+          )}
+
+          {dry && !done && (
+            <div className="rounded-xl bg-sky-50 dark:bg-sky-950/40 ring-1 ring-sky-200 dark:ring-sky-900 p-4 space-y-2">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <ResultBadge label="Tekshirildi" value={dry.scanned} color="indigo" />
+                <ResultBadge label="Bankda bor" value={dry.stillInBank} color="sky" />
+                <ResultBadge label="Bankda yo'q" value={dry.notInBank} color="rose" />
+              </div>
+              <div className="text-[12px] text-sky-900 dark:text-sky-300">
+                <b>{dry.stillInBank}</b> ta to'lov bankda hali mavjud — noto'g'ri o'chirilgan. Tiklash mumkin.
+                {dry.unverified > 0 && <span className="text-amber-700 dark:text-amber-400"> ({dry.unverified} ta tekshirilmadi — bank javob bermadi)</span>}
+              </div>
+            </div>
+          )}
+
+          {done && (
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-4 space-y-2">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <ResultBadge label="Tiklandi" value={done.restored} color="emerald" />
+                <ResultBadge label="Tranzaksiya" value={done.txRestored} color="indigo" />
+                <ResultBadge label="ОплатыКв" value={done.oplataRestored} color="sky" />
+              </div>
+              <div className="text-[12px] text-emerald-900 dark:text-emerald-300"><b>{done.restored}</b> ta to'lov muvaffaqiyatli tiklandi.</div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900 gap-2">
+          {done ? (
+            <Button onClick={() => { reset(); onClose(); }}>{tc('close')}</Button>
+          ) : !dry ? (
+            <>
+              <Button variant="ghost" onClick={onClose}>{tc('close')}</Button>
+              <Button onClick={() => dryMut.mutate()} disabled={dryMut.isPending} className="bg-sky-600 hover:bg-sky-700 text-white">
+                {dryMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Search className="h-4 w-4 mr-1.5" />}
+                {dryMut.isPending ? 'Tekshirilyapti…' : 'Tekshirish'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={() => setDry(null)}>Orqaga</Button>
+              <Button
+                onClick={() => doMut.mutate()}
+                disabled={doMut.isPending || (dry?.stillInBank ?? 0) === 0}
+                className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-md"
+              >
+                {doMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
+                {doMut.isPending ? 'Tiklanyapti…' : `${dry?.stillInBank ?? 0} tani tiklash`}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -822,12 +942,13 @@ function ManualCheckDialog({
   );
 }
 
-function ResultBadge({ label, value, color }: { label: string; value: number; color: 'indigo' | 'rose' | 'amber' | 'sky' }) {
+function ResultBadge({ label, value, color }: { label: string; value: number; color: 'indigo' | 'rose' | 'amber' | 'sky' | 'emerald' }) {
   const styles: Record<string, string> = {
     indigo: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900',
     rose: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
     amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
     sky: 'bg-sky-100 dark:bg-sky-900/30 text-sky-800 dark:text-sky-300 ring-sky-200 dark:ring-sky-900',
+    emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
   };
   return (
     <div className={cn('rounded-lg px-2.5 py-1.5 ring-1 text-center', styles[color])}>

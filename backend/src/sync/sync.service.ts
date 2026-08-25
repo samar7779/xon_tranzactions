@@ -1451,6 +1451,141 @@ export class SyncService implements OnModuleInit {
     return { ok: true, checked: totalChecked, deleted: totalDeleted, edited: totalEdited, moved: totalMoved, skippedAccounts: skipped };
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // PART B — NOTO'G'RI O'CHIRILGANLARNI TIKLASH
+  //   Oldingi "moved-ni deleted deb belgilash" nuqsoni tufayli bankda HALI MAVJUD
+  //   bo'lган to'lovlar DELETED changelog + kaskad o'chirilган ОплатыКв bilan qolган.
+  //   Bu funksiya har DELETED changelog'ni bankdan ±3 kun tekshirib, TOPILSA — snapshot'lardan
+  //   (transactionChangeLog.oldData + oplataKvHistory 'deleted') tranzaksiya + ОплатыКв ni tiklaydi.
+  // ═══════════════════════════════════════════════════════════════════
+  async recoverFalselyDeleted(opts: { dryRun?: boolean; limit?: number; actor: string }): Promise<{
+    ok: boolean; scanned: number; stillInBank: number; restored: number; txRestored: number;
+    oplataRestored: number; notInBank: number; unverified: number; dryRun: boolean;
+    samples: Array<{ externalId: string; contract: string | null; amount: string | null; verdict: string; foundOnDate: string | null; restored: boolean }>;
+  }> {
+    const dryRun = opts.dryRun !== false ? (opts.dryRun ?? true) : false;
+    const limit = Math.min(400, Math.max(1, opts.limit ?? 100));
+    const logs = await this.prisma.transactionChangeLog.findMany({
+      where: {
+        changeType: 'DELETED',
+        // Allaqachon tiklanganlarni o'tkazib yuboramiz
+        NOT: { note: { contains: '[TIKLANDI' } },
+      },
+      orderBy: { detectedAt: 'desc' },
+      take: limit,
+    });
+    const accCache = new Map<string, any>();
+    const getAcc = async (accountId: string) => {
+      if (accCache.has(accountId)) return accCache.get(accountId);
+      const a = await this.prisma.bankAccount.findUnique({
+        where: { id: accountId },
+        include: { credential: { include: { bank: true } } },
+      }).catch(() => null);
+      accCache.set(accountId, a);
+      return a;
+    };
+
+    let scanned = 0, stillInBank = 0, restored = 0, txRestored = 0, oplataRestored = 0, notInBank = 0, unverified = 0;
+    const samples: any[] = [];
+    const CONC = 4;
+    for (let i = 0; i < logs.length; i += CONC) {
+      await Promise.all(logs.slice(i, i + CONC).map(async (lg) => {
+        scanned++;
+        if (!lg.accountId) { unverified++; return; }
+        const acc = await getAcc(lg.accountId);
+        const cred = acc?.credential;
+        if (!cred?.bank?.apiBaseUrl) { unverified++; return; }
+        const v = await this.verifyExternalInBank(lg.externalId, acc);
+        if (v.status === 'found' || v.status === 'shifted') {
+          stillInBank++;
+          let didRestore = false;
+          if (!dryRun) {
+            const r = await this.restoreDeletedLog(lg, opts.actor).catch((e) => {
+              this.logger.warn(`recover restore xato (${lg.externalId}): ${e?.message}`); return null;
+            });
+            if (r) { restored++; if (r.tx) txRestored++; oplataRestored += r.oplata; didRestore = true; }
+          }
+          if (samples.length < 50) samples.push({
+            externalId: lg.externalId, contract: lg.contractNumber, amount: lg.amount?.toString() ?? null,
+            verdict: v.status, foundOnDate: v.foundOnDate, restored: didRestore,
+          });
+        } else if (v.status === 'not_found') { notInBank++; }
+        else { unverified++; }
+      }));
+    }
+    this.logger.log(`recoverFalselyDeleted: skan ${scanned}, bankda bor ${stillInBank}, tiklandi ${restored} (tx ${txRestored}, ОплатыКв ${oplataRestored}), bankda yo'q ${notInBank}, tekshirilmadi ${unverified}${dryRun ? ' [DRY-RUN]' : ''}`);
+    return { ok: true, scanned, stillInBank, restored, txRestored, oplataRestored, notInBank, unverified, dryRun, samples };
+  }
+
+  /** externalId (composite) bankda ±3 kun ichida hali bormi — general_id+num bo'yicha. */
+  private async verifyExternalInBank(externalId: string, acc: any): Promise<{ status: 'found' | 'shifted' | 'not_found' | 'no_data'; foundOnDate: string | null }> {
+    const rawExt = String(externalId || '').replace(/^IP_/, '');
+    const parts = rawExt.split('_');
+    if (rawExt.startsWith('no_general_id') || !parts[0]) return { status: 'no_data', foundOnDate: null };
+    const genNumKey = `${parts[0]}_${parts[1] ?? 'no_num'}`;
+    const base = this.parseDdate(parts[2] ?? '');
+    if (!base) return { status: 'no_data', foundOnDate: null };
+    const cred = acc.credential;
+    const password = this.crypto.decrypt(cred.passwordEnc);
+    const login = (cred.loginPrefix || '') + cred.loginName;
+    const dayMs = 86_400_000;
+    const offsets = [0, -1, 1, -2, 2, -3, 3];
+    let anyOk = false, foundOnDate: string | null = null, onOrig = false;
+    for (const off of offsets) {
+      const ds = format(new Date(base.getTime() + off * dayMs), 'dd.MM.yyyy');
+      try {
+        const res = await this.kb.getDoc1C({
+          baseUrl: cred.bank.apiBaseUrl, login, password, branch: acc.branch,
+          account: acc.accountNo, date: ds, useProxy: cred.useProxy === true,
+        });
+        anyOk = true;
+        for (const it of (res?.content || [])) {
+          if (`${it.general_id}_${String(it.num || 'no_num')}` === genNumKey) { foundOnDate = ds; onOrig = off === 0; break; }
+        }
+        if (foundOnDate) break;
+      } catch { /* bu kun tekshirilmadi */ }
+    }
+    if (foundOnDate) return { status: onOrig ? 'found' : 'shifted', foundOnDate };
+    if (!anyOk) return { status: 'no_data', foundOnDate: null };
+    return { status: 'not_found', foundOnDate: null };
+  }
+
+  /** DELETED changelog snapshot'idan tranzaksiya + bog'langan ОплатыКв qatorlarni tiklaydi (idempotent). */
+  private async restoreDeletedLog(lg: any, actor: string): Promise<{ tx: boolean; oplata: number }> {
+    const old = lg.oldData as any;
+    if (!old || !old.id) return { tx: false, oplata: 0 };
+    // Relation obyektlarini olib tashlaymiz — faqat skalar + FK id'lar qoladi
+    const { bank, account, category, subcategory, ...txData } = old;
+    let txOk = false;
+    try {
+      await this.prisma.transaction.upsert({ where: { id: txData.id }, create: txData, update: {} });
+      txOk = true;
+    } catch (e: any) {
+      this.logger.warn(`restore tx xato (${lg.externalId}): ${e?.message?.slice(0, 160)}`);
+    }
+    // Bog'langan ОплатыКв — oplataKvHistory (action='deleted', note ichida txId=<id>)
+    let oplata = 0;
+    const hist = await this.prisma.oplataKvHistory.findMany({
+      where: { action: 'deleted', note: { contains: `txId=${old.id}` } },
+    }).catch(() => [] as any[]);
+    for (const h of hist) {
+      const row = (h as any).changes;
+      if (!row || !row.id) continue;
+      try {
+        await this.prisma.oplataKv.upsert({ where: { id: row.id }, create: row, update: {} });
+        oplata++;
+      } catch (e: any) {
+        this.logger.warn(`restore ОплатыКв xato (${row.id}): ${e?.message?.slice(0, 160)}`);
+      }
+    }
+    // Changelog'ni "tiklandi" deb belgilaymiz (qayta tiklamaslik uchun)
+    await this.prisma.transactionChangeLog.update({
+      where: { id: lg.id },
+      data: { note: `${lg.note || ''} [TIKLANDI ${new Date().toISOString().slice(0, 10)} · ${actor}]`.slice(0, 990) },
+    }).catch(() => { /* ignore */ });
+    return { tx: txOk, oplata };
+  }
+
   private guessType(purpCode?: string, dtype?: string): TxnType {
     // PDF §9.6 dtype: 01,35 — to'lov; 16 — SWIFT; 97 — karta; 98 — kazna; 99 — byudjet
     if (dtype === '99') return 'TAX';

@@ -466,6 +466,23 @@ export class TransactionsController {
     });
   }
 
+  @Post('changes/recover')
+  @RequirePermissions(PERMISSIONS.CHANGED_TXN_CHECK)
+  @ApiOperation({
+    summary: "Noto'g'ri o'chirilganlarni tiklash — DELETED changelog'lardan bankda HALI bor bo'lganlarini qayta tiklaydi",
+    description: "dryRun=true (standart) faqat sanaydi. dryRun=false — snapshot'dan tranzaksiya + ОплатыКв ni tiklaydi.",
+  })
+  async recoverChanges(
+    @Body() body: { dryRun?: boolean; limit?: number },
+    @CurrentUser('email') email?: string,
+  ) {
+    return this.syncSvc.recoverFalselyDeleted({
+      dryRun: body?.dryRun !== false,
+      limit: body?.limit,
+      actor: email ? `manual:${email}` : 'manual',
+    });
+  }
+
   // ─── Tozalash: to'lov ID bo'yicha topish — STATIC route, :id dan OLDIN bo'lishi SHART ───
   @Get('find-by-payment-id')
   @RequirePermissions(PERMISSIONS.CLEANUP_VIEW)
