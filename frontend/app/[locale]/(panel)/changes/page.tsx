@@ -330,6 +330,7 @@ export default function ChangesPage() {
                 {items.map((it, idx) => {
                   const isDel = it.changeType === 'DELETED';
                   const isMoved = it.changeType === 'MOVED';
+                  const restored = !!it.note && it.note.includes('[TIKLANDI');
                   const rowNum = (page - 1) * perPage + idx + 1;
                   return (
                     <tr
@@ -337,22 +338,30 @@ export default function ChangesPage() {
                       onClick={() => setDetail(it)}
                       className={cn(
                         'border-b border-slate-100 dark:border-slate-800 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer group',
-                        isDel && 'bg-rose-50/20 dark:bg-rose-950/20',
+                        isDel && !restored && 'bg-rose-50/20 dark:bg-rose-950/20',
+                        restored && 'bg-emerald-50/30 dark:bg-emerald-950/20',
                       )}
                     >
                       <td className="px-3 py-3 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{rowNum}</td>
                       <td className="px-3 py-3">
-                        <span className={cn(
-                          'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ring-1 whitespace-nowrap',
-                          isDel
-                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900'
-                            : isMoved
-                            ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900'
-                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
-                        )}>
-                          {isDel ? <Trash2 className="h-3 w-3" /> : isMoved ? <ArrowRightLeft className="h-3 w-3" /> : <Edit3 className="h-3 w-3" />}
-                          {isDel ? t('badgeDeleted') : isMoved ? t('badgeMoved') : t('badgeEdited')}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={cn(
+                            'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ring-1 whitespace-nowrap',
+                            isDel
+                              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900'
+                              : isMoved
+                              ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900'
+                              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+                          )}>
+                            {isDel ? <Trash2 className="h-3 w-3" /> : isMoved ? <ArrowRightLeft className="h-3 w-3" /> : <Edit3 className="h-3 w-3" />}
+                            {isDel ? t('badgeDeleted') : isMoved ? t('badgeMoved') : t('badgeEdited')}
+                          </span>
+                          {restored && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ring-1 whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900">
+                              <CheckCircle2 className="h-3 w-3" /> TIKLANGAN
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap text-[12px]">
                         {formatDateTime(it.detectedAt)}
@@ -643,6 +652,7 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
   if (!item) return null;
   const isDel = item.changeType === 'DELETED';
   const isMoved = item.changeType === 'MOVED';
+  const restored = !!item.note && item.note.includes('[TIKLANDI');
   return (
     <Dialog open={!!item} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-[820px] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
@@ -659,8 +669,13 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
               {isDel ? <Trash2 className="h-6 w-6" /> : isMoved ? <ArrowRightLeft className="h-6 w-6" /> : <Edit3 className="h-6 w-6" />}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-bold text-white/80">
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 flex items-center gap-2">
                 {isDel ? t('detailDeleted') : isMoved ? t('detailMoved') : t('detailEdited')}
+                {restored && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-400/30 ring-1 ring-white/40 text-white text-[9px]">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> TIKLANGAN
+                  </span>
+                )}
               </div>
               <div className="text-xl font-black tracking-tight leading-tight">
                 {item.bankNameSnap || item.account?.bank?.name || '—'}
