@@ -11,8 +11,11 @@ import {
   Smartphone, Wifi, LogIn, ChevronRight, Eye, EyeOff, Palette,
   Bell, MapPin, Calendar, ImagePlus, Sun, Moon, FileEdit, LogOut,
   Cog, Eye as EyeIcon, Database, Award, Target, Flame, TrendingUp,
-  Timer,
+  Timer, Star, Check, RotateCcw,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { usePrefs, ACCENTS } from '@/lib/preferences';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -812,6 +815,96 @@ function SecurityTip({ icon, gradient, title, body }: any) {
 
 /* ═══════════════════ SETTINGS TAB — Working theme switcher ═══════════════════ */
 
+/* ═══════════════════ PERSONALIZATION — accent rang + sevimli sahifalar ═══════════════════ */
+function PersonalizationCard() {
+  const { locale } = useParams<{ locale: string }>();
+  const accent = usePrefs((s) => s.accent);
+  const setAccent = usePrefs((s) => s.setAccent);
+  const favorites = usePrefs((s) => s.favorites);
+  const removeFavorite = usePrefs((s) => s.removeFavorite);
+  const reset = usePrefs((s) => s.reset);
+
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <div className="bg-gradient-to-br from-indigo-50 to-fuchsia-50 dark:from-indigo-950/40 dark:to-fuchsia-950/40 px-6 py-5 border-b border-indigo-100 dark:border-indigo-900">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-600 grid place-items-center text-white shadow-md">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold text-slate-900 dark:text-slate-100">Shaxsiylashtirish</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Accent rang va sevimli sahifalar — faqat siz uchun</div>
+          </div>
+          <button
+            onClick={reset}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:bg-white/70 dark:hover:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 transition"
+          >
+            <RotateCcw className="h-3 w-3" /> Standartga qaytarish
+          </button>
+        </div>
+      </div>
+
+      <CardContent className="p-6 space-y-7">
+        {/* ACCENT */}
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Accent rang</div>
+          <div className="flex flex-wrap gap-3">
+            {ACCENTS.map((a) => (
+              <button
+                key={a.key}
+                onClick={() => setAccent(a.key)}
+                title={a.label}
+                className={cn(
+                  'relative w-11 h-11 rounded-2xl grid place-items-center transition-all ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-900',
+                  accent === a.key ? 'ring-slate-900 dark:ring-white scale-110 shadow-lg' : 'ring-transparent hover:scale-105',
+                )}
+                style={{ background: a.hex }}
+              >
+                {accent === a.key && <Check className="h-5 w-5 text-white drop-shadow" strokeWidth={3} />}
+              </button>
+            ))}
+          </div>
+          <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-2.5">
+            Birlamchi tugmalar, fokus ramkasi, matn ajratish va sidebar accent shu rangga bo'yaladi.
+          </div>
+        </div>
+
+        {/* FAVORITES */}
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+            Sevimli sahifalar ({favorites.length})
+          </div>
+          {favorites.length === 0 ? (
+            <div className="flex items-center gap-2.5 px-4 py-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-100 dark:ring-slate-800 text-[13px] text-slate-500 dark:text-slate-400">
+              <Star className="h-4 w-4 text-amber-400 shrink-0" />
+              Hozircha yo'q. Istalgan sahifada yuqoridagi <b className="mx-1">⭐</b> tugmasini bosing — ular sidebar tepasida "Sevimlilar"da chiqadi.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {favorites.map((f) => (
+                <div key={f.href} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-100 dark:ring-slate-800 hover:ring-slate-200 dark:hover:ring-slate-700 transition">
+                  <Star className="h-4 w-4 text-amber-500 fill-current shrink-0" />
+                  <Link href={`/${locale}${f.href}`} className="flex-1 min-w-0 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:text-primary truncate">
+                    {f.label}
+                  </Link>
+                  <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate max-w-[180px] hidden sm:inline">{f.href}</span>
+                  <button
+                    onClick={() => removeFavorite(f.href)}
+                    title="Olib tashlash"
+                    className="w-7 h-7 grid place-items-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SettingsTab() {
   const t = useTranslations('profile');
   const tc = useTranslations('common');
@@ -840,6 +933,9 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
+      {/* SHAXSIYLASHTIRISH — accent + sevimlilar */}
+      <PersonalizationCard />
+
       {/* THEME */}
       <Card className="border-0 shadow-soft overflow-hidden">
         <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/40 dark:to-purple-950/40 px-6 py-5 border-b border-violet-100 dark:border-violet-900">

@@ -1,15 +1,16 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
   UserCircle, LogOut, ChevronDown, Bell, AlertCircle, CheckCircle2, ChevronRight, Menu,
-  Rocket, Loader2, Sparkles, Coins, ArrowDownUp,
+  Rocket, Loader2, Sparkles, Coins, ArrowDownUp, Star,
 } from 'lucide-react';
 import { useRef, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useUI } from '@/lib/ui';
+import { usePrefs, stripLocale } from '@/lib/preferences';
 import { useAvatar } from '@/lib/use-avatar';
 import { PERMS } from '@/lib/permissions';
 import { api } from '@/lib/api';
@@ -80,6 +81,12 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
+  // Sevimlilar — joriy sahifani pin qilish
+  const pathname = usePathname();
+  const favHref = stripLocale(pathname || '/');
+  const favorites = usePrefs((s) => s.favorites);
+  const toggleFavorite = usePrefs((s) => s.toggleFavorite);
+  const pinned = favorites.some((f) => f.href === favHref);
   const logout = useAuth((s) => s.logout);
   const toggleMobileNav = useUI((s) => s.toggleMobileNav);
   const setAntiStressOpen = useUI((s) => s.setAntiStressOpen);
@@ -166,6 +173,20 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {actions}
+
+            {/* Sevimlilarga qo'shish — joriy sahifani pin/unpin */}
+            <button
+              type="button"
+              onClick={() => toggleFavorite({ href: favHref, label: title })}
+              aria-label={pinned ? 'Sevimlilardan olib tashlash' : 'Sevimlilarga qo\'shish'}
+              title={pinned ? 'Sevimlilardan olib tashlash' : 'Sevimlilarga qo\'shish'}
+              className={cn(
+                'relative w-9 h-9 rounded-full backdrop-blur-sm grid place-items-center transition-colors',
+                pinned ? 'bg-amber-400/90 text-amber-950 hover:bg-amber-300' : 'bg-white/15 hover:bg-white/25 text-white',
+              )}
+            >
+              <Star className={cn('h-[18px] w-[18px]', pinned && 'fill-current')} />
+            </button>
 
             {/* Bildirishnomalar — bell ichida sync xatolari + deploy holati */}
             {(canSeeSync || hasDeployBadge) && (

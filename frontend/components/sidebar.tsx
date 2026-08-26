@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, Home, X, ReceiptText,
+  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, Home, X, ReceiptText, Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { useUI } from '@/lib/ui';
+import { usePrefs } from '@/lib/preferences';
 import { PERMS } from '@/lib/permissions';
 import { useEffect, useRef } from 'react';
 
@@ -68,6 +69,8 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
 
   const visibleItems = NAV.filter((n) => canAny(n.permissions));
   const groups = Array.from(new Set(visibleItems.map((i) => i.group || 'main')));
+  const favorites = usePrefs((s) => s.favorites);
+  const removeFavorite = usePrefs((s) => s.removeFavorite);
 
   return (
     <>
@@ -86,6 +89,33 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
 
       {/* Navigatsiya */}
       <nav className="sb3d-nav">
+        {/* Sevimlilar — foydalanuvchi pin qilgan sahifalar */}
+        {favorites.length > 0 && (
+          <div>
+            <div className="sb3d-navlbl">Sevimlilar</div>
+            {favorites.map((f) => {
+              const href = `/${locale}${f.href}`;
+              const active = pathname === href || pathname.startsWith(href + '/');
+              return (
+                <div key={f.href} className="group/fav relative">
+                  <Link href={href} onClick={onItemClick} className={cn('sb3d-item', active && 'act')}>
+                    <span className="sb3d-tile"><Star className="h-[15px] w-[15px]" /></span>
+                    <span className="truncate">{f.label}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFavorite(f.href); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-6 h-6 grid place-items-center rounded-md text-violet-300 opacity-0 group-hover/fav:opacity-100 hover:bg-white/15 hover:text-white transition"
+                    title="Sevimlilardan olib tashlash"
+                    style={{ transform: 'translateY(-50%) translateZ(50px)' }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {groups.map((g) => {
           const items = visibleItems.filter((i) => (i.group || 'main') === g);
           if (items.length === 0) return null;
