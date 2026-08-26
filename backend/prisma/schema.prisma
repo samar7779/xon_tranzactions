@@ -682,6 +682,32 @@ enum TxChangeType {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// AUDIT LOG — foydalanuvchi amallari tarixi (profil > Xavfsizlik).
+// Global interceptor har o'zgartiruvchi so'rovni (POST/PATCH/PUT/DELETE)
+// avtomatik yozadi: kim, qaysi modul, qanday amal, IP, holat, vaqt.
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  userEmail  String?  @map("user_email") @db.VarChar(190)
+  userName   String?  @map("user_name") @db.VarChar(190)
+  action     String   @db.VarChar(190) // inson-o'qiydigan amal nomi
+  module     String   @db.VarChar(64) // auth | transactions | oplatykv | roles | sync | ...
+  method     String   @db.VarChar(10) // POST | PATCH | DELETE | ...
+  path       String   @db.VarChar(400)
+  ip         String?  @db.VarChar(64)
+  statusCode Int?     @map("status_code")
+  durationMs Int?     @map("duration_ms")
+  success    Boolean  @default(true)
+  meta       Json? // qo'shimcha (route params, xato xabari, ...)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([module])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // SETTING — umumiy key/value sozlamalar (kelajakda kengayadi)
 // Hozir: syncMinDate — sync bu sanadan oldingi tranzaksiyalarni
 // olmaydi (import qilingan tarixiy ma'lumotlarni himoya qilish uchun)

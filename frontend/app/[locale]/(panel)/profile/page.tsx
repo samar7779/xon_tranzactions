@@ -69,6 +69,15 @@ export default function ProfilePage() {
   const actionCount = permissions.length;
   const isSuper = user?.role === 'SUPERADMIN';
 
+  // Haqiqiy amallar tarixi + statistika (audit log)
+  const { data: activity } = useQuery({
+    queryKey: ['my-activity', user?.id],
+    queryFn: () => api.get<{ ok: boolean; actions: any[]; stats: { totalActions: number; activeDays: number; lastActionAt: string | null } }>('/audit/my-activity?limit=40'),
+    enabled: !!user?.id,
+    refetchOnWindowFocus: false,
+  });
+  const activeDays = activity?.stats?.activeDays ?? 0;
+
   // Power level
   let powerKey: 'powerSuper' | 'powerHigh' | 'powerMid' | 'powerLow';
   let powerColor: string;
@@ -115,6 +124,7 @@ export default function ProfilePage() {
             powerColor={powerColor}
             actionCount={actionCount}
             moduleCount={moduleCount}
+            activeDays={activeDays}
             t={t}
             tc={tc}
             onTimerClick={() => setTimerOpen(true)}
@@ -162,7 +172,7 @@ export default function ProfilePage() {
               onAvatarRemove={removeAvatar}
             />
           )}
-          {tab === 'security' && <SecurityTab user={user} />}
+          {tab === 'security' && <SecurityTab user={user} activity={activity} />}
           {tab === 'settings' && <SettingsTab />}
         </div>
       </div>
@@ -179,11 +189,9 @@ export default function ProfilePage() {
 
 /* ═══════════════════ ULTRA HERO ═══════════════════ */
 
-function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, actionCount, moduleCount, t, tc, onTimerClick }: any) {
-  // Hisob yashi (kunlarda)
-  const daysActive = user?.createdAt
-    ? Math.floor((Date.now() - new Date(user.createdAt).getTime()) / 86400000)
-    : 0;
+function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, actionCount, moduleCount, activeDays, t, tc, onTimerClick }: any) {
+  // Faol kunlar — audit log'dan (amallar bo'lgan noyob kunlar soni)
+  const daysActive = activeDays ?? 0;
 
   return (
     <div className="relative overflow-hidden rounded-3xl">
@@ -619,24 +627,28 @@ function LoginHistorySection({ user }: any) {
 
 /* ═══════════════════ SECURITY TAB — Actions Table + Tips ═══════════════════ */
 
-function SecurityTab({ user }: any) {
+function SecurityTab({ user, activity }: any) {
   const t = useTranslations('profile');
   const tc = useTranslations('common');
-  // Sintetik amallar — keyin backend audit log'idan keladi
-  const actions = [
-    { id: 1, action: t('actLogin'), module: 'auth', ip: '192.168.1.1', time: new Date().toISOString(), status: 'success' },
-    { id: 2, action: t('actTxEdited'), module: 'transactions', ip: '192.168.1.1', time: new Date(Date.now() - 3600000).toISOString(), status: 'success' },
-    { id: 3, action: t('actRoleCreated'), module: 'roles', ip: '192.168.1.1', time: new Date(Date.now() - 7200000).toISOString(), status: 'success' },
-    { id: 4, action: t('actSyncRestarted'), module: 'sync', ip: '192.168.1.1', time: new Date(Date.now() - 14400000).toISOString(), status: 'success' },
-    { id: 5, action: t('actUserPwdUpdate'), module: 'users', ip: '192.168.1.1', time: new Date(Date.now() - 86400000).toISOString(), status: 'success' },
-  ];
+  // Haqiqiy amallar — audit log'dan (global interceptor har o'zgartiruvchi so'rovni yozadi)
+  const actions: Array<{ id: string; action: string; module: string; ip: string | null; time: string; success: boolean }> =
+    (activity?.actions || []).map((a: any) => ({
+      id: a.id, action: a.action, module: a.module, ip: a.ip, time: a.createdAt, success: a.success !== false,
+    }));
 
   const moduleColors: Record<string, string> = {
     auth: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900',
     transactions: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
+    oplatykv: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 ring-green-200 dark:ring-green-900',
+    crm: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 ring-cyan-200 dark:ring-cyan-900',
     roles: 'bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300 ring-fuchsia-200 dark:ring-fuchsia-900',
     sync: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
     users: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
+    banks: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900',
+    import: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 ring-teal-200 dark:ring-teal-900',
+    export: 'bg-lime-100 dark:bg-lime-900/30 text-lime-700 dark:text-lime-300 ring-lime-200 dark:ring-lime-900',
+    settings: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
+    chek: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900',
   };
 
   return (
@@ -696,6 +708,14 @@ function SecurityTab({ user }: any) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {actions.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400 dark:text-slate-500 text-[13px]">
+                    <History className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                    Hozircha amallar yo'q — tizimda biror amal (tahrirlash, sync, tiklash...) qilsangiz shu yerda ko'rinadi.
+                  </td>
+                </tr>
+              )}
               {actions.map((a) => (
                 <tr key={a.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors">
                   <td className="px-6 py-3 font-semibold text-slate-800 dark:text-slate-200">{a.action}</td>
@@ -707,13 +727,20 @@ function SecurityTab({ user }: any) {
                       {a.module}
                     </span>
                   </td>
-                  <td className="px-3 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">{a.ip}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">{a.ip || '—'}</td>
                   <td className="px-3 py-3 text-slate-600 dark:text-slate-300 text-[12px]">{formatDateTime(a.time)}</td>
                   <td className="px-6 py-3 text-right">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
-                      <CheckCircle2 className="h-3 w-3" />
-                      {t('statusSuccess')}
-                    </span>
+                    {a.success ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {t('statusSuccess')}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-[10px] font-bold ring-1 ring-rose-200 dark:ring-rose-900">
+                        <X className="h-3 w-3" />
+                        Xato
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -722,8 +749,8 @@ function SecurityTab({ user }: any) {
         </div>
 
         <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] text-slate-500 dark:text-slate-400">
-          <Sparkles className="inline h-3 w-3 mr-1 text-amber-500" />
-          {t('auditLogNote')}
+          <Sparkles className="inline h-3 w-3 mr-1 text-emerald-500" />
+          Har o'zgartiruvchi amal avtomatik yoziladi · so'nggi {actions.length} ta ko'rsatilyapti
         </div>
       </Card>
 

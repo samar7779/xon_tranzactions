@@ -35,6 +35,7 @@ import { AgentModule } from './agent/agent.module';
 import { DeveloperApiModule } from './developer-api/developer-api.module';
 import { ChekModule } from './chek/chek.module';
 import { CorrectionModule } from './correction/correction.module';
+import { AuditModule } from './audit/audit.module';
 import { CorrectionBotModule } from './correction-bot/correction-bot.module';
 import { ShmitdModule } from './shmitd/shmitd.module';
 import { BankPwdModule } from './bank-pwd/bank-pwd.module';
@@ -88,6 +89,7 @@ import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
     DeveloperApiModule,
     ChekModule,
     CorrectionModule,
+    AuditModule,
   ],
   providers: [
     // FIX (A1): ThrottlerGuard'ni GLOBAL bog'laymiz — avval ThrottlerModule sozlangan-u,
