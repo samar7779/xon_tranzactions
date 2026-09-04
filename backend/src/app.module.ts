@@ -14,6 +14,7 @@ import { BankCredentialsModule } from './bank-credentials/bank-credentials.modul
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { KapitalbankModule } from './integrations/kapitalbank/kapitalbank.module';
+import { HamkorbankModule } from './integrations/hamkorbank/hamkorbank.module';
 import { SyncModule } from './sync/sync.module';
 import { DeployModule } from './deploy/deploy.module';
 import { CustomersModule } from './customers/customers.module';
@@ -52,6 +53,7 @@ import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
     PrismaModule,
     CryptoModule,
     KapitalbankModule,
+    HamkorbankModule,
 
     AuthModule,
     AdminUsersModule,

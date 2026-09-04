@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { CreateCredentialDto, UpdateCredentialDto } from './dto/credential.dto';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
+import { HamkorbankClient } from '../integrations/hamkorbank/hamkorbank.client';
 
 @Injectable()
 export class BankCredentialsService {
@@ -12,6 +13,7 @@ export class BankCredentialsService {
     private prisma: PrismaService,
     private crypto: CryptoService,
     private kb: KapitalbankClient,
+    private hamkor: HamkorbankClient,
   ) {}
 
   private mask(c: any) {
@@ -98,11 +100,26 @@ export class BankCredentialsService {
       include: { bank: true },
     });
     if (!c) throw new NotFoundException('Credential topilmadi');
-    if (c.bank.apiKind !== 'KAPITALBANK_V3') {
-      throw new BadRequestException('Hozircha faqat KAPITALBANK_V3 qo\'llab-quvvatlanadi');
+    if (c.bank.apiKind !== 'KAPITALBANK_V3' && c.bank.apiKind !== 'HAMKORBANK_V1') {
+      throw new BadRequestException('Hozircha faqat KAPITALBANK_V3 va HAMKORBANK_V1 qo\'llab-quvvatlanadi');
     }
     const password = this.crypto.decrypt(c.passwordEnc);
     const login = (c.loginPrefix || '') + c.loginName;
+
+    // HAMKORBANK_V1 — apiLogin/sid yo'q; ulanishni get-bank-day bilan tekshiramiz.
+    // Hisoblar Hamkorda avtomat kelmaydi — qo'lda qo'shiladi (Kapital'dagi clients ro'yxati emas).
+    if (c.bank.apiKind === 'HAMKORBANK_V1') {
+      try {
+        const bd = await this.hamkor.getBankDay({ baseUrl: c.bank.apiBaseUrl!, login, password, useProxy: c.useProxy === true });
+        await this.prisma.bankCredential.update({ where: { id }, data: { lastVerifiedAt: new Date(), lastError: null } });
+        return { ok: true, clients: [], bankDay: bd } as any;
+      } catch (e: any) {
+        const msg = e?.message?.slice(0, 500) || 'Noma\'lum xato';
+        await this.prisma.bankCredential.update({ where: { id }, data: { lastError: msg, lastVerifiedAt: new Date() } });
+        throw new BadRequestException(`Hamkorbankga ulanib bo'lmadi: ${msg}`);
+      }
+    }
+
     try {
       const result = await this.kb.apiLogin({
         baseUrl: c.bank.apiBaseUrl!,

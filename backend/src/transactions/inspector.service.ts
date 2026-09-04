@@ -3,7 +3,8 @@ import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
-import { KbDoc1CItem } from '../integrations/kapitalbank/types';
+import { HamkorbankClient } from '../integrations/hamkorbank/hamkorbank.client';
+import { KbDoc1CItem, KbDoc1CResult } from '../integrations/kapitalbank/types';
 
 interface ParsedId {
   bankPrefix: 'IP' | null;
@@ -38,7 +39,22 @@ export class InspectorService {
     private prisma: PrismaService,
     private crypto: CryptoService,
     private kb: KapitalbankClient,
+    private hamkor: HamkorbankClient,
   ) {}
+
+  /** getDoc1C — apiKind bo'yicha klient (Hamkor → REST; boshqasi → AYNAN eski KapitalbankClient). */
+  private async fetchDoc1C(
+    apiKind: string | undefined | null,
+    params: { baseUrl: string; login: string; password: string; branch?: string | null; account: string; date?: string; useProxy?: boolean },
+  ): Promise<KbDoc1CResult> {
+    if (apiKind === 'HAMKORBANK_V1') {
+      return this.hamkor.getStatementDay({
+        baseUrl: params.baseUrl, login: params.login, password: params.password,
+        account: params.account, date: params.date, useProxy: params.useProxy,
+      });
+    }
+    return this.kb.getDoc1C(params as any);
+  }
 
   /** Composite ID'ni komponentlarga ajratish. */
   parseId(rawId: string): ParsedId {
@@ -130,8 +146,8 @@ export class InspectorService {
     const cred = account.credential;
     if (!cred) throw new BadRequestException(`${parsed.ourAccount} hisobiga bank ulanishi biriktirilmagan`);
     const bank = cred.bank;
-    if (bank.apiKind !== 'KAPITALBANK_V3') {
-      throw new BadRequestException(`Hozircha faqat KAPITALBANK_V3 banklar uchun — bu ${bank.apiKind}`);
+    if (bank.apiKind !== 'KAPITALBANK_V3' && bank.apiKind !== 'HAMKORBANK_V1') {
+      throw new BadRequestException(`Hozircha faqat KAPITALBANK_V3 va HAMKORBANK_V1 banklar uchun — bu ${bank.apiKind}`);
     }
     if (!bank.apiBaseUrl) throw new BadRequestException("Bank API URL'i sozlanmagan");
 
@@ -161,7 +177,7 @@ export class InspectorService {
     await Promise.all(
       datesToCheck.map(async (date) => {
         try {
-          const result = await this.kb.getDoc1C({
+          const result = await this.fetchDoc1C(bank.apiKind, {
             baseUrl: bank.apiBaseUrl!,
             login,
             password,

@@ -12,7 +12,9 @@ const DEFAULT_BANKS = [
 
   // Aktiv emas — kelajakda integratsiya bo'ladi
   { code: 'NBU',          name: 'NBU — Milliy bank',     apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
-  { code: 'HAMKORBANK',   name: 'Hamkorbank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  // Hamkorbank — ALOHIDA REST API (PaySystems). apiKind HAMKORBANK_V1. Login/parol kelib,
+  // test qilingach isActive=true qilinadi (yoki UI orqali). Endpoint prod: capi.hamkorbank.uz.
+  { code: 'HAMKORBANK',   name: 'Hamkorbank',            apiBaseUrl: 'https://capi.hamkorbank.uz',  apiKind: 'HAMKORBANK_V1' as const, isActive: false },
   { code: 'ASAKABANK',    name: 'Asaka Bank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
   { code: 'IPOTEKA',      name: 'Ipoteka Bank',          apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
   { code: 'AGROBANK',     name: 'Agrobank',              apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
@@ -57,17 +59,25 @@ export class BanksService implements OnModuleInit {
         await this.prisma.bank.create({ data: b });
         added++;
         this.logger.log(`✓ Bank qo'shildi: ${b.name}`);
-      } else if (existing.isActive !== b.isActive) {
-        // Aktivlik holatini yangilash — faqat credentiallar yo'q bo'lsa
-        const credCount = await this.prisma.bankCredential.count({
-          where: { bankId: existing.id },
-        });
-        if (credCount === 0) {
-          await this.prisma.bank.update({
-            where: { code: b.code },
-            data: { isActive: b.isActive },
+      } else {
+        // Mavjud bank — seed bilan moslash (isActive + apiKind + apiBaseUrl), LEKIN faqat
+        // credential YO'Q bo'lsa (foydalanuvchi sozlagan/ulanган banklarni buzmaslik uchun).
+        // Bu HAMKORBANK'ni eski KAPITALBANK_V3 → HAMKORBANK_V1 ga o'tkazish uchun ham kerak.
+        const needsUpdate =
+          existing.isActive !== b.isActive ||
+          existing.apiKind !== b.apiKind ||
+          (!!b.apiBaseUrl && existing.apiBaseUrl !== b.apiBaseUrl);
+        if (needsUpdate) {
+          const credCount = await this.prisma.bankCredential.count({
+            where: { bankId: existing.id },
           });
-          updated++;
+          if (credCount === 0) {
+            await this.prisma.bank.update({
+              where: { code: b.code },
+              data: { isActive: b.isActive, apiKind: b.apiKind, apiBaseUrl: b.apiBaseUrl ?? existing.apiBaseUrl },
+            });
+            updated++;
+          }
         }
       }
     }

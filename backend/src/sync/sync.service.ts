@@ -4,7 +4,8 @@ import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
-import { KbDoc1CItem } from '../integrations/kapitalbank/types';
+import { HamkorbankClient } from '../integrations/hamkorbank/hamkorbank.client';
+import { KbDoc1CItem, KbDoc1CResult } from '../integrations/kapitalbank/types';
 import { PaymentsService } from '../payments/payments.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { SettingsService } from './settings.service';
@@ -33,6 +34,7 @@ export class SyncService implements OnModuleInit {
     private prisma: PrismaService,
     private crypto: CryptoService,
     private kb: KapitalbankClient,
+    private hamkor: HamkorbankClient,
     private payments: PaymentsService,
     private categorization: CategorizationService,
     private settings: SettingsService,
@@ -42,6 +44,25 @@ export class SyncService implements OnModuleInit {
     // o'zgartirilgan tranzaksiyalarni aniqlash uchun har sync oxirgi 10 kunni
     // qayta tekshiradi (re-verify).
     this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '10'));
+  }
+
+  /**
+   * Bankdan kunlik tranzaksiyalar (getDoc1C ekvivalenti) — apiKind bo'yicha to'g'ri klientni tanlaydi.
+   *   HAMKORBANK_V1 → HamkorbankClient (REST get-doc-details-byacc) → KbDoc1CResult'ga normalizatsiya.
+   *   KAPITALBANK_V3 / IPAK_YOLI_V1 (va boshqa) → mavjud KapitalbankClient.getDoc1C — AYNAN ESKI, tegilmagan.
+   * Shu bois mavjud banklarga (Kapital/Ipak) ta'sir yo'q — faqat Hamkor yangi tarmoqqa ketadi.
+   */
+  private async fetchDoc1C(
+    apiKind: string | undefined | null,
+    params: { baseUrl: string; login: string; password: string; branch?: string | null; account: string; date?: string; useProxy?: boolean; sid?: string },
+  ): Promise<KbDoc1CResult> {
+    if (apiKind === 'HAMKORBANK_V1') {
+      return this.hamkor.getStatementDay({
+        baseUrl: params.baseUrl, login: params.login, password: params.password,
+        account: params.account, date: params.date, useProxy: params.useProxy,
+      });
+    }
+    return this.kb.getDoc1C(params as any);
   }
 
   /**
@@ -178,7 +199,7 @@ export class SyncService implements OnModuleInit {
 
     for (const dateStr of opts.dates) {
       try {
-        const result = await this.kb.getDoc1C({
+        const result = await this.fetchDoc1C(bank.apiKind, {
           baseUrl: bank.apiBaseUrl!,
           login,
           password,
@@ -273,7 +294,7 @@ export class SyncService implements OnModuleInit {
     });
 
     const creds = await this.prisma.bankCredential.findMany({
-      where: { isActive: true, bank: { apiKind: { in: ['KAPITALBANK_V3', 'IPAK_YOLI_V1'] }, isActive: true } },
+      where: { isActive: true, bank: { apiKind: { in: ['KAPITALBANK_V3', 'IPAK_YOLI_V1', 'HAMKORBANK_V1'] }, isActive: true } },
       include: { bank: true, accounts: { where: { syncEnabled: true } } },
     });
     if (creds.length === 0) {
@@ -476,7 +497,7 @@ export class SyncService implements OnModuleInit {
     if (!cred) throw new Error('Credential topilmadi');
     const acc = await this.prisma.bankAccount.findUnique({ where: { id: accountId } });
     if (!acc) throw new Error('Hisob topilmadi');
-    if (cred.bank.apiKind !== 'KAPITALBANK_V3' && cred.bank.apiKind !== 'IPAK_YOLI_V1') {
+    if (cred.bank.apiKind !== 'KAPITALBANK_V3' && cred.bank.apiKind !== 'IPAK_YOLI_V1' && cred.bank.apiKind !== 'HAMKORBANK_V1') {
       throw new Error("Hozircha faqat Kapitalbank va Ipak Yo'li qo'llab-quvvatlanadi");
     }
 
@@ -525,7 +546,7 @@ export class SyncService implements OnModuleInit {
         let dayItems: KbDoc1CItem[] = [];
         let daySaldoOut: number | null = null;
         try {
-          const result = await this.kb.getDoc1C({
+          const result = await this.fetchDoc1C(cred.bank.apiKind, {
             baseUrl: cred.bank.apiBaseUrl!,
             login,
             password,
@@ -584,6 +605,7 @@ export class SyncService implements OnModuleInit {
               password,
               branch: acc.branch,
               useProxy: cred.useProxy === true,
+              apiKind: cred.bank.apiKind,
             },
           });
           if (changeStats.deleted > 0 || changeStats.edited > 0 || changeStats.moved > 0) {
@@ -605,7 +627,9 @@ export class SyncService implements OnModuleInit {
         // GetAcc1C ni faqat saldo_out bo'lmasa va xato bo'lsa ham sync to'xtamasin
         if (balanceSom === undefined) {
           try {
-            const accInfo = await this.kb.getAcc1C({
+            // HAMKORBANK_V1 — GetAcc1C (Kapital SOAP) ishlamaydi; saldo statementdan (getStatementDay)
+            // olinadi, shu bois bu yerda bo'sh. Boshqa banklar — AYNAN eski chaqiruv.
+            const accInfo = cred.bank.apiKind === 'HAMKORBANK_V1' ? [] : await this.kb.getAcc1C({
               baseUrl: cred.bank.apiBaseUrl!,
               login,
               password,
@@ -959,7 +983,7 @@ export class SyncService implements OnModuleInit {
     actor: string;                // 'sync' | 'manual:<email>'
     // O'chirishdan oldin bankdan ±N kun tekshirish uchun (moved vs deleted). Yo'q bo'lsa
     // eski xatti-harakat (tekshiruvsiz o'chirish) — lekin sync doim beradi.
-    bankCtx?: { baseUrl: string; login: string; password: string; branch?: string | null; useProxy: boolean };
+    bankCtx?: { baseUrl: string; login: string; password: string; branch?: string | null; useProxy: boolean; apiKind?: string | null };
   }): Promise<{ deleted: number; edited: number; moved: number }> {
     const { account, bankCode, fetchedItems, fetchedDays, actor, bankCtx } = opts;
     if (fetchedDays.length === 0) return { deleted: 0, edited: 0, moved: 0 };
@@ -1168,7 +1192,7 @@ export class SyncService implements OnModuleInit {
           await Promise.all(extraDays.slice(i, i + CONC).map(async (d) => {
             const ds = format(d, 'dd.MM.yyyy');
             try {
-              const res = await this.kb.getDoc1C({
+              const res = await this.fetchDoc1C(bankCtx.apiKind, {
                 baseUrl: bankCtx.baseUrl, login: bankCtx.login, password: bankCtx.password,
                 branch: bankCtx.branch ?? account.branch ?? undefined, account: account.accountNo,
                 date: ds, useProxy: bankCtx.useProxy,
@@ -1401,7 +1425,7 @@ export class SyncService implements OnModuleInit {
         skipped.push(`${acc.accountNo} (credential yo'q)`);
         continue;
       }
-      if (cred.bank.apiKind !== 'KAPITALBANK_V3' && cred.bank.apiKind !== 'IPAK_YOLI_V1') {
+      if (cred.bank.apiKind !== 'KAPITALBANK_V3' && cred.bank.apiKind !== 'IPAK_YOLI_V1' && cred.bank.apiKind !== 'HAMKORBANK_V1') {
         skipped.push(`${acc.accountNo} (bank turi qo'llab-quvvatlanmaydi)`);
         continue;
       }
@@ -1412,7 +1436,7 @@ export class SyncService implements OnModuleInit {
       const fetchedDays: Date[] = [];
       for (const ds of days) {
         try {
-          const result = await this.kb.getDoc1C({
+          const result = await this.fetchDoc1C(cred.bank.apiKind, {
             baseUrl: cred.bank.apiBaseUrl!,
             login,
             password,
@@ -1441,7 +1465,7 @@ export class SyncService implements OnModuleInit {
         fetchedItems,
         fetchedDays,
         actor,
-        bankCtx: { baseUrl: cred.bank.apiBaseUrl!, login, password, branch: acc.branch, useProxy: cred.useProxy === true },
+        bankCtx: { baseUrl: cred.bank.apiBaseUrl!, login, password, branch: acc.branch, useProxy: cred.useProxy === true, apiKind: cred.bank.apiKind },
       });
       totalDeleted += stats.deleted;
       totalEdited += stats.edited;
@@ -1534,7 +1558,7 @@ export class SyncService implements OnModuleInit {
     for (const off of offsets) {
       const ds = format(new Date(base.getTime() + off * dayMs), 'dd.MM.yyyy');
       try {
-        const res = await this.kb.getDoc1C({
+        const res = await this.fetchDoc1C(cred.bank.apiKind, {
           baseUrl: cred.bank.apiBaseUrl, login, password, branch: acc.branch,
           account: acc.accountNo, date: ds, useProxy: cred.useProxy === true,
         });

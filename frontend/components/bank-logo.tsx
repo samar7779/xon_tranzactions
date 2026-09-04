@@ -5,12 +5,14 @@ import { cn } from '@/lib/utils';
 const BANK_LOGOS: Record<string, string> = {
   KAPITALBANK: '/banks/kapital.webp',
   IPAK_YULI: '/banks/ipak.svg',
+  HAMKORBANK: '/banks/hamkor.svg',
 };
 
 // Logo orqa foni — ba'zi logolar oq fonda yaxshi ko'rinmaydi
 const BANK_LOGO_BG: Record<string, string> = {
   KAPITALBANK: 'bg-amber-400 ring-amber-300',  // sariq fon
   IPAK_YULI: 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
+  HAMKORBANK: 'bg-white ring-slate-200 dark:ring-slate-700',  // SVG'da oq fon bor
 };
 
 // Bank kodi → brand rangi (logo yo'q banklar uchun fallback gradient)
