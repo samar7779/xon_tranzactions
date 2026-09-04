@@ -219,7 +219,10 @@ export class HamkorbankClient {
       inn_dt: it?.innDt != null ? String(it.innDt) : undefined,
       purpose: it?.nazpla != null ? String(it.nazpla) : undefined,
       amount: it?.summa != null ? Number(it.summa) : undefined, // tiyin
-      dtype: it?.docType != null ? String(it.docType) : undefined,
+      // dtype QO'YILMAYDI: Hamkor `docType` = yo'nalish kodi (0=ikkisi/1=kredit/4=debit),
+      // Kapital doc-type EMAS. Uni dtype'ga qo'ysak guessType (purp_code, dtype) noto'g'ri
+      // talqin qiladi va docType ustuni yo'nalish kodini saqlaydi. Yo'nalish allaqachon `dir`da.
+      // (Hamkor doc-type/maqsad kodini bermaydi → TxnType OTHER bo'ladi — bu to'g'ri/halol.)
       // TODO(hamkor login/parol kelgach): `status` (int) → state mapping'ini haqiqiy qiymatlar
       // asosida sozlash. Hozircha COMPLETED(3) default — get-doc-details-byacc provodka
       // qilingan hujjatlarni beradi. state=6 bo'lsa detectChanges CANCELLED deb belgilaydi.

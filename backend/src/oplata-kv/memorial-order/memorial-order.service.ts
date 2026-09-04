@@ -335,8 +335,12 @@ export class MemorialOrderService {
       .filter((i) => i >= 0);
     if (!need.length) return;
 
+    // FAQAT SOAP-mos banklar (Kapital/Ipak) — bu yerda this.kb.getDoc1C (Kapital klienti)
+    // ishlatiladi. HAMKORBANK_V1 (REST) bu klientga mos emas; uni chiqaramiz, aks holda
+    // Hamkor hisoblariga behuda so'rov ketib, MAX_CALLS budjetini yeb qo'yadi (memorial
+    // uchun Hamkor yo'naltirishi — v2). Sync/inspector esa Hamkorni to'g'ri ishlatadi.
     const allAccounts = await this.prisma.bankAccount.findMany({
-      where: { syncEnabled: true },
+      where: { syncEnabled: true, credential: { bank: { apiKind: { in: ['KAPITALBANK_V3', 'IPAK_YOLI_V1'] } } } },
       include: { credential: { include: { bank: true } } },
     });
     if (!allAccounts.length) return;
