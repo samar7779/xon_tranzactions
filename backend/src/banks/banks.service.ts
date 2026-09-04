@@ -12,9 +12,10 @@ const DEFAULT_BANKS = [
 
   // Aktiv emas — kelajakda integratsiya bo'ladi
   { code: 'NBU',          name: 'NBU — Milliy bank',     apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
-  // Hamkorbank — ALOHIDA REST API (PaySystems). apiKind HAMKORBANK_V1. Login/parol kelib,
-  // test qilingach isActive=true qilinadi (yoki UI orqali). Endpoint prod: capi.hamkorbank.uz.
-  { code: 'HAMKORBANK',   name: 'Hamkorbank',            apiBaseUrl: 'https://capi.hamkorbank.uz',  apiKind: 'HAMKORBANK_V1' as const, isActive: false },
+  // Hamkorbank — ALOHIDA REST API (PaySystems). apiKind HAMKORBANK_V1. Faol (AKTIV BANKLAR'da
+  // ko'rinadi) — integratsiya tayyor; login/parol kelib ulanish qo'shilgach sync boshlanadi.
+  // Hozircha creds/hisob yo'q → sync urinmaydi (xavfsiz). Endpoint prod: capi.hamkorbank.uz.
+  { code: 'HAMKORBANK',   name: 'Hamkorbank',            apiBaseUrl: 'https://capi.hamkorbank.uz',  apiKind: 'HAMKORBANK_V1' as const, isActive: true },
   { code: 'ASAKABANK',    name: 'Asaka Bank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
   { code: 'IPOTEKA',      name: 'Ipoteka Bank',          apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
   { code: 'AGROBANK',     name: 'Agrobank',              apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
