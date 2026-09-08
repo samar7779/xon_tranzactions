@@ -200,6 +200,19 @@ export class OplataKvController {
     return this.svc.schotchikToMonthly({ dateFrom: body?.dateFrom, dryRun: body?.dryRun, actor: actorFrom(u) });
   }
 
+  @Post('bulk-category')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_BULK_SPLIT)
+  @ApiOperation({
+    summary: "Ommaviy: belgilangan qatorlarga Оплата turini qo'yish (1 взнос / ежемесячный)",
+    description: "Butun 'Сумма оплаты' tanlangan ustunga o'tadi, ikkinchisi bo'shatiladi. Har o'zgarish history'ga yoziladi.",
+  })
+  bulkCategory(
+    @Body() body: { ids?: string[]; category?: 'FIRST' | 'MONTHLY' },
+    @CurrentUser() u?: AuthUser,
+  ) {
+    return this.svc.bulkSetCategory(body?.ids || [], body?.category as any, actorFrom(u));
+  }
+
   @Post('add-from-tx')
   @RequirePermissions(PERMISSIONS.OPLATAKV_SPLIT)
   @ApiOperation({ summary: "Bitta tranzaksiyani ID/externalId bo'yicha ОплатыКв'ga qo'shish (sana chegarasini inobatga olmaydi, idempotent)" })

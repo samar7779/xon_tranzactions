@@ -15,7 +15,7 @@ import {
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
   PlusCircle, Paperclip, Wallet, Building2, BarChart3, RefreshCw,
   Columns3, Car, Wand2,
-  Ruler, Sparkles, Scissors,
+  Ruler, Sparkles, Scissors, ListChecks,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PurposeInfoButton } from '@/components/purpose-modal';
@@ -188,6 +188,32 @@ export default function OplataKvPage() {
   const canDelete = !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
   const canSplit = !!user?.permissions?.includes(PERMS.OPLATAKV_SPLIT);
+  const canBulk = !!user?.permissions?.includes(PERMS.OPLATAKV_BULK_SPLIT);
+  // Ommaviy o'zgartirish uchun belgilangan qatorlar
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  /** Belgilangan qatorlarga Оплата turini qo'yish (butun summa tanlangan ustunga) */
+  const applyBulkCategory = async (category: 'FIRST' | 'MONTHLY') => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkSaving(true);
+    try {
+      const r = await api.post<{ ok: boolean; updated: number; skipped: number; error?: string }>(
+        '/oplata-kv/bulk-category', { ids, category }, { timeout: 120_000 },
+      );
+      if (!r.ok) { toast.error(r.error || 'Xato'); return; }
+      toast.success(`${r.updated} ta qator o'zgartirildi` + (r.skipped ? ` · ${r.skipped} ta o'tkazildi` : ''));
+      setSelectedIds(new Set());
+      setBulkOpen(false);
+      qc.invalidateQueries({ queryKey: ['oplatakv'] });
+    } catch (e: any) {
+      toast.error(e?.message || 'Xato');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
   // Sync tugmasi — alohida OPLATAKV_SYNC ruxsati (admin bo'lgani uchun emas — ruxsat berilsa)
   const canSync = !!user?.permissions?.includes(PERMS.OPLATAKV_SYNC);
 
@@ -846,6 +872,17 @@ export default function OplataKvPage() {
                         <div className="text-[10.5px] text-slate-500 dark:text-slate-400">XATO to'lov shartnomasini topish</div>
                       </div>
                     </DropdownMenuItem>
+                    {canBulk && (
+                      <DropdownMenuItem onClick={() => setBulkOpen(true)} className="gap-2 cursor-pointer">
+                        <ListChecks className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                        <div className="flex-1">
+                          <div className="text-[13px] font-semibold">Ommaviy o'zgartirish</div>
+                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                            Belgilangan qatorlarga Оплата turi{selectedIds.size > 0 ? ` · ${selectedIds.size} ta` : ''}
+                          </div>
+                        </div>
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -869,6 +906,22 @@ export default function OplataKvPage() {
             <table className="w-full text-[13px]">
               <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-[10.5px] tracking-wider">
                 <tr>
+                  {canBulk && (
+                    <th className="px-3 py-2.5 w-9">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                        title="Sahifadagi barchasini belgilash"
+                        checked={items.length > 0 && items.every((r: any) => selectedIds.has(r.id))}
+                        onChange={(e) => {
+                          const next = new Set(selectedIds);
+                          if (e.target.checked) items.forEach((r: any) => next.add(r.id));
+                          else items.forEach((r: any) => next.delete(r.id));
+                          setSelectedIds(next);
+                        }}
+                      />
+                    </th>
+                  )}
                   <ColumnTh label="Дог №" column="contractNo"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}
@@ -928,13 +981,13 @@ export default function OplataKvPage() {
               <tbody>
                 {listQuery.isLoading && Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
-                    {Array.from({ length: 9 + (showCrmStatusCol ? 1 : 0) + (showManbaCol ? 1 : 0) + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0) }).map((__, j) => (
+                    {Array.from({ length: 9 + (canBulk ? 1 : 0) + (showCrmStatusCol ? 1 : 0) + (showManbaCol ? 1 : 0) + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0) }).map((__, j) => (
                       <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
-                  <tr><td colSpan={9 + (showCrmStatusCol ? 1 : 0) + (showManbaCol ? 1 : 0) + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0)} className="p-12 text-center text-slate-400 dark:text-slate-500">
+                  <tr><td colSpan={9 + (canBulk ? 1 : 0) + (showCrmStatusCol ? 1 : 0) + (showManbaCol ? 1 : 0) + (showTypeCol ? 1 : 0) + (showBranchCol ? 1 : 0)} className="p-12 text-center text-slate-400 dark:text-slate-500">
                     {t('noRowsFound')}
                   </td></tr>
                 )}
@@ -943,9 +996,26 @@ export default function OplataKvPage() {
                   return (
                   <tr
                     key={it.id}
-                    className="border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                    className={cn(
+                      'border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer',
+                      selectedIds.has(it.id) && 'bg-indigo-50/70 dark:bg-indigo-950/50',
+                    )}
                     onClick={() => setDetailRow(it)}
                   >
+                    {canBulk && (
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                          checked={selectedIds.has(it.id)}
+                          onChange={(e) => {
+                            const next = new Set(selectedIds);
+                            if (e.target.checked) next.add(it.id); else next.delete(it.id);
+                            setSelectedIds(next);
+                          }}
+                        />
+                      </td>
+                    )}
                     <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800 dark:text-slate-200">
                       {it.crmXato ? (
                         <span
@@ -1175,6 +1245,76 @@ export default function OplataKvPage() {
 
       {/* CRM'dan kompozit ID bo'yicha qidiruv (XATO to'lov shartnomasini topish) */}
       <CrmLookupDialog open={crmLookupOpen} onClose={() => setCrmLookupOpen(false)} />
+
+      {/* ═══ Ommaviy o'zgartirish — Оплата turi ═══ */}
+      {bulkOpen && (
+        <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => !bulkSaving && setBulkOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-indigo-50 dark:from-sky-950/40 dark:to-indigo-950/40 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 grid place-items-center text-white shadow-md shrink-0">
+                <ListChecks className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-bold text-slate-900 dark:text-slate-100">Ommaviy o&apos;zgartirish</div>
+                <div className="text-[11.5px] text-slate-500 dark:text-slate-400">
+                  Belgilangan {selectedIds.size} ta qatorga Оплата turi qo&apos;yiladi
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {selectedIds.size === 0 ? (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 px-4 py-3 text-[12.5px] text-amber-800 dark:text-amber-300">
+                  Avval jadvaldan qatorlarni belgilang (chap tomondagi katakchalar).
+                </div>
+              ) : (
+                <>
+                  <div className="text-[12px] text-slate-600 dark:text-slate-300">
+                    Har bir qatorning <b>Сумма оплаты</b> summasi to&apos;liq tanlangan ustunga o&apos;tadi,
+                    ikkinchi ustun bo&apos;shatiladi.
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      disabled={bulkSaving}
+                      onClick={() => applyBulkCategory('FIRST')}
+                      className="rounded-xl ring-1 ring-amber-300 dark:ring-amber-800 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 px-4 py-4 text-left transition-colors disabled:opacity-60"
+                    >
+                      <div className="text-[13px] font-bold text-amber-800 dark:text-amber-300">1 взнос</div>
+                      <div className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">Boshlang&apos;ich to&apos;lov ustuniga</div>
+                    </button>
+                    <button
+                      disabled={bulkSaving}
+                      onClick={() => applyBulkCategory('MONTHLY')}
+                      className="rounded-xl ring-1 ring-sky-300 dark:ring-sky-800 bg-sky-50 dark:bg-sky-950/30 hover:bg-sky-100 dark:hover:bg-sky-950/50 px-4 py-4 text-left transition-colors disabled:opacity-60"
+                    >
+                      <div className="text-[13px] font-bold text-sky-800 dark:text-sky-300">ежемесячный</div>
+                      <div className="text-[11px] text-sky-700/80 dark:text-sky-400/80 mt-0.5">Oylik to&apos;lov ustuniga</div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+              <button
+                onClick={() => { setSelectedIds(new Set()); setBulkOpen(false); }}
+                disabled={bulkSaving}
+                className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-50"
+              >
+                Belgilanganni tozalash
+              </button>
+              <button
+                onClick={() => setBulkOpen(false)}
+                disabled={bulkSaving}
+                className="h-9 px-4 rounded-lg text-[12.5px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50"
+              >
+                {bulkSaving ? 'Saqlanmoqda…' : 'Yopish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

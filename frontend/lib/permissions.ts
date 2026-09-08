@@ -49,6 +49,7 @@ export const PERMS = {
   OPLATAKV_IMPORT: 'oplatakv:import',
   OPLATAKV_SPLIT: 'oplatakv:split',                // Split / Re-split
   OPLATAKV_SYNC: 'oplatakv:sync',                  // Hozir sync (tranzaksiyalardan)
+  OPLATAKV_BULK_SPLIT: 'oplatakv:bulk_split',      // Ommaviy Оплата turi
   OPLATAKV_XATO_CRM: 'oplatakv:xato_crm',           // XATO → CRM moduli (tab + tuzatish)
   OPLATAKV_MANAGE: 'oplatakv:manage',              // legacy
 

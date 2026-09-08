@@ -2898,6 +2898,92 @@ export class OplataKvService {
   }
 
   /**
+   * OMMAVIY (bulk) Оплата turini qo'yish — belgilangan qatorlarga.
+   *
+   * Foydalanuvchi jadvalda bir nechta qatorni belgilaydi va turini tanlaydi:
+   *   FIRST   → butun "Сумма оплаты" 1 взнос ustuniga o'tadi, oylik bo'shatiladi
+   *   MONTHLY → butun summa ежемесячный ustuniga o'tadi, 1 взнос bo'shatiladi
+   *
+   * Ya'ni qator tahrirlash oynasidagi qoida saqlanadi:
+   *   1 взнос + ежемесячный = Сумма оплаты
+   *
+   * Har o'zgarish oplata_kv_history'ga yoziladi (kim, qachon, nimadan nimaga).
+   * Summasi 0 bo'lgan qatorlar o'tkazib yuboriladi.
+   */
+  async bulkSetCategory(
+    ids: string[],
+    category: 'FIRST' | 'MONTHLY',
+    actor?: Actor,
+  ): Promise<{ ok: boolean; updated: number; skipped: number; error?: string }> {
+    const list = Array.from(new Set((ids || []).map((s) => String(s || '').trim()).filter(Boolean)));
+    if (list.length === 0) return { ok: false, updated: 0, skipped: 0, error: "Qator tanlanmagan" };
+    if (list.length > 5000) return { ok: false, updated: 0, skipped: 0, error: '5000 tadan ko\'p qator — filtrni toraytiring' };
+    if (category !== 'FIRST' && category !== 'MONTHLY') {
+      return { ok: false, updated: 0, skipped: 0, error: "Tur noto'g'ri (FIRST yoki MONTHLY)" };
+    }
+
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { id: { in: list } },
+      select: { id: true, paymentAmount: true, firstInstallment: true, monthlyAmount: true, paymentCategory: true, contractNo: true },
+    });
+
+    const actorName = actor?.name || "qo'lda (ommaviy)";
+    const updates: any[] = [];
+    const historyRows: any[] = [];
+    let skipped = 0;
+
+    for (const r of rows) {
+      const amount = Number(r.paymentAmount || 0);
+      if (amount === 0) { skipped++; continue; } // summasi yo'q — tegmaymiz
+
+      const first = category === 'FIRST' ? amount : 0;
+      const monthly = category === 'MONTHLY' ? amount : 0;
+
+      // Allaqachon shunday bo'lsa — bekorga yozmaymiz
+      const curFirst = Number(r.firstInstallment || 0);
+      const curMonthly = Number(r.monthlyAmount || 0);
+      if (curFirst === first && curMonthly === monthly && r.paymentCategory === category) { skipped++; continue; }
+
+      updates.push(this.prisma.oplataKv.update({
+        where: { id: r.id },
+        data: {
+          firstInstallment: first !== 0 ? new Prisma.Decimal(first) : null,
+          monthlyAmount:    monthly !== 0 ? new Prisma.Decimal(monthly) : null,
+          paymentCategory:  category as OplataKvCategory,
+        },
+      }));
+
+      historyRows.push({
+        oplataKvId: r.id,
+        action: 'updated',
+        actorType: actor?.id ? 'user' : 'system',
+        actorId: actor?.id ?? null,
+        actorName,
+        fieldsChanged: ['firstInstallment', 'monthlyAmount', 'paymentCategory'],
+        changes: {
+          firstInstallment: { old: r.firstInstallment?.toString() ?? null, new: first !== 0 ? String(first) : null },
+          monthlyAmount:    { old: r.monthlyAmount?.toString() ?? null,    new: monthly !== 0 ? String(monthly) : null },
+          paymentCategory:  { old: r.paymentCategory ?? null,              new: category },
+        } as any,
+        note: `Ommaviy o'zgartirish: Оплата = ${category === 'FIRST' ? '1 взнос' : 'ежемесячный'}`,
+      });
+    }
+
+    if (updates.length === 0) return { ok: true, updated: 0, skipped };
+
+    // Atomik: hammasi yoki hech biri
+    await this.prisma.$transaction(updates);
+    try {
+      await this.prisma.oplataKvHistory.createMany({ data: historyRows });
+    } catch (e: any) {
+      this.log.warn(`bulkSetCategory history yozishda xato (jiddiy emas): ${e?.message}`);
+    }
+
+    this.log.log(`bulkSetCategory: ${updates.length} qator → ${category} (${actorName}), ${skipped} o'tkazildi`);
+    return { ok: true, updated: updates.length, skipped };
+  }
+
+  /**
    * BITTA qator uchun split — modal'dan Re-split bosilganda ishlatiladi.
    * User talabi: "qolda bita tolov uchun split qilinsa shu shartnomani barcha
    * tolovi emas aynan shu toilovni ozini split qilasan qolgan tolovlaridan
