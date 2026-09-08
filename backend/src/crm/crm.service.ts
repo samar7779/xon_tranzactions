@@ -1230,20 +1230,19 @@ export class CrmService {
     }>;
     working: string[];
   }> {
-    // Ehtimoliy yo'llar — Laravel odatdagi index sxemalari
-    const paths = [
-      '/object/index', '/objects', '/object',
-      '/apartment/index', '/apartments', '/apartment',
-      '/flat/index', '/flats',
-      '/home/index', '/homes',
-      '/layout/index', '/layouts',
-      '/plan/index', '/plans',
-      '/block/index', '/blocks',
-      '/order/objects',
-    ];
-
     const tried: Array<any> = [];
     const working: string[] = [];
+
+    // Bazalar: client (bizniki, ishlaydi) + admin/boshqa nomlar (mavjudmi?)
+    // MAQSAD: 404 (manzil YO'Q) va 401/403 (manzil BOR, ruxsat yo'q) ni ajratish.
+    const HOST = XONSAROY_CLIENT_BASE.replace(/\/api\/v4\/client$/, '');
+    const bases: Array<{ label: string; url: string }> = [
+      { label: 'client', url: `${HOST}/api/v4/client` },
+      { label: 'admin',  url: `${HOST}/api/v4/admin` },
+      { label: 'v4',     url: `${HOST}/api/v4` },
+      { label: 'api',    url: `${HOST}/api` },
+    ];
+    const paths = ['/objects', '/apartments', '/layouts'];
 
     const shapeOf = (data: any) => {
       const raw = data?.data ?? data;
@@ -1255,31 +1254,59 @@ export class CrmService {
       };
     };
 
-    for (const path of paths) {
-      // 1) GET (index odatda GET)
+    /** Bitta GET so'rov — status kodini ham qaytaradi (404 vs 401 farqi muhim) */
+    const tryGet = async (label: string, url: string, method: 'GET' = 'GET') => {
+      const ctrl = new AbortController();
+      const tm = setTimeout(() => ctrl.abort(), 12_000);
       try {
-        const r: any = await this.callClientGet(path, { page: 1, limit: 2 }, 15_000);
-        const sh = shapeOf(r?.data);
-        const okRow = !!r?.ok && (sh.count ?? 0) > 0;
-        tried.push({ path, method: 'GET', status: r?.status ?? (r?.ok ? 200 : 'err'), ok: okRow, ...sh });
-        if (okRow) { working.push(`GET ${path}`); continue; }
+        const res = await fetch(`${url}?page=1&limit=2`, {
+          method: 'GET',
+          headers: { Authorization: this.auth(), Accept: 'application/json' },
+          signal: ctrl.signal,
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = JSON.parse(text); } catch { /* JSON emas */ }
+        const sh = shapeOf(data);
+        const okRow = res.ok && (sh.count ?? 0) > 0;
+        tried.push({ path: label, method, status: res.status, ok: okRow, ...sh });
+        if (okRow) working.push(`GET ${label}`);
+        return res.status;
       } catch (e: any) {
-        tried.push({ path, method: 'GET', status: 'exception', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 120) });
+        tried.push({ path: label, method, status: 'timeout/xato', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 100) });
+        return 0;
+      } finally {
+        clearTimeout(tm);
       }
-      // 2) POST (ba'zi endpointlar POST bo'lishi mumkin)
-      try {
-        const r: any = await this.callClient(path, { page: 1, limit: 2 }, 15_000);
-        const sh = shapeOf(r?.data);
-        const okRow = !!r?.ok && (sh.count ?? 0) > 0;
-        tried.push({ path, method: 'POST', status: r?.status ?? (r?.ok ? 200 : 'err'), ok: okRow, ...sh });
-        if (okRow) working.push(`POST ${path}`);
-      } catch (e: any) {
-        tried.push({ path, method: 'POST', status: 'exception', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 120) });
+    };
+
+    // 0) NAZORAT so'rovi — kalit umuman ishlayaptimi (bu 200 bo'lishi kerak)
+    try {
+      const r: any = await this.call('/index', { page: 1, 'per-page': 1 });
+      const sh = shapeOf(r?.data);
+      tried.push({
+        path: '✓ NAZORAT: client/order/index (ishlashi kerak)',
+        method: 'POST', status: r?.ok ? 200 : (r?.status ?? 'err'),
+        ok: !!r?.ok, ...sh,
+      });
+    } catch (e: any) {
+      tried.push({ path: '✓ NAZORAT: client/order/index', method: 'POST', status: 'xato', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 100) });
+    }
+
+    // 1) Har baza × har yo'l
+    for (const b of bases) {
+      for (const p of paths) {
+        await tryGet(`${b.label}:${p}`, `${b.url}${p}`);
       }
     }
 
-    this.log.log(`CRM inventar probe: ${working.length} ta ishlaydigan endpoint — ${working.join(', ') || 'yo\'q'}`);
-    return { ok: true, base: XONSAROY_CLIENT_BASE, tried, working };
+    // 2) Admin panel hostining o'zi (app.xonsaroy.uz) — API shu yerda bo'lishi mumkin
+    for (const p of paths) {
+      await tryGet(`app.xonsaroy.uz/api${p}`, `https://app.xonsaroy.uz/api${p}`);
+    }
+
+    this.log.log(`CRM inventar probe v2: ${working.length} ta ishladi — ${working.join(', ') || "yo'q"}`);
+    return { ok: true, base: HOST, tried, working };
   }
 
   /**
