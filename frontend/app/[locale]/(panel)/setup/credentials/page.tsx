@@ -25,7 +25,7 @@ import {
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { BankLogo } from '@/components/bank-logo';
+import { BankLogo, bankGradient } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
@@ -569,15 +569,17 @@ function CredentialCard({
   const t = useTranslations('credentials');
   const login = (c.loginPrefix || '') + (c.loginName || '');
   return (
-    <Card className="group border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all overflow-hidden bg-white dark:bg-slate-900">
+    <Card className="group relative border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all overflow-hidden bg-white dark:bg-slate-900">
+      {/* Bank bo'yicha rangli chiziq (chap) — adashmaslik uchun */}
+      <div className={cn('absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b', bankGradient(c.bank?.code || ''))} />
       <CardContent className="p-0">
         {/* Header */}
-        <div className="px-4 pt-4 pb-3 space-y-3">
+        <div className="pl-5 pr-4 pt-4 pb-3 space-y-3">
           <div className="flex items-center gap-3">
             <BankLogo code={c.bank?.code || ''} name={c.bank?.name} size={42} />
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-bold truncate tracking-tight text-slate-900 dark:text-slate-100">{c.label}</div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{c.bank?.name}</div>
+              <div className={cn('text-[11px] font-semibold truncate', `bg-gradient-to-r ${bankGradient(c.bank?.code || '')} bg-clip-text text-transparent`)}>{c.bank?.name}</div>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
