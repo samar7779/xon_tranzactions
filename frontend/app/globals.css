@@ -553,3 +553,11 @@ html.dark .sb3d-sheen{ background:linear-gradient(115deg,transparent 35%,rgba(25
 .anti-ghost{ bottom:16%; animation:anti-ghost 15s ease-in-out infinite; }
 
 /* diag build 9909939 */
+
+/* ОплатыКв — ommaviy o'zgartirishdan keyin o'zgargan qatorlar 3s yashil bo'lib yonadi */
+.oplatakv-flash { animation: oplatakv-flash 3s ease-out both; }
+@keyframes oplatakv-flash {
+  0%   { background-color: rgba(16,185,129,.35); box-shadow: inset 3px 0 0 0 rgb(16,185,129); }
+  70%  { background-color: rgba(16,185,129,.18); box-shadow: inset 3px 0 0 0 rgb(16,185,129); }
+  100% { background-color: transparent;         box-shadow: inset 3px 0 0 0 transparent; }
+}

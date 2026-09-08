@@ -193,21 +193,35 @@ export default function OplataKvPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
+  // Natija modul ICHIDA ko'rsatiladi (toast emas)
+  const [bulkResult, setBulkResult] = useState<{ updated: number; skipped: number; category: 'FIRST' | 'MONTHLY' } | null>(null);
+  // O'zgargan qatorlar bir necha soniya yonib turadi — ko'z bilan ko'rinsin
+  const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
 
   /** Belgilangan qatorlarga Оплата turini qo'yish (butun summa tanlangan ustunga) */
   const applyBulkCategory = async (category: 'FIRST' | 'MONTHLY') => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     setBulkSaving(true);
+    setBulkResult(null);
     try {
       const r = await api.post<{ ok: boolean; updated: number; skipped: number; error?: string }>(
         '/oplata-kv/bulk-category', { ids, category }, { timeout: 120_000 },
       );
       if (!r.ok) { toast.error(r.error || 'Xato'); return; }
-      toast.success(`${r.updated} ta qator o'zgartirildi` + (r.skipped ? ` · ${r.skipped} ta o'tkazildi` : ''));
+
+      // Natija oyna ichida ko'rsatiladi — oyna yopilmaydi
+      setBulkResult({ updated: r.updated, skipped: r.skipped, category });
+
+      // Jadval DARHOL yangilanadi. MUHIM: kalit ro'yxatnikiga mos bo'lishi shart
+      // (['oplata-kv', qs]) — ilgari ['oplatakv'] edi va jadval yangilanmasdi.
+      await qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv-last-sync'] });
+
+      // O'zgargan qatorlar 3 soniya yonib turadi
+      setFlashIds(new Set(ids));
+      setTimeout(() => setFlashIds(new Set()), 3000);
       setSelectedIds(new Set());
-      setBulkOpen(false);
-      qc.invalidateQueries({ queryKey: ['oplatakv'] });
     } catch (e: any) {
       toast.error(e?.message || 'Xato');
     } finally {
@@ -997,8 +1011,12 @@ export default function OplataKvPage() {
                   <tr
                     key={it.id}
                     className={cn(
-                      'border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer',
-                      selectedIds.has(it.id) && 'bg-indigo-50/70 dark:bg-indigo-950/50',
+                      'border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-all cursor-pointer',
+                      // Belgilangan qator — chapda indigo chiziq + fon
+                      selectedIds.has(it.id) &&
+                        'bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-950/60 shadow-[inset_3px_0_0_0_rgb(99,102,241)]',
+                      // Endigina o'zgargan qator — 3 soniya yashil bo'lib yonadi
+                      flashIds.has(it.id) && 'oplatakv-flash',
                     )}
                     onClick={() => setDetailRow(it)}
                   >
@@ -1248,8 +1266,14 @@ export default function OplataKvPage() {
 
       {/* ═══ Ommaviy o'zgartirish — Оплата turi ═══ */}
       {bulkOpen && (
-        <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => !bulkSaving && setBulkOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[120] grid place-items-center bg-slate-900/50 backdrop-blur-sm p-4"
+          onClick={() => { if (!bulkSaving) { setBulkOpen(false); setBulkResult(null); } }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-indigo-50 dark:from-sky-950/40 dark:to-indigo-950/40 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
               <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 grid place-items-center text-white shadow-md shrink-0">
                 <ListChecks className="h-5 w-5" />
@@ -1257,63 +1281,136 @@ export default function OplataKvPage() {
               <div className="min-w-0 flex-1">
                 <div className="text-[14px] font-bold text-slate-900 dark:text-slate-100">Ommaviy o&apos;zgartirish</div>
                 <div className="text-[11.5px] text-slate-500 dark:text-slate-400">
-                  Belgilangan {selectedIds.size} ta qatorga Оплата turi qo&apos;yiladi
+                  {bulkResult
+                    ? 'Natija'
+                    : bulkSaving
+                      ? 'Bajarilmoqda…'
+                      : `Belgilangan ${selectedIds.size} ta qatorga Оплата turi qo'yiladi`}
                 </div>
               </div>
             </div>
 
-            <div className="p-5 space-y-3">
-              {selectedIds.size === 0 ? (
-                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 px-4 py-3 text-[12.5px] text-amber-800 dark:text-amber-300">
+            <div className="p-5 space-y-3 min-h-[168px] grid place-items-center">
+              {/* ── 1) BAJARILMOQDA — animatsiya ── */}
+              {bulkSaving ? (
+                <div className="w-full text-center space-y-3 py-2">
+                  <div className="relative w-16 h-16 mx-auto">
+                    <span className="absolute inset-0 rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 opacity-25 animate-ping" />
+                    <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 grid place-items-center text-white shadow-lg">
+                      <Loader2 className="h-7 w-7 animate-spin" />
+                    </span>
+                  </div>
+                  <div className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                    Qatorlar yangilanmoqda…
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 bulk-bar" />
+                  </div>
+                </div>
+              ) : bulkResult ? (
+                /* ── 2) NATIJA ── */
+                <div className="w-full text-center space-y-3 py-1 bulk-pop">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-lg shadow-emerald-500/30">
+                    <CheckCircle2 className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <div className="text-[20px] font-extrabold tabular-nums text-slate-900 dark:text-slate-100">
+                      {bulkResult.updated} ta qator
+                    </div>
+                    <div className="text-[12.5px] text-slate-600 dark:text-slate-300 mt-0.5">
+                      <b>{bulkResult.category === 'FIRST' ? '1 взнос' : 'ежемесячный'}</b> ustuniga o&apos;tkazildi
+                    </div>
+                  </div>
+                  {bulkResult.skipped > 0 && (
+                    <div className="inline-block rounded-lg bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-1.5 text-[11.5px] text-amber-800 dark:text-amber-300">
+                      {bulkResult.skipped} ta qator o&apos;tkazib yuborildi
+                      <span className="opacity-70"> (summasi 0 yoki allaqachon shunday)</span>
+                    </div>
+                  )}
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                    Jadval yangilandi — o&apos;zgargan qatorlar yashil rangda ko&apos;rinadi
+                  </div>
+                </div>
+              ) : selectedIds.size === 0 ? (
+                /* ── 3) QATOR TANLANMAGAN ── */
+                <div className="w-full rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 px-4 py-3 text-[12.5px] text-amber-800 dark:text-amber-300">
                   Avval jadvaldan qatorlarni belgilang (chap tomondagi katakchalar).
                 </div>
               ) : (
-                <>
+                /* ── 4) TUR TANLASH ── */
+                <div className="w-full space-y-3">
                   <div className="text-[12px] text-slate-600 dark:text-slate-300">
                     Har bir qatorning <b>Сумма оплаты</b> summasi to&apos;liq tanlangan ustunga o&apos;tadi,
                     ikkinchi ustun bo&apos;shatiladi.
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <button
-                      disabled={bulkSaving}
                       onClick={() => applyBulkCategory('FIRST')}
-                      className="rounded-xl ring-1 ring-amber-300 dark:ring-amber-800 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 px-4 py-4 text-left transition-colors disabled:opacity-60"
+                      className="group rounded-xl ring-1 ring-amber-300 dark:ring-amber-800 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:scale-[1.03] active:scale-95 px-4 py-4 text-left transition-all"
                     >
                       <div className="text-[13px] font-bold text-amber-800 dark:text-amber-300">1 взнос</div>
                       <div className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">Boshlang&apos;ich to&apos;lov ustuniga</div>
                     </button>
                     <button
-                      disabled={bulkSaving}
                       onClick={() => applyBulkCategory('MONTHLY')}
-                      className="rounded-xl ring-1 ring-sky-300 dark:ring-sky-800 bg-sky-50 dark:bg-sky-950/30 hover:bg-sky-100 dark:hover:bg-sky-950/50 px-4 py-4 text-left transition-colors disabled:opacity-60"
+                      className="group rounded-xl ring-1 ring-sky-300 dark:ring-sky-800 bg-sky-50 dark:bg-sky-950/30 hover:bg-sky-100 dark:hover:bg-sky-950/50 hover:scale-[1.03] active:scale-95 px-4 py-4 text-left transition-all"
                     >
                       <div className="text-[13px] font-bold text-sky-800 dark:text-sky-300">ежемесячный</div>
                       <div className="text-[11px] text-sky-700/80 dark:text-sky-400/80 mt-0.5">Oylik to&apos;lov ustuniga</div>
                     </button>
                   </div>
-                </>
+                </div>
               )}
             </div>
 
             <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+              {bulkResult ? (
+                <button
+                  onClick={() => setBulkResult(null)}
+                  className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                >
+                  Yana o&apos;zgartirish
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setSelectedIds(new Set()); setBulkOpen(false); }}
+                  disabled={bulkSaving}
+                  className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-50"
+                >
+                  Belgilanganni tozalash
+                </button>
+              )}
               <button
-                onClick={() => { setSelectedIds(new Set()); setBulkOpen(false); }}
+                onClick={() => { setBulkOpen(false); setBulkResult(null); }}
                 disabled={bulkSaving}
-                className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-50"
+                className={cn(
+                  'h-9 px-4 rounded-lg text-[12.5px] font-semibold transition-colors disabled:opacity-50',
+                  bulkResult
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
+                )}
               >
-                Belgilanganni tozalash
-              </button>
-              <button
-                onClick={() => setBulkOpen(false)}
-                disabled={bulkSaving}
-                className="h-9 px-4 rounded-lg text-[12.5px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50"
-              >
-                {bulkSaving ? 'Saqlanmoqda…' : 'Yopish'}
+                {bulkResult ? 'Tayyor' : 'Yopish'}
               </button>
             </div>
           </div>
+
+          <style jsx>{`
+            .bulk-bar { animation: bulk-bar 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+            @keyframes bulk-bar {
+              0%   { transform: translateX(-110%); }
+              100% { transform: translateX(320%); }
+            }
+            .bulk-pop { animation: bulk-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+            @keyframes bulk-pop {
+              from { opacity: 0; transform: scale(0.9); }
+              to   { opacity: 1; transform: none; }
+            }
+          `}</style>
         </div>
       )}
+
+
 
     </div>
   );
