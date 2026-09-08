@@ -1234,80 +1234,62 @@ export class CrmService {
     const working: string[] = [];
     const HOST = XONSAROY_CLIENT_BASE.replace(/\/api\/v4\/client$/, ''); // app-api.xonsaroy.uz
 
-    const shapeOf = (data: any) => {
-      const raw = data?.data ?? data;
-      const rows = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : null);
-      return {
-        count: rows ? rows.length : null,
-        keys: rows?.[0] && typeof rows[0] === 'object' ? Object.keys(rows[0]).slice(0, 30) : [],
-        sample: rows?.[0] ?? (typeof raw === 'object' ? Object.keys(raw || {}).slice(0, 20) : null),
-      };
-    };
-
     /**
-     * GET so'rov + javobning TURINI aniqlash.
-     * v2 da 200 kelgan-u qator ko'rinmagan edi — javob JSON emas, HTML (SPA
-     * sahifasi) bo'lishi mumkin. Endi content-type va javob boshi ko'rsatiladi.
+     * LOGIN MANZILINI TOPISH (parolsiz).
+     * Bo'sh body bilan POST yuboramiz:
+     *   404 → bunday manzil yo'q
+     *   422 / 400 → manzil BOR, maydonlarni kutmoqda (login/parol) ← kerakligi shu
+     *   401 → manzil bor, ma'lumot noto'g'ri
+     * Javob matnida qaysi maydon nomlari kutilayotgani ham ko'rinadi.
      */
-    const tryUrl = async (label: string, url: string, auth: boolean) => {
+    const tryPost = async (label: string, url: string, body: any) => {
       const ctrl = new AbortController();
       const tm = setTimeout(() => ctrl.abort(), 12_000);
       try {
         const res = await fetch(url, {
-          method: 'GET',
-          headers: auth
-            ? { Authorization: this.auth(), Accept: 'application/json' }
-            : { Accept: 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body),
           signal: ctrl.signal,
         });
         const ct = (res.headers.get('content-type') || '').split(';')[0];
         const text = await res.text();
-        const isHtml = /^\s*</.test(text) || /text\/html/i.test(ct);
-        let data: any = null;
-        if (!isHtml) { try { data = JSON.parse(text); } catch { /* JSON emas */ } }
-        const sh = shapeOf(data);
-        const okRow = res.ok && !isHtml && (sh.count ?? 0) > 0;
+        const isHtml = /^\s*</.test(text);
         tried.push({
           path: label,
-          method: 'GET',
+          method: 'POST',
           status: res.status,
-          ok: okRow,
-          count: sh.count,
-          // Ustunda ko'rinadi: javob turi + javob boshi
-          keys: [isHtml ? 'HTML (JSON emas)' : ct || 'turi yo\'q', text.replace(/\s+/g, ' ').slice(0, 140)],
-          sample: sh.sample,
+          // 422/400/401 = manzil BOR (bizga kerakli signal)
+          ok: [400, 401, 422].includes(res.status),
+          count: null,
+          keys: [isHtml ? 'HTML' : ct || '—', text.replace(/\s+/g, ' ').slice(0, 160)],
+          sample: null,
         });
-        if (okRow) working.push(label);
+        if ([400, 401, 422].includes(res.status)) working.push(label);
       } catch (e: any) {
-        tried.push({ path: label, method: 'GET', status: 'timeout/xato', ok: false, count: null, keys: [String(e?.message).slice(0, 100)], sample: null });
+        tried.push({ path: label, method: 'POST', status: 'timeout/xato', ok: false, count: null, keys: [String(e?.message).slice(0, 90)], sample: null });
       } finally {
         clearTimeout(tm);
       }
     };
 
-    // 0) NAZORAT — kalit ishlayaptimi
+    // Ehtimoliy login manzillari — bo'sh body bilan (parol YUBORILMAYDI)
+    const loginPaths = [
+      '/api/login', '/api/auth/login', '/api/signin', '/api/user/login',
+      '/api/v4/login', '/api/v4/auth/login', '/api/admin/login',
+      '/api/employee/login', '/api/staff/login',
+    ];
+    for (const p of loginPaths) {
+      await tryPost(`LOGIN? ${p}`, `${HOST}${p}`, {});
+    }
+
+    // Nazorat: kalitimiz hamon ishlayaptimi
     try {
       const r: any = await this.call('/index', { page: 1, 'per-page': 1 });
-      const sh = shapeOf(r?.data);
-      tried.push({ path: '✓ NAZORAT: client/order/index', method: 'POST', status: r?.ok ? 200 : (r?.status ?? 'err'), ok: !!r?.ok, ...sh });
-    } catch { /* nazorat xatosi jiddiy emas */ }
+      tried.push({ path: '✓ NAZORAT: client/order/index', method: 'POST', status: r?.ok ? 200 : (r?.status ?? 'err'), ok: !!r?.ok, count: null, keys: ['client kalit'], sample: null });
+    } catch { /* jiddiy emas */ }
 
-    // 1) app-api.xonsaroy.uz/api/objects — v2 da 401 bergan (MANZIL BOR!)
-    //    Turli ko'rinishlarini sinaymiz: kalit bilan va kalitsiz, versiyalar bilan
-    await tryUrl('api/objects (kalit bilan)', `${HOST}/api/objects?page=1&limit=2`, true);
-    await tryUrl('api/objects (kalitsiz)', `${HOST}/api/objects?page=1&limit=2`, false);
-    for (const v of ['v1', 'v2', 'v3', 'v4']) {
-      await tryUrl(`api/${v}/objects`, `${HOST}/api/${v}/objects?page=1&limit=2`, true);
-    }
-    await tryUrl('api/objects/51/apartments', `${HOST}/api/objects/51/apartments?page=1&limit=2`, true);
-    await tryUrl('api/v4/client/object/51/apartments', `${HOST}/api/v4/client/object/51/apartments?page=1&limit=2`, true);
-
-    // 2) Admin panel hosti — v2 da 200 bergan, lekin qator yo'q edi (HTML?)
-    await tryUrl('app.xonsaroy.uz/api/objects', 'https://app.xonsaroy.uz/api/objects?page=1&limit=2', true);
-    await tryUrl('app.xonsaroy.uz/api/objects/51/apartments', 'https://app.xonsaroy.uz/api/objects/51/apartments?page=1&limit=2', true);
-    await tryUrl('app.xonsaroy.uz/objects (sahifa)', 'https://app.xonsaroy.uz/objects', false);
-
-    this.log.log(`CRM inventar probe v3: ${working.length} ta ishladi — ${working.join(', ') || "yo'q"}`);
+    this.log.log(`CRM login probe: ${working.length} ta mavjud manzil — ${working.join(', ') || "yo'q"}`);
     return { ok: true, base: HOST, tried, working };
   }
 
