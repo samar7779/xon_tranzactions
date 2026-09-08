@@ -29,16 +29,6 @@ type CrmMeta = { orderId: string | null; branch: string | null; propertyType: st
 export class PublicApiController {
   constructor(private readonly prisma: PrismaService, private readonly crm: CrmService) {}
 
-  // ─── DEBUG: CRM inventar (xonadonlar/obyektlar) endpointlarini sinash ───
-  // Shaxmatka g'oyasi uchun: bizdagi client kaliti bo'sh xonadonlar ro'yxatini
-  // beradimi? FAQAT O'QISH — hech narsa yozmaydi/o'zgartirmaydi.
-  @Get('_debug/crm-inventory-probe')
-  @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
-  @ApiOperation({ summary: 'DEBUG: CRM client API xonadonlar/obyektlar ro\'yxatini beradimi (probe)' })
-  async debugCrmInventoryProbe() {
-    return this.crm.probeInventoryEndpoints();
-  }
-
   // ─── DEBUG: shartnoma bo'yicha CRM xom javobi (turi/parking maydonini topish uchun) ───
   @Get('_debug/crm-raw')
   @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
