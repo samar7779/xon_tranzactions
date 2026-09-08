@@ -1232,17 +1232,7 @@ export class CrmService {
   }> {
     const tried: Array<any> = [];
     const working: string[] = [];
-
-    // Bazalar: client (bizniki, ishlaydi) + admin/boshqa nomlar (mavjudmi?)
-    // MAQSAD: 404 (manzil YO'Q) va 401/403 (manzil BOR, ruxsat yo'q) ni ajratish.
-    const HOST = XONSAROY_CLIENT_BASE.replace(/\/api\/v4\/client$/, '');
-    const bases: Array<{ label: string; url: string }> = [
-      { label: 'client', url: `${HOST}/api/v4/client` },
-      { label: 'admin',  url: `${HOST}/api/v4/admin` },
-      { label: 'v4',     url: `${HOST}/api/v4` },
-      { label: 'api',    url: `${HOST}/api` },
-    ];
-    const paths = ['/objects', '/apartments', '/layouts'];
+    const HOST = XONSAROY_CLIENT_BASE.replace(/\/api\/v4\/client$/, ''); // app-api.xonsaroy.uz
 
     const shapeOf = (data: any) => {
       const raw = data?.data ?? data;
@@ -1254,58 +1244,70 @@ export class CrmService {
       };
     };
 
-    /** Bitta GET so'rov — status kodini ham qaytaradi (404 vs 401 farqi muhim) */
-    const tryGet = async (label: string, url: string, method: 'GET' = 'GET') => {
+    /**
+     * GET so'rov + javobning TURINI aniqlash.
+     * v2 da 200 kelgan-u qator ko'rinmagan edi — javob JSON emas, HTML (SPA
+     * sahifasi) bo'lishi mumkin. Endi content-type va javob boshi ko'rsatiladi.
+     */
+    const tryUrl = async (label: string, url: string, auth: boolean) => {
       const ctrl = new AbortController();
       const tm = setTimeout(() => ctrl.abort(), 12_000);
       try {
-        const res = await fetch(`${url}?page=1&limit=2`, {
+        const res = await fetch(url, {
           method: 'GET',
-          headers: { Authorization: this.auth(), Accept: 'application/json' },
+          headers: auth
+            ? { Authorization: this.auth(), Accept: 'application/json' }
+            : { Accept: 'application/json' },
           signal: ctrl.signal,
         });
+        const ct = (res.headers.get('content-type') || '').split(';')[0];
         const text = await res.text();
+        const isHtml = /^\s*</.test(text) || /text\/html/i.test(ct);
         let data: any = null;
-        try { data = JSON.parse(text); } catch { /* JSON emas */ }
+        if (!isHtml) { try { data = JSON.parse(text); } catch { /* JSON emas */ } }
         const sh = shapeOf(data);
-        const okRow = res.ok && (sh.count ?? 0) > 0;
-        tried.push({ path: label, method, status: res.status, ok: okRow, ...sh });
-        if (okRow) working.push(`GET ${label}`);
-        return res.status;
+        const okRow = res.ok && !isHtml && (sh.count ?? 0) > 0;
+        tried.push({
+          path: label,
+          method: 'GET',
+          status: res.status,
+          ok: okRow,
+          count: sh.count,
+          // Ustunda ko'rinadi: javob turi + javob boshi
+          keys: [isHtml ? 'HTML (JSON emas)' : ct || 'turi yo\'q', text.replace(/\s+/g, ' ').slice(0, 140)],
+          sample: sh.sample,
+        });
+        if (okRow) working.push(label);
       } catch (e: any) {
-        tried.push({ path: label, method, status: 'timeout/xato', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 100) });
-        return 0;
+        tried.push({ path: label, method: 'GET', status: 'timeout/xato', ok: false, count: null, keys: [String(e?.message).slice(0, 100)], sample: null });
       } finally {
         clearTimeout(tm);
       }
     };
 
-    // 0) NAZORAT so'rovi — kalit umuman ishlayaptimi (bu 200 bo'lishi kerak)
+    // 0) NAZORAT — kalit ishlayaptimi
     try {
       const r: any = await this.call('/index', { page: 1, 'per-page': 1 });
       const sh = shapeOf(r?.data);
-      tried.push({
-        path: '✓ NAZORAT: client/order/index (ishlashi kerak)',
-        method: 'POST', status: r?.ok ? 200 : (r?.status ?? 'err'),
-        ok: !!r?.ok, ...sh,
-      });
-    } catch (e: any) {
-      tried.push({ path: '✓ NAZORAT: client/order/index', method: 'POST', status: 'xato', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 100) });
-    }
+      tried.push({ path: '✓ NAZORAT: client/order/index', method: 'POST', status: r?.ok ? 200 : (r?.status ?? 'err'), ok: !!r?.ok, ...sh });
+    } catch { /* nazorat xatosi jiddiy emas */ }
 
-    // 1) Har baza × har yo'l
-    for (const b of bases) {
-      for (const p of paths) {
-        await tryGet(`${b.label}:${p}`, `${b.url}${p}`);
-      }
+    // 1) app-api.xonsaroy.uz/api/objects — v2 da 401 bergan (MANZIL BOR!)
+    //    Turli ko'rinishlarini sinaymiz: kalit bilan va kalitsiz, versiyalar bilan
+    await tryUrl('api/objects (kalit bilan)', `${HOST}/api/objects?page=1&limit=2`, true);
+    await tryUrl('api/objects (kalitsiz)', `${HOST}/api/objects?page=1&limit=2`, false);
+    for (const v of ['v1', 'v2', 'v3', 'v4']) {
+      await tryUrl(`api/${v}/objects`, `${HOST}/api/${v}/objects?page=1&limit=2`, true);
     }
+    await tryUrl('api/objects/51/apartments', `${HOST}/api/objects/51/apartments?page=1&limit=2`, true);
+    await tryUrl('api/v4/client/object/51/apartments', `${HOST}/api/v4/client/object/51/apartments?page=1&limit=2`, true);
 
-    // 2) Admin panel hostining o'zi (app.xonsaroy.uz) — API shu yerda bo'lishi mumkin
-    for (const p of paths) {
-      await tryGet(`app.xonsaroy.uz/api${p}`, `https://app.xonsaroy.uz/api${p}`);
-    }
+    // 2) Admin panel hosti — v2 da 200 bergan, lekin qator yo'q edi (HTML?)
+    await tryUrl('app.xonsaroy.uz/api/objects', 'https://app.xonsaroy.uz/api/objects?page=1&limit=2', true);
+    await tryUrl('app.xonsaroy.uz/api/objects/51/apartments', 'https://app.xonsaroy.uz/api/objects/51/apartments?page=1&limit=2', true);
+    await tryUrl('app.xonsaroy.uz/objects (sahifa)', 'https://app.xonsaroy.uz/objects', false);
 
-    this.log.log(`CRM inventar probe v2: ${working.length} ta ishladi — ${working.join(', ') || "yo'q"}`);
+    this.log.log(`CRM inventar probe v3: ${working.length} ta ishladi — ${working.join(', ') || "yo'q"}`);
     return { ok: true, base: HOST, tried, working };
   }
 
