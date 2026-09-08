@@ -1213,6 +1213,76 @@ export class CrmService {
   // ═══════════════════════════════════════════════════════════════
 
   /**
+   * PROBE (diagnostika, FAQAT O'QISH) — bizdagi client kaliti xonadonlar /
+   * obyektlar / planirovkalar ro'yxatini beradimi?
+   *
+   * Shaxmatka g'oyasi uchun kerak: CRM admin panelida (app.xonsaroy.uz) bu
+   * ma'lumot bor (bo'sh xonadonlar ham), lekin bizdagi kalit `/api/v4/client`
+   * uchun. Shu funksiya ehtimoliy yo'llarni birma-bir sinab, qaysi biri
+   * javob berishini ko'rsatadi. HECH NARSA YOZMAYDI — faqat GET/POST index.
+   */
+  async probeInventoryEndpoints(): Promise<{
+    ok: true;
+    base: string;
+    tried: Array<{
+      path: string; method: 'GET' | 'POST'; status: number | string;
+      ok: boolean; count: number | null; keys: string[]; sample: any;
+    }>;
+    working: string[];
+  }> {
+    // Ehtimoliy yo'llar — Laravel odatdagi index sxemalari
+    const paths = [
+      '/object/index', '/objects', '/object',
+      '/apartment/index', '/apartments', '/apartment',
+      '/flat/index', '/flats',
+      '/home/index', '/homes',
+      '/layout/index', '/layouts',
+      '/plan/index', '/plans',
+      '/block/index', '/blocks',
+      '/order/objects',
+    ];
+
+    const tried: Array<any> = [];
+    const working: string[] = [];
+
+    const shapeOf = (data: any) => {
+      const raw = data?.data ?? data;
+      const rows = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : null);
+      return {
+        count: rows ? rows.length : null,
+        keys: rows?.[0] && typeof rows[0] === 'object' ? Object.keys(rows[0]).slice(0, 30) : [],
+        sample: rows?.[0] ?? (typeof raw === 'object' ? Object.keys(raw || {}).slice(0, 20) : null),
+      };
+    };
+
+    for (const path of paths) {
+      // 1) GET (index odatda GET)
+      try {
+        const r: any = await this.callClientGet(path, { page: 1, limit: 2 }, 15_000);
+        const sh = shapeOf(r?.data);
+        const okRow = !!r?.ok && (sh.count ?? 0) > 0;
+        tried.push({ path, method: 'GET', status: r?.status ?? (r?.ok ? 200 : 'err'), ok: okRow, ...sh });
+        if (okRow) { working.push(`GET ${path}`); continue; }
+      } catch (e: any) {
+        tried.push({ path, method: 'GET', status: 'exception', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 120) });
+      }
+      // 2) POST (ba'zi endpointlar POST bo'lishi mumkin)
+      try {
+        const r: any = await this.callClient(path, { page: 1, limit: 2 }, 15_000);
+        const sh = shapeOf(r?.data);
+        const okRow = !!r?.ok && (sh.count ?? 0) > 0;
+        tried.push({ path, method: 'POST', status: r?.status ?? (r?.ok ? 200 : 'err'), ok: okRow, ...sh });
+        if (okRow) working.push(`POST ${path}`);
+      } catch (e: any) {
+        tried.push({ path, method: 'POST', status: 'exception', ok: false, count: null, keys: [], sample: String(e?.message).slice(0, 120) });
+      }
+    }
+
+    this.log.log(`CRM inventar probe: ${working.length} ta ishlaydigan endpoint — ${working.join(', ') || 'yo\'q'}`);
+    return { ok: true, base: XONSAROY_CLIENT_BASE, tried, working };
+  }
+
+  /**
    * Aktiv shartnomalar ro'yxati (CRM /order/index, paginatsiya).
    * Trashed paramlar yo'q — bekor/o'chirilganlar chiqmaydi.
    */
