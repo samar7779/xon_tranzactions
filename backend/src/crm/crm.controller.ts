@@ -13,6 +13,15 @@ import { CrmService } from './crm.service';
 export class CrmController {
   constructor(private readonly svc: CrmService) {}
 
+  // Shaxmatka g'oyasi uchun diagnostika: CRM client kaliti xonadonlar/obyektlar
+  // ro'yxatini beradimi? FAQAT O'QISH — CRM'da hech narsa o'zgarmaydi.
+  @Get('inventory-probe')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({ summary: "Xonadonlar/obyektlar ro'yxati endpointlarini sinash (faqat o'qish)" })
+  inventoryProbe() {
+    return this.svc.probeInventoryEndpoints();
+  }
+
   @Get('search')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   @ApiOperation({ summary: 'Shartnoma raqami bo\'yicha qidiruv (XonSaroy CRM)' })
