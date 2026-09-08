@@ -339,10 +339,13 @@ export class GoogleExportService {
   private cellValue(row: any, field: string): string | number {
     switch (field) {
       case 'date':             return this.fmtDate(row.date);
-      // Summa maydonlari — HAR DOIM musbat yoziladi (manfiy/возврат ham musbat ko'rinsin).
-      case 'paymentAmount':    return row.paymentAmount    != null ? Math.abs(Number(row.paymentAmount))    : '';
-      case 'firstInstallment': return row.firstInstallment != null ? Math.abs(Number(row.firstInstallment)) : '';
-      case 'monthlyAmount':    return row.monthlyAmount    != null ? Math.abs(Number(row.monthlyAmount))    : '';
+      // Summa maydonlari — ishora SAQLANADI: возврат (qaytarilgan pul) manfiy
+      // bo'lib yoziladi. Ilgari Math.abs bilan musbat yozilardi — natijada
+      // jadvalda ustunni yig'indi qilganda qaytarilgan pul tushumga QO'SHILIB
+      // ketardi (ayirilishi kerak edi).
+      case 'paymentAmount':    return row.paymentAmount    != null ? Number(row.paymentAmount)    : '';
+      case 'firstInstallment': return row.firstInstallment != null ? Number(row.firstInstallment) : '';
+      case 'monthlyAmount':    return row.monthlyAmount    != null ? Number(row.monthlyAmount)    : '';
       case 'paymentCategory':  return row.paymentCategory ? (CATEGORY_LABEL[row.paymentCategory] || row.paymentCategory) : '';
       // XATO — CRM'da tasdiqlanmagan shartnoma: raqam o'rniga "XATO" yoziladi
       case 'contractNo':       return row.crmXato ? 'XATO' : (row.contractNo || '');
@@ -355,7 +358,7 @@ export class GoogleExportService {
       case 'note':             return row.note || '';
       // ─── Tranzaksiya maydonlari ───
       case 'txnDate':          return this.fmtDate(row.txnDate);
-      case 'amount':           return row.amount != null ? Math.abs(Number(row.amount)) : '';
+      case 'amount':           return row.amount != null ? Number(row.amount) : '';
       case 'direction':        return row.direction || '';
       case 'fromName':         return row.fromName || '';
       case 'fromAccount':      return row.fromAccount || '';
