@@ -398,29 +398,57 @@ export class MemorialOrderService {
     this.log.log(`Мем.ордер bankdan: contract=${contractNo} need=${need.length} accounts=${accounts.length} dates=${dates.size} calls=${calls} pool=${pool.length}`);
     if (!pool.length) return;
 
-    // Mos to'lovni topish: summa (deyarli) teng + shartnoma № purpose ichida
+    // Mos to'lovni topish: summa (deyarli) teng + shartnoma № purpose ichida + SANA yaqin.
+    //
+    // MUHIM (2026-09 tuzatildi): ilgari sana umuman hisobga olinmasdi va bitta bank
+    // hujjati bir necha qatorga qayta-qayta ishlatilardi. Shartnomada bir xil
+    // summali oylik to'lovlar ko'p bo'lgani uchun (masalan 10 367 333 × 20 marta)
+    // reyestrda hamma qatorga AYNAN bitta order (masalan 26.04.2023, № 3837797)
+    // tushib qolardi. Endi: (1) sana yaqinligi hisobga olinadi, (2) har bank
+    // hujjati faqat BITTA qatorga biriktiriladi.
     const norm = (s?: string) => (s || '').toUpperCase().replace(/[^A-ZА-Я0-9]/gi, '');
     const cnNorm = norm(contractNo);
+    /** Bank hujjatining noyob kaliti — takror ishlatishni oldini olish uchun */
+    const keyOf = (it: any) =>
+      String(it?.general_id || it?.b2_id || `${it?.num ?? ''}_${it?.ddate ?? ''}_${it?.amount ?? ''}`);
+    const MAX_DAY_GAP = 3; // bank sanasi to'lov sanasidan shuncha kun farq qilishi mumkin
+
+    const used = new Set<string>();
     let filled = 0;
     for (const i of need) {
       const amt = Number(rows[i].paymentAmount ?? blocks[i].amount ?? 0);
+      const rowDate = rows[i].date instanceof Date ? (rows[i].date as Date) : null;
       let best: KbDoc1CItem | undefined;
       let bestScore = Infinity;
+
       for (const it of pool) {
+        const k = keyOf(it);
+        if (used.has(k)) continue;                     // bu hujjat allaqachon boshqa qatorga ketgan
         const iamt = Number(it.amount ?? 0) / 100;
         const amtDiff = Math.abs(iamt - amt);
         if (amtDiff > Math.max(1, iamt * 0.0001)) continue;
-        const hasContract = norm(it.purpose).includes(cnNorm);
-        const score = (hasContract ? 0 : 1_000_000) + amtDiff;
+        if (!norm(it.purpose).includes(cnNorm)) continue; // shartnoma № majburiy
+
+        // Sana yaqinligi — eng muhim mezon
+        const bd = this.parseApiDate((it as any).ddate);
+        const dayGap = rowDate && bd
+          ? Math.abs(rowDate.getTime() - bd.getTime()) / 86_400_000
+          : 99;
+        if (dayGap > MAX_DAY_GAP) continue;
+
+        const score = dayGap * 1_000_000 + amtDiff;
         if (score < bestScore) { bestScore = score; best = it; }
       }
-      // Faqat shartnoma № mos kelsa to'ldiramiz (noto'g'ri to'lovni oldini olish)
-      if (best && norm(best.purpose).includes(cnNorm)) {
+
+      if (best) {
         blocks[i] = this.blockFromBankItem(best);
+        used.add(keyOf(best));
         filled++;
       }
+      // Topilmasa — blok "нет данных" bo'lib qoladi. Bu NOTO'G'RI order
+      // ko'rsatishdan ko'ra to'g'riroq (reyestrda "Без данных" hisoblanadi).
     }
-    this.log.log(`Мем.ордер bankdan to'ldirildi: ${filled}/${need.length}`);
+    this.log.log(`Мем.ордер bankdan to'ldirildi: ${filled}/${need.length} (takrorsiz, sana ±${MAX_DAY_GAP} kun)`);
   }
 
   private blockFromBankItem(it: KbDoc1CItem): OrderBlock {
