@@ -190,7 +190,7 @@ export default function OplataKvPage() {
   const canSplit = !!user?.permissions?.includes(PERMS.OPLATAKV_SPLIT);
   const canBulk = !!user?.permissions?.includes(PERMS.OPLATAKV_BULK_SPLIT);
   // Ommaviy o'zgartirish uchun belgilangan qatorlar
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Map<string, any>>(new Map());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   // Natija modul ICHIDA ko'rsatiladi (toast emas)
@@ -198,9 +198,20 @@ export default function OplataKvPage() {
   // O'zgargan qatorlar bir necha soniya yonib turadi — ko'z bilan ko'rinsin
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
 
+  // Tanlangan qatorlarning jami summalari — panelda ko'rsatiladi
+  const selectedSums = useMemo(() => {
+    let payment = 0, first = 0, monthly = 0;
+    for (const r of selectedIds.values()) {
+      payment += Number(r?.paymentAmount || 0);
+      first   += Number(r?.firstInstallment || 0);
+      monthly += Number(r?.monthlyAmount || 0);
+    }
+    return { payment, first, monthly };
+  }, [selectedIds]);
+
   /** Belgilangan qatorlarga Оплата turini qo'yish (butun summa tanlangan ustunga) */
   const applyBulkCategory = async (category: 'FIRST' | 'MONTHLY') => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds.keys());
     if (ids.length === 0) return;
     setBulkSaving(true);
     setBulkResult(null);
@@ -221,7 +232,7 @@ export default function OplataKvPage() {
       // O'zgargan qatorlar 3 soniya yonib turadi
       setFlashIds(new Set(ids));
       setTimeout(() => setFlashIds(new Set()), 3000);
-      setSelectedIds(new Set());
+      setSelectedIds(new Map());
     } catch (e: any) {
       toast.error(e?.message || 'Xato');
     } finally {
@@ -886,17 +897,6 @@ export default function OplataKvPage() {
                         <div className="text-[10.5px] text-slate-500 dark:text-slate-400">XATO to'lov shartnomasini topish</div>
                       </div>
                     </DropdownMenuItem>
-                    {canBulk && (
-                      <DropdownMenuItem onClick={() => setBulkOpen(true)} className="gap-2 cursor-pointer">
-                        <ListChecks className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                        <div className="flex-1">
-                          <div className="text-[13px] font-semibold">Ommaviy o'zgartirish</div>
-                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                            Belgilangan qatorlarga Оплата turi{selectedIds.size > 0 ? ` · ${selectedIds.size} ta` : ''}
-                          </div>
-                        </div>
-                      </DropdownMenuItem>
-                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -914,6 +914,55 @@ export default function OplataKvPage() {
           </CardContent>
         </Card>
 
+        {/* ═══ Tanlangan qatorlar paneli — soni, summalari va ommaviy amal ═══ */}
+        {canBulk && selectedIds.size > 0 && (
+          <div className="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25 px-4 py-3 flex items-center gap-4 flex-wrap sel-bar-in">
+            <span className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur grid place-items-center shrink-0">
+              <ListChecks className="h-5 w-5" />
+            </span>
+
+            <div className="shrink-0">
+              <div className="text-[18px] font-extrabold leading-none tabular-nums">{selectedIds.size} ta</div>
+              <div className="text-[10.5px] text-white/70 mt-0.5">qator tanlandi</div>
+            </div>
+
+            <div className="h-9 w-px bg-white/25 shrink-0" />
+
+            {/* Tanlanganlarning jami summalari */}
+            <div className="flex items-center gap-4 flex-wrap min-w-0">
+              <div>
+                <div className="text-[9.5px] uppercase tracking-wider text-white/70">Сумма оплаты</div>
+                <div className="text-[14px] font-bold tabular-nums">{formatMoney(selectedSums.payment).replace(' UZS', '')}</div>
+              </div>
+              <div>
+                <div className="text-[9.5px] uppercase tracking-wider text-white/70">1 взнос</div>
+                <div className="text-[14px] font-bold tabular-nums">{formatMoney(selectedSums.first).replace(' UZS', '')}</div>
+              </div>
+              <div>
+                <div className="text-[9.5px] uppercase tracking-wider text-white/70">ежемесячный</div>
+                <div className="text-[14px] font-bold tabular-nums">{formatMoney(selectedSums.monthly).replace(' UZS', '')}</div>
+              </div>
+            </div>
+
+            <div className="flex-1" />
+
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="h-10 px-4 rounded-xl bg-white text-indigo-700 hover:bg-indigo-50 text-[12.5px] font-bold shadow-md transition-colors shrink-0 inline-flex items-center gap-2"
+            >
+              <ListChecks className="h-4 w-4" />
+              Ommaviy o&apos;zgartirish
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Map())}
+              title="Belgilashni bekor qilish"
+              className="h-10 w-10 rounded-xl bg-white/15 hover:bg-white/25 grid place-items-center transition-colors shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* ═══ Table ═══ */}
         <Card className="border-0 shadow-soft overflow-hidden">
           <div className="overflow-x-auto">
@@ -928,8 +977,8 @@ export default function OplataKvPage() {
                         title="Sahifadagi barchasini belgilash"
                         checked={items.length > 0 && items.every((r: any) => selectedIds.has(r.id))}
                         onChange={(e) => {
-                          const next = new Set(selectedIds);
-                          if (e.target.checked) items.forEach((r: any) => next.add(r.id));
+                          const next = new Map(selectedIds);
+                          if (e.target.checked) items.forEach((r: any) => next.set(r.id, r));
                           else items.forEach((r: any) => next.delete(r.id));
                           setSelectedIds(next);
                         }}
@@ -1027,8 +1076,8 @@ export default function OplataKvPage() {
                           className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
                           checked={selectedIds.has(it.id)}
                           onChange={(e) => {
-                            const next = new Set(selectedIds);
-                            if (e.target.checked) next.add(it.id); else next.delete(it.id);
+                            const next = new Map(selectedIds);
+                            if (e.target.checked) next.set(it.id, it); else next.delete(it.id);
                             setSelectedIds(next);
                           }}
                         />
@@ -1373,7 +1422,7 @@ export default function OplataKvPage() {
                 </button>
               ) : (
                 <button
-                  onClick={() => { setSelectedIds(new Set()); setBulkOpen(false); }}
+                  onClick={() => { setSelectedIds(new Map()); setBulkOpen(false); }}
                   disabled={bulkSaving}
                   className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 disabled:opacity-50"
                 >
