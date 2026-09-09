@@ -916,35 +916,39 @@ export default function OplataKvPage() {
 
         {/* ═══ Tanlangan qatorlar paneli — soni, summalari va ommaviy amal ═══ */}
         {canBulk && selectedIds.size > 0 && (
-          <div className="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25 px-4 py-3 flex items-center gap-4 flex-wrap sel-bar-in">
-            <span className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur grid place-items-center shrink-0">
-              <ListChecks className="h-5 w-5" />
+          <div className="rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25 px-5 py-4 flex items-center gap-5 flex-wrap sel-bar-in">
+            <span className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur grid place-items-center shrink-0">
+              <ListChecks className="h-6 w-6" />
             </span>
 
             <div className="shrink-0">
-              <div className="text-[18px] font-extrabold leading-none tabular-nums">{selectedIds.size} ta</div>
+              <div className="text-[22px] font-extrabold leading-none tabular-nums">{selectedIds.size} ta</div>
               <div className="text-[10.5px] text-white/70 mt-0.5">qator tanlandi</div>
             </div>
 
-            <div className="h-9 w-px bg-white/25 shrink-0" />
+            <div className="h-11 w-px bg-white/25 shrink-0" />
 
-            {/* Tanlanganlarning jami summalari */}
-            <div className="flex items-center gap-4 flex-wrap min-w-0">
-              <div>
-                <div className="text-[9.5px] uppercase tracking-wider text-white/70">Сумма оплаты</div>
-                <div className="text-[14px] font-bold tabular-nums">{formatMoney(selectedSums.payment).replace(' UZS', '')}</div>
+            {/* Tanlanganlarning jami summalari — bo'sh joyga teng taqsimlanadi */}
+            <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-8 px-1 sm:px-4">
+              <div className="min-w-0">
+                <div className="text-[10.5px] uppercase tracking-[0.14em] text-white/65 mb-0.5">Сумма оплаты</div>
+                <div className="text-[19px] font-extrabold tabular-nums leading-none truncate">
+                  {formatMoney(selectedSums.payment).replace(' UZS', '')}
+                </div>
               </div>
-              <div>
-                <div className="text-[9.5px] uppercase tracking-wider text-white/70">1 взнос</div>
-                <div className="text-[14px] font-bold tabular-nums">{formatMoney(selectedSums.first).replace(' UZS', '')}</div>
+              <div className="min-w-0 sm:border-l sm:border-white/20 sm:pl-8">
+                <div className="text-[10.5px] uppercase tracking-[0.14em] text-white/65 mb-0.5">1 взнос</div>
+                <div className="text-[19px] font-extrabold tabular-nums leading-none truncate">
+                  {formatMoney(selectedSums.first).replace(' UZS', '')}
+                </div>
               </div>
-              <div>
-                <div className="text-[9.5px] uppercase tracking-wider text-white/70">ежемесячный</div>
-                <div className="text-[14px] font-bold tabular-nums">{formatMoney(selectedSums.monthly).replace(' UZS', '')}</div>
+              <div className="min-w-0 sm:border-l sm:border-white/20 sm:pl-8">
+                <div className="text-[10.5px] uppercase tracking-[0.14em] text-white/65 mb-0.5">ежемесячный</div>
+                <div className="text-[19px] font-extrabold tabular-nums leading-none truncate">
+                  {formatMoney(selectedSums.monthly).replace(' UZS', '')}
+                </div>
               </div>
             </div>
-
-            <div className="flex-1" />
 
             <button
               onClick={() => setBulkOpen(true)}
