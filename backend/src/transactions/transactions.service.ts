@@ -457,10 +457,15 @@ export class TransactionsService {
       // 0) PRIORITY: qo'lda biriktirilgan kontragent (har qanday boshqa logikadan ustun)
       if (tx.manualCounterparty?.name) {
         counterpartyDisplay = tx.manualCounterparty.name;
-      } else if (tx.source === 'IMPORT' && tx.importCounterpartyText) {
+      } else if (tx.source === 'IMPORT' && tx.importCounterpartyText && tx.categorizedBy !== 'manual') {
         // 0.5) IMPORT manbai — Excel'ning "Контрагент" ustuni (E) qiymatini
         //      kategoriya nomidan ustun deb hisoblaymiz. Aks holda Excel'dagi
         //      "Клиент/Физ.Л/Юр.Л" o'rniga "Взносы за квартиры" chiqib qolardi.
+        //
+        //      LEKIN: foydalanuvchi kategoriyani QO'LDA o'zgartirgan bo'lsa
+        //      (categorizedBy='manual') — uning tanlovi ustun. Aks holda odam
+        //      kategoriyani o'zgartiradi-yu, ustunda eski Excel matni qolaverardi
+        //      va "saqlanmadi" bo'lib ko'rinardi.
         counterpartyDisplay = tx.importCounterpartyText;
       } else if (code === 'CLIENT') {
         // CLIENT — har doim kategoriya nomi (CRM customer ismi YO'Q)
@@ -1069,6 +1074,10 @@ export class TransactionsService {
     let counterpartyDisplay: string | null = null;
     if (tx.manualCounterparty?.name) {
       counterpartyDisplay = tx.manualCounterparty.name;
+    } else if (tx.source === 'IMPORT' && tx.importCounterpartyText && tx.categorizedBy !== 'manual') {
+      // Ro'yxat bilan BIR XIL qoida: Excel "Контрагент" matni ustun, lekin
+      // kategoriya qo'lda o'zgartirilgan bo'lsa — kategoriya ustun.
+      counterpartyDisplay = tx.importCounterpartyText;
     } else if (code === 'CLIENT') {
       // CLIENT — har doim kategoriya nomi (CRM customer ismi YO'Q)
       counterpartyDisplay = tx.category?.name || null;
