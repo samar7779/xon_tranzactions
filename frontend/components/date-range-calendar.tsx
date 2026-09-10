@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, RotateCcw, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw, Check, CalendarDays, Keyboard } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   addDays, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek,
@@ -50,6 +50,8 @@ export function DateRangeCalendar({
   const [view, setView] = useState<Date>(() => startOfMonth(toD || fromD || today));
   const [hover, setHover] = useState<Date | null>(null);
   const [dir, setDir] = useState(0);
+  // 2 usul: kalendar (bosib tanlash) yoki qo'lda yozish (kalendarda qiynalganlar uchun)
+  const [mode, setMode] = useState<'calendar' | 'manual'>('calendar');
 
   const gridStart = useMemo(() => startOfWeek(startOfMonth(view), { weekStartsOn: 1 }), [view]);
   const days = useMemo(() => Array.from({ length: 42 }, (_, i) => addDays(gridStart, i)), [gridStart]);
@@ -117,8 +119,32 @@ export function DateRangeCalendar({
         </button>
       </div>
 
-      {/* ── Kalendar ── */}
-      <div className="flex-1 p-3.5">
+      {/* ── Kalendar / Qo'lda yozish ── */}
+      <div className="flex-1 p-3.5 flex flex-col">
+        {/* Tab: kalendar bosib tanlash yoki qo'lda yozish (2 usul) */}
+        <div className="flex items-center gap-1 mb-3 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl">
+          <button
+            onClick={() => setMode('calendar')}
+            className={cn(
+              'flex-1 h-8 rounded-lg text-[12px] font-semibold inline-flex items-center justify-center gap-1.5 transition-all',
+              mode === 'calendar' ? 'bg-white dark:bg-slate-950 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            <CalendarDays className="h-4 w-4" /> Kalendar
+          </button>
+          <button
+            onClick={() => setMode('manual')}
+            className={cn(
+              'flex-1 h-8 rounded-lg text-[12px] font-semibold inline-flex items-center justify-center gap-1.5 transition-all',
+              mode === 'manual' ? 'bg-white dark:bg-slate-950 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            <Keyboard className="h-4 w-4" /> Qo'lda yozish
+          </button>
+        </div>
+
+        {mode === 'calendar' && (
+        <>
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <button
@@ -211,6 +237,40 @@ export function DateRangeCalendar({
             );
           })}
         </div>
+        </>
+        )}
+
+        {mode === 'manual' && (
+          <div className="flex-1 flex flex-col gap-4 pt-2 pb-1 min-h-[300px]">
+            <div className="text-[12.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              Sanani <b className="text-slate-700 dark:text-slate-200">qo'lda kiriting</b> (yoki maydondagi kichik kalendardan tanlang). Bir kun uchun ikkala maydonga bir xil sana yozing.
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5 block">Dan (boshlanish)</label>
+                <input
+                  type="date"
+                  value={from || ''}
+                  max={to || max || undefined}
+                  onChange={(e) => { const v = e.target.value; onChange(v, (to && v && v > to) ? '' : to); }}
+                  className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 text-[14px] text-slate-800 dark:text-slate-100 tabular-nums"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5 block">Gacha (tugash)</label>
+                <input
+                  type="date"
+                  value={to || ''}
+                  min={from || undefined}
+                  max={max || undefined}
+                  onChange={(e) => { const v = e.target.value; onChange(from, (from && v && v < from) ? from : v); }}
+                  className="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 text-[14px] text-slate-800 dark:text-slate-100 tabular-nums"
+                />
+              </div>
+            </div>
+            <div className="flex-1" />
+          </div>
+        )}
 
         {/* Footer — tanlangan oraliq + qo'llash */}
         <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
