@@ -357,13 +357,23 @@ function BankPwdDialog({ open, onClose }: { open: boolean; onClose: () => void }
         </div>
 
         {!unlocked ? (
-          <div className="flex-1 grid place-items-center p-6">
-            <div className="w-full max-w-xs text-center">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white mx-auto shadow-lg shadow-orange-500/30"><Lock className="h-7 w-7" /></div>
-              <div className="mt-3 text-[15px] font-bold text-slate-800 dark:text-slate-100">Himoyalangan</div>
-              <div className="text-[12px] text-slate-400 mt-0.5">Kirish uchun kodni kiriting</div>
-              <input type="password" inputMode="numeric" autoFocus value={gate} onChange={(e) => setGate(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') unlockMut.mutate(gate); }} placeholder="Kod" className="mt-4 w-full h-11 px-3 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 text-[15px] text-center tracking-widest" />
-              <button onClick={() => unlockMut.mutate(gate)} disabled={unlockMut.isPending} className="mt-3 w-full h-11 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[13px] inline-flex items-center justify-center gap-2 disabled:opacity-50">{unlockMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Ochish</button>
+          <div className="flex-1 relative grid place-items-center p-6 overflow-hidden">
+            {/* Dekorativ fon — bo'sh oq joyni to'ldiradi */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-amber-400/15 blur-3xl" />
+              <div className="absolute -bottom-24 -right-10 w-80 h-80 rounded-full bg-orange-500/15 blur-3xl" />
+            </div>
+            <div className="relative w-full max-w-sm">
+              <div className="rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 shadow-xl p-8 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white mx-auto shadow-lg shadow-orange-500/30 ring-4 ring-orange-500/10"><Lock className="h-8 w-8" /></div>
+                <div className="mt-4 text-[17px] font-black tracking-tight text-slate-800 dark:text-slate-100">Bank parollari — himoyalangan</div>
+                <div className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed px-1">
+                  Bu yerda banklarning <b className="text-slate-700 dark:text-slate-200">real parollari</b> saqlanadi. Ochiq sessiya qolsa ham himoyalangan bo'lishi uchun — kirishда maxfiy kod so'raladi.
+                </div>
+                <input type="password" inputMode="numeric" autoFocus value={gate} onChange={(e) => setGate(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') unlockMut.mutate(gate); }} placeholder="• • • •" className="mt-5 w-full h-12 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 text-[18px] text-center tracking-[0.4em] font-bold" />
+                <button onClick={() => unlockMut.mutate(gate)} disabled={unlockMut.isPending || !gate.trim()} className="mt-3 w-full h-12 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-semibold text-[14px] inline-flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 disabled:opacity-50 transition-all">{unlockMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Ochish</button>
+                <div className="mt-4 text-[11px] text-slate-400 inline-flex items-center gap-1.5 justify-center"><ShieldCheck className="h-3.5 w-3.5" /> Faqat vakolatli xodim uchun</div>
+              </div>
             </div>
           </div>
         ) : (
@@ -378,12 +388,18 @@ function BankPwdDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 const list = cands[b.id] || [];
                 return (
                   <div key={b.id} className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white shrink-0"><Building2 className="h-4 w-4" /></div>
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <BankLogo code={b.code} name={b.name} size={38} rounded="rounded-lg" />
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-[14px] text-slate-800 dark:text-slate-100 truncate">{b.name}</div>
-                        <div className="text-[11px] text-slate-400">{list.length} ta parol</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{b.code}</div>
                       </div>
+                      <span className={cn('text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0',
+                        list.length > 0
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400')}>
+                        {list.length} ta parol
+                      </span>
                     </div>
                     <div className="flex gap-2">
                       <input value={newPwd[b.id] || ''} onChange={(e) => setNewPwd((m) => ({ ...m, [b.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') addPwd(b.id); }} placeholder="Parol qo'shish (Enter yoki tugma)" className="flex-1 h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 text-[13px] font-mono" />
