@@ -155,6 +155,25 @@ export class CrmService {
   }
 
   /**
+   * Sverka CRM uchun — BEKOR QILINGAN (расторгнут / soft-deleted) shartnomalar
+   * to'lovlarini HAM qamrab oladi. /order/* endpointlar kabi trashed
+   * parametrlarini yuboradi (XonSaroy Laravel SoftDelete: trashed_status=1 →
+   * withTrashed, ya'ni aktiv + bekor barchasi).
+   *
+   * DIQQAT: XonPay sync qiladigan getPaymentHistory() O'ZGARMAYDI — bu ALOHIDA
+   * metod, faqat Sverka CRM ishlatadi. Agar endpoint bu parametrlarni
+   * e'tiborsiz qoldirsa — natija getPaymentHistory bilan bir xil bo'ladi
+   * (regressiya yo'q): eng yomon holat = hozirgidek faqat aktivlar.
+   */
+  async getPaymentHistoryAll(page = 1, limit = 5000, timeoutMs = 60_000) {
+    return this.callClient(
+      '/payment-history/excel',
+      { page, limit, is_trashed: 1, trashed_status: 1, with_trashed: 1 },
+      timeoutMs,
+    );
+  }
+
+  /**
    * Kompozit bank ID'ni ajratadi: [IP_]general_id_num_ddate_acc_ct_acc_dt_amount_sign
    * (ddate dd.MM.yyyy). null — format noto'g'ri.
    */

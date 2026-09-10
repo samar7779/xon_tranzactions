@@ -463,6 +463,16 @@ export default function CheckCrmPage() {
               </div>
             )}
 
+            {/* ═══ KATEGORIYA SUB-TABLARI (4 holat + Hammasi) ═══ */}
+            {summary && (
+              <CategoryTabs
+                summary={summary}
+                active={rowStatuses}
+                onSelect={(val) => { setRowStatuses(val ? [val] : []); setPage(1); }}
+                t={t}
+              />
+            )}
+
             {/* ═══ QIDIRUV + FILTR ═══ */}
             <Card className="border-0 shadow-soft">
               <CardContent className="p-3 space-y-3">
@@ -749,6 +759,64 @@ function RunProgress({ status, t }: { status: StatusResponse; t: any }) {
         @keyframes crm-progress { 0% { transform: translateX(-110%); } 100% { transform: translateX(320%); } }
       `}</style>
     </Card>
+  );
+}
+
+/**
+ * Kategoriya sub-tablari — 4 aniq holat + "Hammasi".
+ * Ro'yxatni bir bosishда filtrlaydi (single-select). Sanoqlar summary'dan.
+ * Kartalar (KPI) — summa/foizni ko'rsatadi; bu esa asosiy ko'rinish tanlagichi.
+ */
+function CategoryTabs({
+  summary, active, onSelect, t,
+}: {
+  summary: NonNullable<ResultResponse['summary']>;
+  active: string[];
+  onSelect: (val: string | null) => void;
+  t: (k: string) => string;
+}) {
+  const tabs: { val: string | null; label: string; count: number; tone: string }[] = [
+    { val: null, label: t('tabAll'), count: summary.total, tone: 'sky' },
+    { val: 'ok', label: t('statusOk'), count: summary.ok, tone: 'emerald' },
+    { val: 'mismatch', label: t('statusMismatch'), count: summary.mismatch, tone: 'amber' },
+    { val: 'crm-only', label: t('statusCrmOnly'), count: summary.crmOnly, tone: 'rose' },
+    { val: 'our-only', label: t('statusOurOnly'), count: summary.ourOnly, tone: 'violet' },
+  ];
+  const isActive = (val: string | null) =>
+    val === null ? active.length === 0 : active.length === 1 && active[0] === val;
+  const toneActive: Record<string, string> = {
+    sky: 'bg-sky-600 text-white shadow-md shadow-sky-500/25',
+    emerald: 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25',
+    amber: 'bg-amber-500 text-white shadow-md shadow-amber-500/25',
+    rose: 'bg-rose-600 text-white shadow-md shadow-rose-500/25',
+    violet: 'bg-violet-600 text-white shadow-md shadow-violet-500/25',
+  };
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+      {tabs.map((tab) => {
+        const act = isActive(tab.val);
+        return (
+          <button
+            key={tab.val ?? 'all'}
+            onClick={() => onSelect(tab.val)}
+            className={cn(
+              'shrink-0 inline-flex items-center gap-2 h-10 px-3.5 rounded-xl text-[13px] font-semibold transition-all ring-1',
+              act
+                ? `${toneActive[tab.tone]} ring-transparent`
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-800 hover:ring-slate-300 dark:hover:ring-slate-700',
+            )}
+          >
+            {tab.label}
+            <span className={cn(
+              'inline-grid place-items-center min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-bold tabular-nums',
+              act ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
+            )}>
+              {tab.count.toLocaleString('ru-RU')}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

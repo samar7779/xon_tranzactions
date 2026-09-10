@@ -1470,6 +1470,7 @@
     "kpiMismatch": "Mismatch",
     "kpiCrmOnly": "CRM only",
     "kpiOurOnly": "Ours only",
+    "tabAll": "All",
     "sumCrm": "CRM total",
     "sumOur": "ОплатыКв total",
     "sumDiff": "Total difference",

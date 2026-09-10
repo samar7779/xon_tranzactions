@@ -417,7 +417,9 @@ export class CrmSverkaService implements OnModuleInit {
       const tBatch = Date.now();
       // Promise.all tartibni saqlaydi — natijalar sahifa tartibida qayta ishlanadi
       const results = await Promise.all(
-        pages.map(async (page) => ({ page, r: await this.crm.getPaymentHistory(page, LIMIT, this.runTimeoutMs) })),
+        // getPaymentHistoryAll — bekor qilingan (расторгнут) shartnoma to'lovlarini
+        // ham qamrab oladi (aks holda ular "faqat bizda" bo'lib xato farq berardi).
+        pages.map(async (page) => ({ page, r: await this.crm.getPaymentHistoryAll(page, LIMIT, this.runTimeoutMs) })),
       );
       this.progress.lastPageMs = Math.round((Date.now() - tBatch) / pages.length);
 
@@ -548,7 +550,8 @@ export class CrmSverkaService implements OnModuleInit {
    */
   async ping(limit = 1, timeoutMs = 30_000) {
     const t0 = Date.now();
-    const r = await this.crm.getPaymentHistory(1, Math.min(Math.max(limit, 1), 5000), timeoutMs);
+    // Sverka bilan bir xil qamrov (bekor shartnomalar ham) — total mos kelsin
+    const r = await this.crm.getPaymentHistoryAll(1, Math.min(Math.max(limit, 1), 5000), timeoutMs);
     const ms = Date.now() - t0;
 
     if (!r.ok) {
@@ -689,6 +692,18 @@ export class CrmSverkaService implements OnModuleInit {
         ourMonthly += p.monthly;
         if (p.date > lastDate) lastDate = p.date;
       }
+
+      // ── 0-TO'LOV chiqarib tashlanadi (foydalanuvchi talabi) ──
+      // Shartnoma ikkala bazada ham (yoki bittasida) bor bo'lsa-da, lekin AMALDA
+      // hech qanday tranzaksiya bo'lmagan bo'lsa — solishtirishga kiritmaymiz.
+      // "Tranzaksiya yo'q" = jami HAM, boshlang'ich/oylik taqsimot HAM to'liq 0.
+      // Net 0 bo'lsa-da ichida teskari ishorali (+X/−X) real harakat bo'lsa
+      // (taqsimot farqi) — QOLDIRAMIZ. Ehtiyotkorlik: kamroq emas, ko'proq ko'rsatamiz.
+      if (
+        cents(crmTotal) === 0 && cents(ourTotal) === 0 &&
+        cents(crmInitial) === 0 && cents(crmMonthly) === 0 &&
+        cents(ourInitial) === 0 && cents(ourMonthly) === 0
+      ) continue;
 
       const diff = (cents(ourTotal) - cents(crmTotal)) / 100;
       const diffInitial = (cents(ourInitial) - cents(crmInitial)) / 100;

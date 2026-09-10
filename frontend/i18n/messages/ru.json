@@ -1470,6 +1470,7 @@
     "kpiMismatch": "Расхождение",
     "kpiCrmOnly": "Только в CRM",
     "kpiOurOnly": "Только у нас",
+    "tabAll": "Все",
     "sumCrm": "Итого CRM",
     "sumOur": "Итого ОплатыКв",
     "sumDiff": "Сумма расхождений",
