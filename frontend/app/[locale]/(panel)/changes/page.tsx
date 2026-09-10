@@ -62,6 +62,7 @@ export default function ChangesPage() {
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const canCheck = useHasPermission(PERMS.CHANGED_TXN_CHECK);
+  const canRestore = useHasPermission(PERMS.CHANGED_TXN_RESTORE);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [accountId, setAccountId] = useState<string>('all');
@@ -72,6 +73,8 @@ export default function ChangesPage() {
   const [checkOpen, setCheckOpen] = useState(false);
   const [recoverOpen, setRecoverOpen] = useState(false);
   const [detail, setDetail] = useState<ChangeItem | null>(null);
+  // Qatorli tiklash — tanlangan yozuv (modal ochiladi)
+  const [restoreItem, setRestoreItem] = useState<ChangeItem | null>(null);
 
   const accountsQ = useQuery({
     queryKey: ['bank-accounts-for-changes'],
@@ -294,17 +297,18 @@ export default function ChangesPage() {
                   <th className="px-3 py-3 text-right whitespace-nowrap">{t('colAmount')}</th>
                   <th className="px-3 py-3 text-left">{t('colChanges')}</th>
                   <th className="px-3 py-3 text-left w-20">{t('colWho')}</th>
+                  {canRestore && <th className="px-3 py-3 text-center w-24">Amal</th>}
                 </tr>
               </thead>
               <tbody>
                 {listQ.isLoading && (
-                  <tr><td colSpan={10} className="px-4 py-16 text-center text-slate-400 dark:text-slate-500">
+                  <tr><td colSpan={canRestore ? 11 : 10} className="px-4 py-16 text-center text-slate-400 dark:text-slate-500">
                     <Loader2 className="h-6 w-6 animate-spin inline mr-2" />
                     <span className="font-medium">{tc('loading')}</span>
                   </td></tr>
                 )}
                 {!listQ.isLoading && items.length === 0 && (
-                  <tr><td colSpan={10} className="px-4 py-20 text-center">
+                  <tr><td colSpan={canRestore ? 11 : 10} className="px-4 py-20 text-center">
                     <div className="inline-flex flex-col items-center max-w-md">
                       <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 grid place-items-center mb-3 ring-1 ring-slate-200 dark:ring-slate-700">
                         <AlertOctagon className="h-7 w-7 text-slate-400 dark:text-slate-500" />
@@ -427,6 +431,26 @@ export default function ChangesPage() {
                             : <span className="text-slate-500 dark:text-slate-400">{it.detectedBy}</span>
                         ) : '—'}
                       </td>
+                      {/* Amal — faqat O'CHIRILGAN yozuvni qaytarish mumkin */}
+                      {canRestore && (
+                        <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          {isDel && !restored ? (
+                            <button
+                              onClick={() => setRestoreItem(it)}
+                              title="Bu to'lovni tranzaksiyaga (va shartlarga mos bo'lsa ОплатыКв'ga) qaytarish"
+                              className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm hover:shadow transition-all whitespace-nowrap"
+                            >
+                              <ArrowRightLeft className="h-3 w-3" /> Qaytarish
+                            </button>
+                          ) : restored ? (
+                            <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-emerald-700 dark:text-emerald-300">
+                              <CheckCircle2 className="h-3 w-3" /> tiklangan
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600 text-[11px]">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -488,7 +512,194 @@ export default function ChangesPage() {
         onClose={() => setRecoverOpen(false)}
         onSuccess={() => qc.invalidateQueries({ queryKey: ['transactions-changes'] })}
       />
+      <RestoreOneDialog
+        item={restoreItem}
+        onClose={() => setRestoreItem(null)}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['transactions-changes'] });
+          qc.invalidateQueries({ queryKey: ['transactions'] });
+          qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+        }}
+      />
     </>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// Qatorli tiklash — bitta o'chirilgan to'lovni qaytarish
+//   1) tranzaksiya snapshot'dan tiklanadi
+//   2) ОплатыКв — tarixdagi nusxadan, u yo'q bo'lsa shartlarga mos bo'lsa
+//      (CLIENT + shartnoma) qaytadan qo'shiladi
+// Bankda topilmasa — majburiy tasdiq so'raladi (arvoh pul xavfi).
+// ════════════════════════════════════════════════════════
+interface RestoreResp {
+  ok: boolean;
+  status: string;
+  verdict: string;
+  foundOnDate: string | null;
+  needsConfirm: boolean;
+  tx: { restored: boolean; id: string | null; externalId: string | null };
+  oplata: { mode: 'history' | 'created' | 'exists' | 'skipped' | 'failed'; count: number; id: string | null; reason: string };
+  message: string;
+}
+
+function RestoreOneDialog({
+  item, onClose, onSuccess,
+}: { item: ChangeItem | null; onClose: () => void; onSuccess: () => void }) {
+  const [res, setRes] = useState<RestoreResp | null>(null);
+
+  const mut = useMutation({
+    mutationFn: (force: boolean) =>
+      api.post<RestoreResp>('/transactions/changes/restore-one', { logId: item!.id, force }, { timeout: 300_000 }),
+    onSuccess: (r) => {
+      setRes(r);
+      if (r.status === 'restored') {
+        toast.success(r.message);
+        onSuccess();
+      } else if (r.needsConfirm) {
+        toast.warning('Bankda topilmadi — tasdiq kerak');
+      } else {
+        toast.info(r.message);
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || 'Tiklashda xatolik'),
+  });
+
+  const close = () => { setRes(null); mut.reset(); onClose(); };
+  if (!item) return null;
+
+  const amount = item.amount ? Math.abs(Number(item.amount)) : 0;
+  const done = res?.status === 'restored';
+
+  const oplataLabel: Record<string, { text: string; cls: string }> = {
+    history: { text: 'Tarixdagi nusxadan tiklandi', cls: 'text-emerald-700 dark:text-emerald-300' },
+    created: { text: "Shartlarga mos — qaytadan qo'shildi", cls: 'text-emerald-700 dark:text-emerald-300' },
+    exists:  { text: 'Allaqachon bor edi', cls: 'text-sky-700 dark:text-sky-300' },
+    skipped: { text: 'Qo\'shilmadi', cls: 'text-slate-600 dark:text-slate-300' },
+    failed:  { text: 'Xatolik', cls: 'text-rose-700 dark:text-rose-300' },
+  };
+
+  return (
+    <Dialog open={!!item} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 grid place-items-center">
+              <ArrowRightLeft className="h-4 w-4" />
+            </span>
+            O&apos;chirilgan to&apos;lovni qaytarish
+          </DialogTitle>
+          <DialogDescription>
+            Tranzaksiya tiklanadi. Agar to&apos;lov ОплатыКв shartlariga mos bo&apos;lsa (Клиент + shartnoma) —
+            u yerga ham qaytariladi.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* To'lov ma'lumoti */}
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-2 text-[12.5px]">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-slate-500 dark:text-slate-400">Shartnoma</span>
+            <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">{item.contractNumber || '—'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-slate-500 dark:text-slate-400">Summa</span>
+            <span className="tabular-nums font-bold">
+              {item.direction === 'IN' ? '+' : '−'}{formatMoney(amount, 'UZS').replace(' UZS', '')} UZS
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-slate-500 dark:text-slate-400">Tranzaksiya sanasi</span>
+            <span className="tabular-nums">{item.txnDate ? new Date(item.txnDate).toLocaleDateString('ru-RU') : '—'}</span>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-slate-500 dark:text-slate-400 shrink-0">Composite ID</span>
+            <span className="font-mono text-[10.5px] text-slate-600 dark:text-slate-300 break-all text-right">{item.externalId}</span>
+          </div>
+        </div>
+
+        {/* Yuklanish */}
+        {mut.isPending && (
+          <div className="flex items-center gap-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-100 dark:ring-indigo-900 px-3 py-3 text-[12.5px] text-indigo-800 dark:text-indigo-200">
+            <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+            Bankda tekshirilyapti va tiklanyapti…
+          </div>
+        )}
+
+        {/* Bankda topilmadi — tasdiq */}
+        {res && res.needsConfirm && !mut.isPending && (
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-3 text-[12.5px] text-amber-900 dark:text-amber-200">
+            <div className="font-bold flex items-center gap-1.5 mb-1">
+              <AlertOctagon className="h-4 w-4" /> Bankda topilmadi
+            </div>
+            Bu to&apos;lov bank ro&apos;yxatida (±3 kun) yo&apos;q — bank haqiqatan bekor qilgan bo&apos;lishi mumkin.
+            Baribir tiklasangiz, bazada bankda mavjud bo&apos;lmagan to&apos;lov paydo bo&apos;ladi.
+          </div>
+        )}
+
+        {/* Natija */}
+        {res && done && (
+          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-3 py-3 space-y-2 text-[12.5px]">
+            <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 font-bold">
+              <CheckCircle2 className="h-4 w-4" /> Tiklandi
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-slate-600 dark:text-slate-300">Tranzaksiya</span>
+              <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                {res.tx.restored ? 'qaytarildi' : 'bazada bor edi'}
+              </span>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-slate-600 dark:text-slate-300 shrink-0">ОплатыКв</span>
+              <span className={cn('font-semibold text-right', oplataLabel[res.oplata.mode]?.cls)}>
+                {oplataLabel[res.oplata.mode]?.text || res.oplata.mode}
+                <span className="block text-[10.5px] font-normal text-slate-500 dark:text-slate-400 mt-0.5">
+                  {res.oplata.reason}
+                </span>
+              </span>
+            </div>
+            {res.verdict && res.verdict !== 'skipped' && (
+              <div className="flex items-center justify-between gap-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-900">
+                <span className="text-slate-600 dark:text-slate-300">Bank tekshiruvi</span>
+                <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                  {res.verdict === 'found' ? 'bankda bor' :
+                   res.verdict === 'shifted' ? `bankda bor (${res.foundOnDate})` :
+                   res.verdict === 'not_found' ? 'bankda topilmadi (majburiy tiklandi)' : 'tekshirib bo\'lmadi'}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Boshqa holatlar (already / no_snapshot / failed) */}
+        {res && !done && !res.needsConfirm && (
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-3 text-[12.5px] text-slate-700 dark:text-slate-200">
+            {res.message}
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={close}>{done ? 'Yopish' : 'Bekor qilish'}</Button>
+          {!done && (
+            <Button
+              onClick={() => mut.mutate(!!res?.needsConfirm)}
+              disabled={mut.isPending}
+              className={cn(
+                'gap-1.5 text-white',
+                res?.needsConfirm
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-emerald-600 hover:bg-emerald-700',
+              )}
+            >
+              {mut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Tiklanyapti…</>
+                : res?.needsConfirm
+                ? <><AlertOctagon className="h-4 w-4" /> Baribir tiklash</>
+                : <><ArrowRightLeft className="h-4 w-4" /> Qaytarish</>}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

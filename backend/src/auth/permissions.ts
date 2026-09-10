@@ -48,6 +48,7 @@ export const PERMISSIONS = {
   // Tranzaksiyalar — O'zgargan to'lovlar tab (bank tomonida o'chirilgan/o'zgartirilganlar)
   CHANGED_TXN_VIEW: 'changed_txn:view',                         // Sahifani ochish + ro'yxat
   CHANGED_TXN_CHECK: 'changed_txn:check',                       // Qo'lda re-verify ishga tushirish
+  CHANGED_TXN_RESTORE: 'changed_txn:restore',                   // O'chirilgan to'lovni qatorli tiklash (tx + ОплатыКв)
 
   // Tranzaksiyalar — "Взнос от имени клиента" tab (o'z shartnomalarimiz reestri)
   VZNOS_VIEW: 'vznos:view',                                     // Tab'ni ochish + ro'yxat + kartalar
@@ -221,6 +222,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_CRM_RUN, label: 'Sverka CRM — CRM\'dan jonli yangilash' },
           { value: PERMISSIONS.CHANGED_TXN_VIEW, label: 'O\'zgargan to\'lovlar tab — ko\'rish' },
           { value: PERMISSIONS.CHANGED_TXN_CHECK, label: 'O\'zgargan to\'lovlar — qo\'lda tekshirish (sana oralig\'i)' },
+          { value: PERMISSIONS.CHANGED_TXN_RESTORE, label: 'O\'zgargan to\'lovlar — o\'chirilgan to\'lovni tiklash (tx + ОплатыКв)' },
           { value: PERMISSIONS.VZNOS_VIEW, label: 'Взнос от имени клиента tab — ko\'rish' },
           { value: PERMISSIONS.VZNOS_MANAGE, label: 'Взнос от имени клиента — qo\'shish/tahrirlash/o\'chirish/bekor' },
         ],

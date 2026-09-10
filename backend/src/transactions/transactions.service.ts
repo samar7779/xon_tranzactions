@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { SyncService } from '../sync/sync.service';
+import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 
 // YYYY-MM-DD ko'rinishidagi sana — Tashkent kunining boshi/oxiri (UTC+5)
@@ -57,7 +59,11 @@ export interface ExportFilters {
 export class TransactionsService {
   private readonly logger = new Logger(TransactionsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private sync: SyncService,
+    private oplataKv: OplataKvService,
+  ) {}
 
   /** Vergul bilan ajratilgan string'ni arrayga aylantiradi. Bo'sh bo'lsa null. */
   private parseList(s?: string): string[] | null {
@@ -1667,5 +1673,98 @@ export class TransactionsService {
     const buffer = Buffer.from(arrayBuffer);
     const ts = new Date().toISOString().slice(0, 10);
     return { buffer, filename: `klient-xato-${ts}.xlsx` };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // O'CHIRILGAN TO'LOVNI QAYTARISH — "O'zgargan to'lovlar" jadvalidagi qatorli tugma.
+  //   1) tranzaksiya changelog snapshot'idan tiklanadi (SyncService);
+  //   2) ОплатыКв — avval kaskad o'chirilgan qator TARIXDAN qaytariladi;
+  //   3) tarix bo'lmasa va to'lov ОплатыКв shartlariga mos bo'lsa (CLIENT + shartnoma)
+  //      qator QAYTADAN yaratiladi + 1-vznos/oylik split hisoblanadi.
+  // Bankda topilmagan to'lov force=true bo'lmasa tiklanmaydi (arvoh pul xavfi).
+  // ═══════════════════════════════════════════════════════════════════
+  async restoreChangeLog(logId: string, opts: { force?: boolean; actor: string; actorId?: string | null }): Promise<{
+    ok: boolean;
+    status: string;
+    verdict: string;
+    foundOnDate: string | null;
+    needsConfirm: boolean;
+    tx: { restored: boolean; id: string | null; externalId: string | null };
+    oplata: { mode: 'history' | 'created' | 'exists' | 'skipped' | 'failed'; count: number; id: string | null; reason: string };
+    message: string;
+  }> {
+    const r = await this.sync.restoreOneDeleted({ logId, force: opts.force, actor: opts.actor });
+
+    const base = {
+      verdict: r.verdict,
+      foundOnDate: r.foundOnDate,
+      tx: { restored: r.txRestored, id: r.txId, externalId: r.externalId },
+    };
+
+    // Tiklanmadi — sabab bilan qaytaramiz (not_in_bank bo'lsa tasdiq so'raladi)
+    if (r.status !== 'restored') {
+      return {
+        ...base,
+        ok: r.ok,
+        status: r.status,
+        needsConfirm: r.status === 'not_in_bank',
+        oplata: { mode: 'skipped', count: 0, id: null, reason: 'Tranzaksiya tiklanmadi' },
+        message: r.message,
+      };
+    }
+
+    // ── ОплатыКв qismi ────────────────────────────────────────────────
+    // (a) tarixdan tiklandi
+    if (r.oplataRestored > 0) {
+      return {
+        ...base, ok: true, status: 'restored', needsConfirm: false,
+        oplata: { mode: 'history', count: r.oplataRestored, id: null, reason: 'Tarixdagi nusxadan tiklandi' },
+        message: `Tranzaksiya tiklandi · ОплатыКв: ${r.oplataRestored} ta qator tarixdan qaytarildi`,
+      };
+    }
+
+    // (b) tarix yo'q — shartlarga mos bo'lsa qaytadan qo'shamiz
+    const ref = r.externalId || r.txId;
+    if (!ref) {
+      return {
+        ...base, ok: true, status: 'restored', needsConfirm: false,
+        oplata: { mode: 'skipped', count: 0, id: null, reason: "Tranzaksiya ID topilmadi" },
+        message: "Tranzaksiya tiklandi · ОплатыКв: tekshirib bo'lmadi",
+      };
+    }
+    const add = await this.oplataKv
+      .addOneFromTransaction(ref, { id: opts.actorId ?? null, name: `tiklash · ${opts.actor}` })
+      .catch((e: any) => {
+        this.logger.warn(`restoreChangeLog ОплатыКв xato (${ref}): ${e?.message}`);
+        return null;
+      });
+
+    if (!add) {
+      return {
+        ...base, ok: true, status: 'restored', needsConfirm: false,
+        oplata: { mode: 'failed', count: 0, id: null, reason: "ОплатыКв'ga qo'shishda xatolik" },
+        message: "Tranzaksiya tiklandi · ОплатыКв'ga qo'shib bo'lmadi",
+      };
+    }
+    if (add.status === 'added') {
+      return {
+        ...base, ok: true, status: 'restored', needsConfirm: false,
+        oplata: { mode: 'created', count: 1, id: add.oplataKvId ?? null, reason: add.message },
+        message: `Tranzaksiya tiklandi · ОплатыКв'ga qayta qo'shildi (${add.message})`,
+      };
+    }
+    if (add.status === 'exists') {
+      return {
+        ...base, ok: true, status: 'restored', needsConfirm: false,
+        oplata: { mode: 'exists', count: 0, id: add.oplataKvId ?? null, reason: add.message },
+        message: "Tranzaksiya tiklandi · ОплатыКв'da allaqachon bor",
+      };
+    }
+    // not_client | no_contract | not_found — shartlarga mos emas, bu XATO emas
+    return {
+      ...base, ok: true, status: 'restored', needsConfirm: false,
+      oplata: { mode: 'skipped', count: 0, id: null, reason: add.message },
+      message: `Tranzaksiya tiklandi · ОплатыКв: ${add.message}`,
+    };
   }
 }

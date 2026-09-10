@@ -393,7 +393,10 @@ export class TransactionsController {
   ) {
     const where: any = {};
     if (accountId) where.accountId = accountId;
-    if (changeType === 'DELETED' || changeType === 'EDITED') where.changeType = changeType;
+    // MOVED ham to'liq filtr — aks holda "Ko'chirilgan" tanlansa HAMMA yozuv qaytardi
+    if (changeType === 'DELETED' || changeType === 'EDITED' || changeType === 'MOVED') {
+      where.changeType = changeType;
+    }
     if (dateFrom || dateTo) {
       where.detectedAt = {};
       if (dateFrom) where.detectedAt.gte = new Date(`${dateFrom}T00:00:00Z`);
@@ -480,6 +483,28 @@ export class TransactionsController {
       dryRun: body?.dryRun !== false,
       limit: body?.limit,
       actor: email ? `manual:${email}` : 'manual',
+    });
+  }
+
+  @Post('changes/restore-one')
+  @RequirePermissions(PERMISSIONS.CHANGED_TXN_RESTORE)
+  @ApiOperation({
+    summary: "Bitta o'chirilgan to'lovni tiklash (qatorli tugma)",
+    description:
+      "Tranzaksiyani snapshot'dan tiklaydi. ОплатыКв: avval tarixdagi nusxadan, " +
+      "u yo'q bo'lsa shartlarga mos bo'lsa (CLIENT + shartnoma) qaytadan qo'shiladi. " +
+      "Bankda topilmagan to'lov force=true bo'lmasa tiklanmaydi.",
+  })
+  async restoreOneChange(
+    @Body() body: { logId: string; force?: boolean },
+    @CurrentUser() user?: { id?: string; email?: string; fullName?: string },
+  ) {
+    if (!body?.logId) throw new BadRequestException('logId majburiy');
+    const email = user?.email;
+    return this.svc.restoreChangeLog(body.logId, {
+      force: body.force === true,
+      actor: email ? `manual:${email}` : 'manual',
+      actorId: user?.id ?? null,
     });
   }
 

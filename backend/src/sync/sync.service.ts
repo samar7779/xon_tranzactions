@@ -1482,6 +1482,101 @@ export class SyncService implements OnModuleInit {
   //   Bu funksiya har DELETED changelog'ni bankdan ±3 kun tekshirib, TOPILSA — snapshot'lardan
   //   (transactionChangeLog.oldData + oplataKvHistory 'deleted') tranzaksiya + ОплатыКв ni tiklaydi.
   // ═══════════════════════════════════════════════════════════════════
+  /**
+   * BITTA DELETED changelog'ni tiklash — "O'zgargan to'lovlar" jadvalidagi qatorli tugma uchun.
+   *
+   * Oqim:
+   *   1) log topiladi va DELETED ekani tekshiriladi;
+   *   2) bankda hali bor-yo'qligi tekshiriladi (±3 kun) — verdict qaytadi;
+   *   3) bankda ANIQ yo'q bo'lsa (not_found) va force=false bo'lsa TIKLANMAYDI —
+   *      bank haqiqatan bekor qilgan to'lovni tiklash "arvoh pul" yaratadi;
+   *   4) aks holda snapshot'dan tranzaksiya + (tarixdan) ОплатыКв tiklanadi.
+   *
+   * ОплатыКв'ni SHARTLAR bo'yicha qaytadan yaratish bu yerda EMAS —
+   * u TransactionsService.restoreChangeLog ichida (OplataKvService orqali) bajariladi,
+   * chunki SyncModule OplataKvModule'ga bog'lana olmaydi (aylanma bog'liqlik).
+   */
+  async restoreOneDeleted(opts: { logId: string; force?: boolean; actor: string }): Promise<{
+    ok: boolean;
+    status: 'restored' | 'already' | 'not_in_bank' | 'not_deleted' | 'not_found' | 'no_snapshot' | 'failed';
+    verdict: 'found' | 'shifted' | 'not_found' | 'no_data' | 'skipped';
+    foundOnDate: string | null;
+    txRestored: boolean;
+    txId: string | null;
+    externalId: string | null;
+    oplataRestored: number;
+    message: string;
+  }> {
+    const empty = {
+      ok: false, verdict: 'skipped' as const, foundOnDate: null,
+      txRestored: false, txId: null, externalId: null, oplataRestored: 0,
+    };
+    const lg = await this.prisma.transactionChangeLog.findUnique({ where: { id: opts.logId } });
+    if (!lg) return { ...empty, status: 'not_found', message: 'Yozuv topilmadi' };
+    if (lg.changeType !== 'DELETED') {
+      return { ...empty, status: 'not_deleted', externalId: lg.externalId,
+        message: `Faqat o'chirilgan yozuvni tiklash mumkin (bu: ${lg.changeType})` };
+    }
+    const old = lg.oldData as any;
+    if (!old || !old.id) {
+      return { ...empty, status: 'no_snapshot', externalId: lg.externalId,
+        message: "Snapshot yo'q — bu yozuvdan tiklab bo'lmaydi" };
+    }
+
+    // Tranzaksiya bazada bormi — id bo'yicha HAM, externalId bo'yicha HAM.
+    // (keyingi sync o'sha to'lovni YANGI cuid bilan qayta yaratgan bo'lishi mumkin —
+    //  externalId @unique, shuning uchun eski cuid bilan create qilsak P2002 bo'lardi)
+    const existing = await this.prisma.transaction.findFirst({
+      where: { OR: [{ id: old.id }, { externalId: lg.externalId }] },
+      select: { id: true },
+    });
+    // MUHIM: tranzaksiya qaytib kelgan bo'lsa ham to'xtamaymiz — ОплатыКв qatori
+    // hali ham yo'q bo'lishi mumkin, foydalanuvchi aynan shuni qaytarmoqchi.
+    const txAlreadyExists = !!existing;
+
+    // Bankda hali bormi — ±3 kun oynasi bo'yicha.
+    // Tranzaksiya bazada bo'lsa tekshiruv shart emas (u allaqachon haqiqiy deb tan olingan).
+    let verdict: 'found' | 'shifted' | 'not_found' | 'no_data' | 'skipped' = 'skipped';
+    let foundOnDate: string | null = null;
+    if (!txAlreadyExists && lg.accountId) {
+      const acc = await this.prisma.bankAccount.findUnique({
+        where: { id: lg.accountId },
+        include: { credential: { include: { bank: true } } },
+      }).catch(() => null);
+      if (acc?.credential?.bank?.apiBaseUrl) {
+        const v = await this.verifyExternalInBank(lg.externalId, acc).catch(() => null);
+        if (v) { verdict = v.status; foundOnDate = v.foundOnDate; }
+      }
+    }
+    if (verdict === 'not_found' && !opts.force) {
+      return { ...empty, status: 'not_in_bank', verdict, externalId: lg.externalId,
+        message: "Bu to'lov bankda topilmadi — bank haqiqatan o'chirgan bo'lishi mumkin. " +
+          'Baribir tiklash uchun tasdiqlang.' };
+    }
+
+    const r = await this.restoreDeletedLog(lg, opts.actor).catch((e) => {
+      this.logger.warn(`restoreOneDeleted xato (${lg.externalId}): ${e?.message}`);
+      return null;
+    });
+    if (!r) {
+      return { ...empty, status: 'failed', verdict, foundOnDate, externalId: lg.externalId,
+        message: 'Tiklashda xatolik — loglarni tekshiring' };
+    }
+    this.logger.log(
+      `restoreOneDeleted: ${lg.externalId} tiklandi (tx=${r.tx}, mavjud=${txAlreadyExists}, ` +
+      `ОплатыКв=${r.oplata}, verdict=${verdict}, actor=${opts.actor})`,
+    );
+    return {
+      ok: true, status: 'restored', verdict, foundOnDate,
+      txRestored: r.tx, txId: existing?.id ?? old.id, externalId: lg.externalId, oplataRestored: r.oplata,
+      message: r.tx
+        ? 'Tranzaksiya tiklandi'
+        : txAlreadyExists
+        ? 'Tranzaksiya bazada bor edi'
+        : 'Tranzaksiya tiklanmadi',
+    };
+  }
+
   async recoverFalselyDeleted(opts: { dryRun?: boolean; limit?: number; actor: string }): Promise<{
     ok: boolean; scanned: number; stillInBank: number; restored: number; txRestored: number;
     oplataRestored: number; notInBank: number; unverified: number; dryRun: boolean;
@@ -1578,36 +1673,92 @@ export class SyncService implements OnModuleInit {
   private async restoreDeletedLog(lg: any, actor: string): Promise<{ tx: boolean; oplata: number }> {
     const old = lg.oldData as any;
     if (!old || !old.id) return { tx: false, oplata: 0 };
-    // Relation obyektlarini olib tashlaymiz — faqat skalar + FK id'lar qoladi
-    const { bank, account, category, subcategory, ...txData } = old;
+    const txData = this.sanitizeTxSnapshot(old);
     let txOk = false;
     try {
       await this.prisma.transaction.upsert({ where: { id: txData.id }, create: txData, update: {} });
       txOk = true;
     } catch (e: any) {
-      this.logger.warn(`restore tx xato (${lg.externalId}): ${e?.message?.slice(0, 160)}`);
+      this.logger.warn(`restore tx xato (${lg.externalId}): ${e?.message?.slice(0, 200)}`);
     }
-    // Bog'langan ОплатыКв — oplataKvHistory (action='deleted', note ichida txId=<id>)
+    // Bog'langan ОплатыКв — oplataKvHistory (action='deleted').
+    // IKKI kalit: note ichidagi `txId=<id>` (kaskad o'chirish) VA oplataKvId = externalId
+    // (sync yaratgan qatorning id'si aynan bank kompozit ID — boshqa yo'l bilan
+    //  o'chirilganlarni ham topadi).
     let oplata = 0;
+    const keys: any[] = [{ note: { contains: `txId=${old.id}` } }];
+    if (lg.externalId) keys.push({ oplataKvId: lg.externalId });
     const hist = await this.prisma.oplataKvHistory.findMany({
-      where: { action: 'deleted', note: { contains: `txId=${old.id}` } },
+      where: { action: 'deleted', OR: keys },
+      orderBy: { createdAt: 'desc' },
     }).catch(() => [] as any[]);
+    const seen = new Set<string>();
     for (const h of hist) {
       const row = (h as any).changes;
       if (!row || !row.id) continue;
+      // Bir xil qator uchun bir nechta 'deleted' tarix yozuvi bo'lishi mumkin
+      // (o'chir-tikla sikllari) — eng oxirgisini olamiz
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      // Allaqachon bor bo'lsa qayta yaratmaymiz va "tiklandi" deb SANAMAYMIZ
+      const already = await this.prisma.oplataKv.findUnique({ where: { id: row.id }, select: { id: true } });
+      if (already) continue;
+      // updatedAt tashlab yuboriladi — @updatedAt yangi vaqt qo'yadi, aks holda
+      // /v1/oplata-kv delta-feed (updatedSince) tiklangan qatorni HECH QACHON ko'rmaydi
+      const { updatedAt, ...rowData } = row;
       try {
-        await this.prisma.oplataKv.upsert({ where: { id: row.id }, create: row, update: {} });
+        await this.prisma.oplataKv.upsert({ where: { id: row.id }, create: rowData, update: {} });
         oplata++;
+        // ОплатыКв tarixida iz — "Tarix" tabida tiklash ko'rinsin
+        await this.prisma.oplataKvHistory.create({
+          data: {
+            oplataKvId: row.id,
+            action: 'created',
+            actorType: 'system',
+            actorId: null,
+            actorName: actor,
+            fieldsChanged: ['*'],
+            changes: rowData as any,
+            note: `TIKLANDI — o'chirilgan tranzaksiya qaytarildi (txId=${old.id})`,
+          },
+        }).catch(() => { /* audit yozuvi — asosiy amalga to'siq emas */ });
       } catch (e: any) {
-        this.logger.warn(`restore ОплатыКв xato (${row.id}): ${e?.message?.slice(0, 160)}`);
+        this.logger.warn(`restore ОплатыКв xato (${row.id}): ${e?.message?.slice(0, 200)}`);
       }
     }
-    // Changelog'ni "tiklandi" deb belgilaymiz (qayta tiklamaslik uchun)
-    await this.prisma.transactionChangeLog.update({
-      where: { id: lg.id },
-      data: { note: `${lg.note || ''} [TIKLANDI ${new Date().toISOString().slice(0, 10)} · ${actor}]`.slice(0, 990) },
-    }).catch(() => { /* ignore */ });
+    // Changelog'ni "tiklandi" deb belgilaymiz — FAQAT haqiqatan biror narsa tiklangan bo'lsa.
+    // (aks holda muvaffaqiyatsiz urinish qatorni ommaviy tiklashdan abadiy yashirardi)
+    if (txOk || oplata > 0) {
+      await this.prisma.transactionChangeLog.update({
+        where: { id: lg.id },
+        data: { note: `${lg.note || ''} [TIKLANDI ${new Date().toISOString().slice(0, 10)} · ${actor}]`.slice(0, 990) },
+      }).catch(() => { /* ignore */ });
+    }
     return { tx: txOk, oplata };
+  }
+
+  /**
+   * Transaction snapshot'ini Prisma create uchun tozalaydi:
+   *   — relation obyektlari olib tashlanadi (faqat skalar + FK id'lar qoladi);
+   *   — Json maydonlar null bo'lsa Prisma.DbNull qilinadi (aks holda create ValidationError beradi);
+   *   — updatedAt tashlanadi (@updatedAt yangi vaqt qo'yadi).
+   */
+  private sanitizeTxSnapshot(old: any): any {
+    // Transaction modelidagi BARCHA relation maydonlar — biror include qo'shilsa ham yiqilmasin
+    const RELATIONS = [
+      'bank', 'account', 'category', 'subcategory', 'customer',
+      'manualCounterparty', 'importBatch', 'attachments', 'xonpayMatches', 'payments',
+    ];
+    const data: any = {};
+    for (const [k, v] of Object.entries(old)) {
+      if (RELATIONS.includes(k) || k === 'updatedAt') continue;
+      data[k] = v;
+    }
+    // Nullable Json maydonlar — Prisma create'da toza `null` qabul qilmaydi
+    for (const jsonField of ['metadata', 'rawExtra']) {
+      if (jsonField in data && data[jsonField] === null) data[jsonField] = Prisma.DbNull;
+    }
+    return data;
   }
 
   private guessType(purpCode?: string, dtype?: string): TxnType {

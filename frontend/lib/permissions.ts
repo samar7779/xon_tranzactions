@@ -32,6 +32,7 @@ export const PERMS = {
   TRANSACTIONS_SVERKA_CRM_RUN: 'transactions:sverka_crm_run',
   CHANGED_TXN_VIEW: 'changed_txn:view',
   CHANGED_TXN_CHECK: 'changed_txn:check',
+  CHANGED_TXN_RESTORE: 'changed_txn:restore',
 
   VZNOS_VIEW: 'vznos:view',
   VZNOS_MANAGE: 'vznos:manage',
