@@ -1,4 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import * as zlib from 'zlib';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
@@ -191,6 +193,8 @@ const DEFAULT_CONCURRENCY = 6;
 
 /** Run holati DB'da shu kalit ostida — server restartidan keyin ham bilinadi */
 const RUN_STATE_KEY = 'crmSverka.lastRun';
+/** Oxirgi snapshot (CRM to'lovlari) DB'da shu kalit ostida — gzip+base64 */
+const SNAPSHOT_KEY = 'crmSverka.snapshot';
 
 @Injectable()
 export class CrmSverkaService implements OnModuleInit {
@@ -242,20 +246,158 @@ export class CrmSverkaService implements OnModuleInit {
    * foydalanuvchi sababsiz "tortilmoqda" ekranini ko'rib qoladi.
    */
   async onModuleInit() {
+    // ── 1) Oxirgi snapshotni DB'dan tiklaymiz — server restart/deploy'dan keyin
+    //       sahifaga kirish bir zumda ochilsin (CRM'ni qaytadan tortmasin). ──
+    await this.restoreSnapshot();
+
+    // ── 2) Oldingi run 'running' holatida qolib ketganmi (jarayon uzilgan)? ──
     try {
       const row = await this.prisma.setting.findUnique({ where: { key: RUN_STATE_KEY } });
       if (!row?.value) return;
       const st = JSON.parse(row.value);
       if (st?.status !== 'running') return;
 
-      this.lastError =
-        "Oldingi tortish o'rtada uzilib qoldi (server qayta ishga tushgan bo'lishi mumkin). " +
-        'Qaytadan urinib ko\'ring — kerak bo\'lsa sahifa hajmini kichraytiring.';
-      this.progress.phase = 'error';
-      this.log.warn(`CRM sverka: uzilib qolgan run topildi (${st.startedAt}) — 'crashed' deb belgilandi`);
+      // Uzilib qolgan run — DB'da 'crashed' deb belgilaymiz
       await this.saveRunState({ ...st, status: 'crashed', finishedAt: new Date().toISOString() });
+
+      if (this.snapshot) {
+        // Snapshot tiklandi — foydalanuvchini bezovta qilmaymiz, oxirgi natija ko'rinadi
+        this.log.warn(`CRM sverka: oldingi run uzilgan (${st.startedAt}), lekin oxirgi snapshot tiklandi`);
+      } else {
+        this.lastError =
+          "Oldingi tortish o'rtada uzilib qoldi (server qayta ishga tushgan bo'lishi mumkin). " +
+          'Qaytadan urinib ko\'ring — kerak bo\'lsa sahifa hajmini kichraytiring.';
+        this.progress.phase = 'error';
+        this.log.warn(`CRM sverka: uzilib qolgan run topildi (${st.startedAt}) — 'crashed' deb belgilandi`);
+      }
     } catch (e: any) {
       this.log.warn(`CRM sverka run holatini o'qishda xato (jiddiy emas): ${e?.message}`);
+    }
+  }
+
+  /**
+   * Avto-yangilash — ma'lumot o'zi yangilanib tursin, foydalanuvchi kutmasin.
+   * Kuniga bir necha marta (Toshkent vaqti). Faqat snapshot eskirgan (1 soatdan
+   * ortiq) va hozir tortilmayotgan bo'lsa ishga tushadi — ortiqcha CRM yuki yo'q.
+   * env CRM_SVERKA_REFRESH_CRON bilan sozlanadi.
+   */
+  @Cron(process.env.CRM_SVERKA_REFRESH_CRON || '0 7,12,17 * * *', {
+    name: 'crmSverkaAutoRefresh',
+    timeZone: 'Asia/Tashkent',
+  })
+  autoRefresh(): void {
+    if (this.running) return;
+    const ageMs = this.snapshot ? Date.now() - this.snapshot.builtAt.getTime() : Infinity;
+    if (ageMs < 60 * 60 * 1000) return; // 1 soatdan yangi — kerak emas
+    this.log.log('CRM sverka avto-yangilash (cron) boshlandi');
+    this.start('avto (cron)');
+  }
+
+  // ═══════════════════ SNAPSHOT PERSIST (disk/DB) ═══════════════════
+
+  /**
+   * Muvaffaqiyatli tortishdan keyin CRM to'lovlarini DB'ga saqlaymiz (gzip+base64).
+   * "our" (ОплатыКв) saqlanmaydi — u lokal bazadan tez o'qiladi va doim yangi.
+   */
+  private async persistSnapshot(snap: Snapshot): Promise<void> {
+    try {
+      const payload = {
+        v: 1,
+        builtAt: snap.builtAt.toISOString(),
+        durationMs: snap.durationMs,
+        pages: snap.pages,
+        partial: snap.partial, // to'liqlik belgisi — restore chala'ni tiklamasin
+        crm: snap.crm,
+      };
+      const gz = zlib.gzipSync(Buffer.from(JSON.stringify(payload), 'utf8')).toString('base64');
+      await this.prisma.setting.upsert({
+        where: { key: SNAPSHOT_KEY },
+        create: { key: SNAPSHOT_KEY, value: gz },
+        update: { value: gz },
+      });
+      this.log.log(`CRM sverka snapshot saqlandi: ${snap.crm.length} to'lov · ${Math.round(gz.length / 1024)}KB`);
+    } catch (e: any) {
+      this.log.warn(`CRM sverka snapshot saqlashda xato (jiddiy emas): ${e?.message}`);
+    }
+  }
+
+  /**
+   * DB'dagi oxirgi CRM snapshotni tiklaydi + "our" tomonini bazadan qayta o'qiydi.
+   * Boot'da chaqiriladi — sahifaga kirish bir zumda ochilsin.
+   */
+  private async restoreSnapshot(): Promise<void> {
+    try {
+      const row = await this.prisma.setting.findUnique({ where: { key: SNAPSHOT_KEY } });
+      if (!row?.value) return;
+
+      let payload: any;
+      try {
+        const buf = zlib.gunzipSync(Buffer.from(row.value, 'base64'));
+        payload = JSON.parse(buf.toString('utf8'));
+      } catch (e: any) {
+        this.log.warn(`CRM sverka snapshot ochilmadi (buzilgan?): ${e?.message}`);
+        return;
+      }
+      if (!payload || !Array.isArray(payload.crm)) return;
+      // Chala (partial) snapshot tiklanmaydi — faqat to'liq natija ishonchli
+      if (payload.partial === true) {
+        this.log.warn("CRM sverka: saqlangan snapshot qisman belgilangan — tiklanmadi");
+        return;
+      }
+      const crm: CrmPay[] = payload.crm.map((p: any) => ({
+        contract: normContract(p.contract),
+        amount: toNum(p.amount),
+        date: p.date || '',
+        method: this.intern(p.method),
+        type: this.intern(p.type),
+        kind: p.kind === 'initial' ? 'initial' : 'monthly',
+        category: this.intern(p.category),
+        status: this.intern(p.status),
+        object: this.intern(p.object),
+        client: this.intern(p.client),
+        externalId: String(p.externalId || ''),
+        problematic: !!p.problematic,
+      }));
+
+      const crmByContract = new Map<string, CrmPay[]>();
+      for (const p of crm) {
+        if (!p.contract) continue;
+        const arr = crmByContract.get(p.contract);
+        if (arr) arr.push(p);
+        else crmByContract.set(p.contract, [p]);
+      }
+
+      // "our" tomonini bazadan qayta o'qiymiz (tez, doim yangi)
+      const our = await this.fetchOurPayments();
+      const ourByContract = new Map<string, OurPay[]>();
+      for (const p of our) {
+        if (!p.contract) continue;
+        const arr = ourByContract.get(p.contract);
+        if (arr) arr.push(p);
+        else ourByContract.set(p.contract, [p]);
+      }
+
+      this.snapshot = {
+        builtAt: payload.builtAt ? new Date(payload.builtAt) : new Date(),
+        durationMs: Number(payload.durationMs) || 0,
+        pages: Number(payload.pages) || 0,
+        crm,
+        our,
+        crmByContract,
+        ourByContract,
+        partial: false,
+      };
+      this.progress.phase = 'done';
+      this.progress.pages = this.snapshot.pages;
+      this.progress.crmFetched = crm.length;
+      this.progress.ourRows = our.length;
+      this.progress.contracts = new Set([...crmByContract.keys(), ...ourByContract.keys()]).size;
+      this.log.log(
+        `CRM sverka snapshot tiklandi (DB'dan): CRM=${crm.length} · ОплатыКв=${our.length} · ` +
+        `shartnoma=${this.progress.contracts} · built ${payload.builtAt}`,
+      );
+    } catch (e: any) {
+      this.log.warn(`CRM sverka snapshot tiklashda xato (jiddiy emas): ${e?.message}`);
     }
   }
 
@@ -374,10 +516,12 @@ export class CrmSverkaService implements OnModuleInit {
 
     // ── 3) CRM sahifalari — parallel, kelgani sayin snapshot'ga qo'shiladi ──
     this.progress.phase = 'crm';
-    await this.fetchAllCrmPayments(snap);
+    const { complete } = await this.fetchAllCrmPayments(snap);
 
     // ── 4) Yakun ──
-    snap.partial = false;
+    // partial = tortish TABIIY tugamadi (xato/takror/MAX_* tufayli to'xtadi).
+    // Bunday chala natijani DB'ga SAQLAMAYMIZ — oxirgi yaxshi snapshot buzilmasin.
+    snap.partial = !complete;
     snap.builtAt = new Date();
     snap.durationMs = Date.now() - t0;
     snap.pages = this.progress.pages;
@@ -388,8 +532,18 @@ export class CrmSverkaService implements OnModuleInit {
     this.finishedAt = new Date();
     this.log.log(
       `CRM sverka tayyor: CRM=${snap.crm.length} (${snap.pages} sahifa) · ОплатыКв=${our.length} · ` +
-      `shartnoma=${this.progress.contracts} · ${Math.round(snap.durationMs / 1000)}s`,
+      `shartnoma=${this.progress.contracts} · ${Math.round(snap.durationMs / 1000)}s · ` +
+      `${complete ? 'TO\'LIQ' : 'QISMAN (saqlanmaydi)'}`,
     );
+
+    // Snapshotni DB'ga FAQAT to'liq va xatosiz bo'lsa saqlaymiz — keyingi
+    // restart/deploy'da qayta tortmasdan tiklanadi. Chala pull yaxshi snapshotni
+    // ustiga yozmasin (o'tkinchi CRM sahifa xatosi ma'lumotni buzmasin).
+    if (complete && !this.lastError) {
+      await this.persistSnapshot(snap);
+    } else {
+      this.log.warn('CRM sverka: natija qisman — snapshot DB\'ga saqlanmadi (oxirgi yaxshi snapshot saqlanib qoladi)');
+    }
   }
 
   /**
@@ -399,7 +553,7 @@ export class CrmSverkaService implements OnModuleInit {
    * Endi bir vaqtda CONCURRENCY ta sahifa so'raladi va har paket kelishi bilan
    * snapshot'ga qo'shiladi — natija tortish tugashini kutmaydi.
    */
-  private async fetchAllCrmPayments(snap: Snapshot): Promise<void> {
+  private async fetchAllCrmPayments(snap: Snapshot): Promise<{ complete: boolean }> {
     const LIMIT = this.runLimit;
     const CONCURRENCY = this.runConcurrency;
     const MAX_PAGES = 1000; // himoya chegarasi
@@ -408,6 +562,9 @@ export class CrmSverkaService implements OnModuleInit {
     let nextPage = 1;
     let stop = false;
     let lastGoodPage = 0;
+    // complete=true FAQAT tabiiy tugaganda (bo'sh sahifa yoki so'ralgandan kam kelib
+    // oxirgi sahifa). Xato/takror/MAX_* tufayli to'xtash — complete=false (qisman).
+    let complete = false;
 
     while (!stop && nextPage <= MAX_PAGES) {
       const pages: number[] = [];
@@ -438,7 +595,8 @@ export class CrmSverkaService implements OnModuleInit {
 
         const raw: any = (r as any).data?.data ?? (r as any).data;
         const pageItems: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
-        if (pageItems.length === 0) { stop = true; break; }
+        // Bo'sh sahifa — boshqa ma'lumot yo'q, tabiiy tugadi
+        if (pageItems.length === 0) { complete = true; stop = true; break; }
 
         // HIMOYA: CRM `page` ni e'tiborsiz qoldirsa — bir xil sahifa qayta-qayta
         // keladi va xotira to'lib ketadi. Sahifa "imzosi" takrorlansa — to'xtaymiz.
@@ -487,8 +645,8 @@ export class CrmSverkaService implements OnModuleInit {
           stop = true;
           break;
         }
-        // So'ralgandan kam keldi — bu oxirgi sahifa
-        if (pageItems.length < LIMIT) { stop = true; break; }
+        // So'ralgandan kam keldi — bu oxirgi sahifa (tabiiy tugadi)
+        if (pageItems.length < LIMIT) { complete = true; stop = true; break; }
       }
 
       // Har paketdan keyin shartnomalar sonini yangilaymiz (progress jonli ko'rinsin)
@@ -505,6 +663,8 @@ export class CrmSverkaService implements OnModuleInit {
       this.lastError = `CRM ${MAX_PAGES} sahifadan oshdi — ma'lumot to'liq emas`;
       this.log.warn(`CRM sverka: ${this.lastError}`);
     }
+
+    return { complete };
   }
 
   /** ОплатыКв — barcha qatorlar (ixcham select) */
