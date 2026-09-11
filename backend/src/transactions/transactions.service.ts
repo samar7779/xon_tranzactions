@@ -1689,8 +1689,9 @@ export class TransactionsService {
     verdict: string;
     foundOnDate: string | null;
     needsConfirm: boolean;
-    tx: { restored: boolean; id: string | null; externalId: string | null };
+    tx: { restored: boolean; alreadyExisted: boolean; id: string | null; externalId: string | null };
     oplata: { mode: 'history' | 'created' | 'exists' | 'skipped' | 'failed'; count: number; id: string | null; reason: string };
+    warnings: string[];
     message: string;
   }> {
     const r = await this.sync.restoreOneDeleted({ logId, force: opts.force, actor: opts.actor });
@@ -1698,7 +1699,7 @@ export class TransactionsService {
     const base = {
       verdict: r.verdict,
       foundOnDate: r.foundOnDate,
-      tx: { restored: r.txRestored, id: r.txId, externalId: r.externalId },
+      tx: { restored: r.txRestored, alreadyExisted: r.txAlreadyExists, id: r.txId, externalId: r.externalId },
     };
 
     // Tiklanmadi — sabab bilan qaytaramiz (not_in_bank bo'lsa tasdiq so'raladi)
@@ -1708,16 +1709,26 @@ export class TransactionsService {
         ok: r.ok,
         status: r.status,
         needsConfirm: r.status === 'not_in_bank',
+        warnings: [],
         oplata: { mode: 'skipped', count: 0, id: null, reason: 'Tranzaksiya tiklanmadi' },
         message: r.message,
       };
     }
 
+    // ── Ogohlantirishlar ──────────────────────────────────────────────
+    const warnings: string[] = [];
+    if (r.verdict === 'not_found') {
+      warnings.push("Bank ro'yxatida topilmadi — keyingi avtomatik sync bu to'lovni yana o'chirishi mumkin");
+    } else if (r.verdict === 'no_data' || r.verdict === 'skipped') {
+      warnings.push("Bankdan tekshirib bo'lmadi — to'lov bankda bor-yo'qligi tasdiqlanmagan");
+    }
+
     // ── ОплатыКв qismi ────────────────────────────────────────────────
-    // (a) tarixdan tiklandi
+    // (a) tarixdan tiklandi — split qiymatlari snapshot bilan birga qaytdi
     if (r.oplataRestored > 0) {
+      warnings.push(...(await this.splitStaleWarning(logId)));
       return {
-        ...base, ok: true, status: 'restored', needsConfirm: false,
+        ...base, ok: true, status: 'restored', needsConfirm: false, warnings,
         oplata: { mode: 'history', count: r.oplataRestored, id: null, reason: 'Tarixdagi nusxadan tiklandi' },
         message: `Tranzaksiya tiklandi · ОплатыКв: ${r.oplataRestored} ta qator tarixdan qaytarildi`,
       };
@@ -1727,7 +1738,7 @@ export class TransactionsService {
     const ref = r.externalId || r.txId;
     if (!ref) {
       return {
-        ...base, ok: true, status: 'restored', needsConfirm: false,
+        ...base, ok: true, status: 'restored', needsConfirm: false, warnings,
         oplata: { mode: 'skipped', count: 0, id: null, reason: "Tranzaksiya ID topilmadi" },
         message: "Tranzaksiya tiklandi · ОплатыКв: tekshirib bo'lmadi",
       };
@@ -1741,30 +1752,74 @@ export class TransactionsService {
 
     if (!add) {
       return {
-        ...base, ok: true, status: 'restored', needsConfirm: false,
+        ...base, ok: true, status: 'restored', needsConfirm: false, warnings,
         oplata: { mode: 'failed', count: 0, id: null, reason: "ОплатыКв'ga qo'shishda xatolik" },
         message: "Tranzaksiya tiklandi · ОплатыКв'ga qo'shib bo'lmadi",
       };
     }
     if (add.status === 'added') {
+      // Tranzaksiya bazada bor edi, faqat ОплатыКв qo'shildi — changelog hali
+      // "tiklandi" deb belgilanmagan bo'lishi mumkin, belgilaymiz
+      await this.markChangeLogRestored(logId, opts.actor);
+      warnings.push(...(await this.splitStaleWarning(logId)));
       return {
-        ...base, ok: true, status: 'restored', needsConfirm: false,
+        ...base, ok: true, status: 'restored', needsConfirm: false, warnings,
         oplata: { mode: 'created', count: 1, id: add.oplataKvId ?? null, reason: add.message },
         message: `Tranzaksiya tiklandi · ОплатыКв'ga qayta qo'shildi (${add.message})`,
       };
     }
     if (add.status === 'exists') {
       return {
-        ...base, ok: true, status: 'restored', needsConfirm: false,
+        ...base, ok: true, status: 'restored', needsConfirm: false, warnings,
         oplata: { mode: 'exists', count: 0, id: add.oplataKvId ?? null, reason: add.message },
         message: "Tranzaksiya tiklandi · ОплатыКв'da allaqachon bor",
       };
     }
     // not_client | no_contract | not_found — shartlarga mos emas, bu XATO emas
     return {
-      ...base, ok: true, status: 'restored', needsConfirm: false,
+      ...base, ok: true, status: 'restored', needsConfirm: false, warnings,
       oplata: { mode: 'skipped', count: 0, id: null, reason: add.message },
       message: `Tranzaksiya tiklandi · ОплатыКв: ${add.message}`,
     };
+  }
+
+  /**
+   * Tiklangan to'lovdan KEYINGI to'lovlar taqsimoti (1 взнос/oylik) eskirgan bo'lishi mumkin:
+   * WATERFALL sana tartibiga bog'liq — qator yo'q paytda keyingi to'lovlar grafikning
+   * o'sha qadamlarini egallab olgan bo'lishi mumkin. Avtomatik qayta hisoblamaymiz
+   * (qo'lda qo'yilgan kategoriyalarni yo'q qilardi) — foydalanuvchini ogohlantiramiz.
+   */
+  private async splitStaleWarning(logId: string): Promise<string[]> {
+    try {
+      const lg = await this.prisma.transactionChangeLog.findUnique({
+        where: { id: logId },
+        select: { contractNumber: true, txnDate: true },
+      });
+      if (!lg?.contractNumber || !lg.txnDate) return [];
+      const later = await this.prisma.oplataKv.count({
+        where: { contractNo: lg.contractNumber, date: { gt: lg.txnDate } },
+      });
+      if (later === 0) return [];
+      return [
+        `Bu shartnoma bo'yicha keyingi ${later} ta to'lov bor — 1 взнос/oylik taqsimoti ` +
+        `eskirgan bo'lishi mumkin, ОплатыКв'da tekshiring`,
+      ];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Changelog'ni "tiklandi" deb belgilaydi (agar hali belgilanmagan bo'lsa). */
+  private async markChangeLogRestored(logId: string, actor: string): Promise<void> {
+    try {
+      const lg = await this.prisma.transactionChangeLog.findUnique({
+        where: { id: logId }, select: { note: true },
+      });
+      if (!lg || (lg.note || '').includes('[TIKLANDI')) return;
+      await this.prisma.transactionChangeLog.update({
+        where: { id: logId },
+        data: { note: `${lg.note || ''} [TIKLANDI ${new Date().toISOString().slice(0, 10)} · ${actor}]`.slice(0, 990) },
+      });
+    } catch { /* belgilash — asosiy amalga to'siq emas */ }
   }
 }

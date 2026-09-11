@@ -512,7 +512,9 @@ export default function ChangesPage() {
         onClose={() => setRecoverOpen(false)}
         onSuccess={() => qc.invalidateQueries({ queryKey: ['transactions-changes'] })}
       />
+      {/* key — har qator uchun yangi nusxa: oldingi qatorning natijasi (force holati) qolib ketmasin */}
       <RestoreOneDialog
+        key={restoreItem?.id || 'none'}
         item={restoreItem}
         onClose={() => setRestoreItem(null)}
         onSuccess={() => {
@@ -538,8 +540,9 @@ interface RestoreResp {
   verdict: string;
   foundOnDate: string | null;
   needsConfirm: boolean;
-  tx: { restored: boolean; id: string | null; externalId: string | null };
+  tx: { restored: boolean; alreadyExisted: boolean; id: string | null; externalId: string | null };
   oplata: { mode: 'history' | 'created' | 'exists' | 'skipped' | 'failed'; count: number; id: string | null; reason: string };
+  warnings?: string[];
   message: string;
 }
 
@@ -629,10 +632,21 @@ function RestoreOneDialog({
         {res && res.needsConfirm && !mut.isPending && (
           <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-3 text-[12.5px] text-amber-900 dark:text-amber-200">
             <div className="font-bold flex items-center gap-1.5 mb-1">
-              <AlertOctagon className="h-4 w-4" /> Bankda topilmadi
+              <AlertOctagon className="h-4 w-4" />
+              {res.verdict === 'not_found' ? 'Bankda topilmadi' : "Bankdan tekshirib bo'lmadi"}
             </div>
-            Bu to&apos;lov bank ro&apos;yxatida (±3 kun) yo&apos;q — bank haqiqatan bekor qilgan bo&apos;lishi mumkin.
-            Baribir tiklasangiz, bazada bankda mavjud bo&apos;lmagan to&apos;lov paydo bo&apos;ladi.
+            {res.verdict === 'not_found' ? (
+              <>
+                Bu to&apos;lov bank ro&apos;yxatida (±3 kun) yo&apos;q — bank haqiqatan bekor qilgan bo&apos;lishi mumkin.
+                Baribir tiklasangiz, bazada bankda mavjud bo&apos;lmagan to&apos;lov paydo bo&apos;ladi va
+                keyingi avtomatik sync uni yana o&apos;chirishi mumkin.
+              </>
+            ) : (
+              <>
+                Hisob yoki bank API mavjud emas — to&apos;lov bankda bor-yo&apos;qligini tasdiqlab bo&apos;lmadi.
+                Tiklash uchun tasdiqlang.
+              </>
+            )}
           </div>
         )}
 
@@ -645,7 +659,7 @@ function RestoreOneDialog({
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-600 dark:text-slate-300">Tranzaksiya</span>
               <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                {res.tx.restored ? 'qaytarildi' : 'bazada bor edi'}
+                {res.tx.restored ? 'qaytarildi' : res.tx.alreadyExisted ? 'bazada bor edi' : 'qaytarilmadi'}
               </span>
             </div>
             <div className="flex items-start justify-between gap-3">
@@ -657,16 +671,20 @@ function RestoreOneDialog({
                 </span>
               </span>
             </div>
-            {res.verdict && res.verdict !== 'skipped' && (
-              <div className="flex items-center justify-between gap-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-900">
-                <span className="text-slate-600 dark:text-slate-300">Bank tekshiruvi</span>
-                <span className="text-[11px] text-slate-600 dark:text-slate-300">
-                  {res.verdict === 'found' ? 'bankda bor' :
-                   res.verdict === 'shifted' ? `bankda bor (${res.foundOnDate})` :
-                   res.verdict === 'not_found' ? 'bankda topilmadi (majburiy tiklandi)' : 'tekshirib bo\'lmadi'}
-                </span>
+            <div className="flex items-center justify-between gap-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-900">
+              <span className="text-slate-600 dark:text-slate-300">Bank tekshiruvi</span>
+              <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                {res.verdict === 'found' ? 'bankda bor' :
+                 res.verdict === 'shifted' ? `bankda bor (${res.foundOnDate})` :
+                 res.verdict === 'not_found' ? 'bankda topilmadi (majburiy tiklandi)' :
+                 res.tx.alreadyExisted ? 'shart emas edi (tranzaksiya bazada bor)' : 'tekshirib bo\'lmadi'}
+              </span>
+            </div>
+            {(res.warnings || []).map((w, i) => (
+              <div key={i} className="flex items-start gap-1.5 text-[11.5px] text-amber-800 dark:text-amber-300 pt-1">
+                <AlertOctagon className="h-3.5 w-3.5 shrink-0 mt-0.5" /> <span>{w}</span>
               </div>
-            )}
+            ))}
           </div>
         )}
 

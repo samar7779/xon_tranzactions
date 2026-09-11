@@ -1502,6 +1502,7 @@ export class SyncService implements OnModuleInit {
     verdict: 'found' | 'shifted' | 'not_found' | 'no_data' | 'skipped';
     foundOnDate: string | null;
     txRestored: boolean;
+    txAlreadyExists: boolean;
     txId: string | null;
     externalId: string | null;
     oplataRestored: number;
@@ -1509,7 +1510,7 @@ export class SyncService implements OnModuleInit {
   }> {
     const empty = {
       ok: false, verdict: 'skipped' as const, foundOnDate: null,
-      txRestored: false, txId: null, externalId: null, oplataRestored: 0,
+      txRestored: false, txAlreadyExists: false, txId: null, externalId: null, oplataRestored: 0,
     };
     const lg = await this.prisma.transactionChangeLog.findUnique({ where: { id: opts.logId } });
     if (!lg) return { ...empty, status: 'not_found', message: 'Yozuv topilmadi' };
@@ -1548,26 +1549,35 @@ export class SyncService implements OnModuleInit {
         if (v) { verdict = v.status; foundOnDate = v.foundOnDate; }
       }
     }
-    if (verdict === 'not_found' && !opts.force) {
-      return { ...empty, status: 'not_in_bank', verdict, externalId: lg.externalId,
-        message: "Bu to'lov bankda topilmadi — bank haqiqatan o'chirgan bo'lishi mumkin. " +
-          'Baribir tiklash uchun tasdiqlang.' };
+    // Tasdiq QOIDASI: tranzaksiya bazada yo'q bo'lsa, faqat bank ANIQ tasdiqlagan
+    // holatda ('found'/'shifted') tasdiqsiz tiklanadi. Qolgan hamma holat —
+    // 'not_found' (bankda yo'q), 'no_data'/'skipped' (tekshirib bo'lmadi) — tasdiq talab qiladi.
+    if (!txAlreadyExists && verdict !== 'found' && verdict !== 'shifted' && !opts.force) {
+      return {
+        ...empty, status: 'not_in_bank', verdict, foundOnDate, externalId: lg.externalId,
+        message: verdict === 'not_found'
+          ? "Bu to'lov bankda topilmadi — bank haqiqatan o'chirgan bo'lishi mumkin. Baribir tiklash uchun tasdiqlang."
+          : "Bankdan tekshirib bo'lmadi (hisob yoki bank API mavjud emas). Tiklash uchun tasdiqlang.",
+      };
     }
 
     const r = await this.restoreDeletedLog(lg, opts.actor).catch((e) => {
       this.logger.warn(`restoreOneDeleted xato (${lg.externalId}): ${e?.message}`);
       return null;
     });
-    if (!r) {
-      return { ...empty, status: 'failed', verdict, foundOnDate, externalId: lg.externalId,
-        message: 'Tiklashda xatolik — loglarni tekshiring' };
+    // Hech narsa tiklanmadi — buni MUVAFFAQIYAT deb ko'rsatmaymiz
+    if (!r || (!r.tx && !txAlreadyExists && r.oplata === 0)) {
+      return {
+        ...empty, status: 'failed', verdict, foundOnDate, externalId: lg.externalId,
+        message: "Tiklab bo'lmadi — snapshot'dan yozib bo'lmadi (server loglarini tekshiring)",
+      };
     }
     this.logger.log(
       `restoreOneDeleted: ${lg.externalId} tiklandi (tx=${r.tx}, mavjud=${txAlreadyExists}, ` +
       `ОплатыКв=${r.oplata}, verdict=${verdict}, actor=${opts.actor})`,
     );
     return {
-      ok: true, status: 'restored', verdict, foundOnDate,
+      ok: true, status: 'restored', verdict, foundOnDate, txAlreadyExists,
       txRestored: r.tx, txId: existing?.id ?? old.id, externalId: lg.externalId, oplataRestored: r.oplata,
       message: r.tx
         ? 'Tranzaksiya tiklandi'
@@ -1680,6 +1690,19 @@ export class SyncService implements OnModuleInit {
       txOk = true;
     } catch (e: any) {
       this.logger.warn(`restore tx xato (${lg.externalId}): ${e?.message?.slice(0, 200)}`);
+    }
+    // MUHIM: tranzaksiya yozilmagan bo'lsa VA bazada ham yo'q bo'lsa — ОплатыКв'ni
+    // TIKLAMAYMIZ. Aks holda tranzaksiyasiz "yetim" to'lov qatori paydo bo'lardi
+    // (u eksport/API/hisobotlarga chiqadi, lekin tranzaksiyasi yo'q).
+    if (!txOk) {
+      const txExists = await this.prisma.transaction.findFirst({
+        where: { OR: [{ id: old.id }, ...(lg.externalId ? [{ externalId: lg.externalId }] : [])] },
+        select: { id: true },
+      }).catch(() => null);
+      if (!txExists) {
+        this.logger.warn(`restore to'xtatildi (${lg.externalId}): tranzaksiya tiklanmadi — ОплатыКв'ga tegilmadi`);
+        return { tx: false, oplata: 0 };
+      }
     }
     // Bog'langan ОплатыКв — oplataKvHistory (action='deleted').
     // IKKI kalit: note ichidagi `txId=<id>` (kaskad o'chirish) VA oplataKvId = externalId
