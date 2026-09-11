@@ -181,15 +181,16 @@ export interface SverkaRow {
 type RunPhase = 'idle' | 'crm' | 'db' | 'compute' | 'done' | 'error';
 
 /**
- * Sahifa hajmi. XonPay sync 5000 ishlatadi, lekin u fonda (cron) ishlaydi —
- * bu yerda foydalanuvchi kutib turadi, shuning uchun kichikroq sahifa:
- * birinchi javob tezroq keladi va progress "0 sahifa"da qotib qolmaydi.
+ * Sahifa hajmi. Bekor shartnomalar qo'shilgach CRM to'lovlari ~6 barobar oshdi
+ * (36k → 228k+). Endi snapshot DB'ga saqlanib, boot'da tiklanadi + cron avto —
+ * ya'ni foydalanuvchi odatda tortishni KUTMAYDI. Shu sabab kattaroq sahifa +
+ * ko'proq parallel: umumiy so'rovlar soni kamayadi, tortish sezilarli tezlashadi.
  */
-const DEFAULT_PAGE_LIMIT = 2000;
+const DEFAULT_PAGE_LIMIT = 5000;
 /** Bitta sahifa uchun timeout — payment-history og'ir endpoint (60s ba'zan yetmaydi) */
 const DEFAULT_PAGE_TIMEOUT_MS = 180_000;
 /** Bir vaqtda nechta sahifa so'ralsin — ketma-ket tortish juda sekin edi */
-const DEFAULT_CONCURRENCY = 6;
+const DEFAULT_CONCURRENCY = 8;
 
 /** Run holati DB'da shu kalit ostida — server restartidan keyin ham bilinadi */
 const RUN_STATE_KEY = 'crmSverka.lastRun';
@@ -253,25 +254,37 @@ export class CrmSverkaService implements OnModuleInit {
     // ── 2) Oldingi run 'running' holatida qolib ketganmi (jarayon uzilgan)? ──
     try {
       const row = await this.prisma.setting.findUnique({ where: { key: RUN_STATE_KEY } });
-      if (!row?.value) return;
-      const st = JSON.parse(row.value);
-      if (st?.status !== 'running') return;
-
-      // Uzilib qolgan run — DB'da 'crashed' deb belgilaymiz
-      await this.saveRunState({ ...st, status: 'crashed', finishedAt: new Date().toISOString() });
-
-      if (this.snapshot) {
-        // Snapshot tiklandi — foydalanuvchini bezovta qilmaymiz, oxirgi natija ko'rinadi
-        this.log.warn(`CRM sverka: oldingi run uzilgan (${st.startedAt}), lekin oxirgi snapshot tiklandi`);
-      } else {
-        this.lastError =
-          "Oldingi tortish o'rtada uzilib qoldi (server qayta ishga tushgan bo'lishi mumkin). " +
-          'Qaytadan urinib ko\'ring — kerak bo\'lsa sahifa hajmini kichraytiring.';
-        this.progress.phase = 'error';
-        this.log.warn(`CRM sverka: uzilib qolgan run topildi (${st.startedAt}) — 'crashed' deb belgilandi`);
+      if (row?.value) {
+        const st = JSON.parse(row.value);
+        if (st?.status === 'running') {
+          // Uzilib qolgan run — DB'da 'crashed' deb belgilaymiz
+          await this.saveRunState({ ...st, status: 'crashed', finishedAt: new Date().toISOString() });
+          if (this.snapshot) {
+            this.log.warn(`CRM sverka: oldingi run uzilgan (${st.startedAt}), lekin oxirgi snapshot tiklandi`);
+          } else {
+            this.log.warn(`CRM sverka: uzilib qolgan run topildi (${st.startedAt}) — 'crashed' deb belgilandi`);
+          }
+        }
       }
     } catch (e: any) {
       this.log.warn(`CRM sverka run holatini o'qishda xato (jiddiy emas): ${e?.message}`);
+    }
+
+    // ── 3) Snapshot yo'q bo'lsa — SERVER O'ZI fonda tortadi (brauzer ochiq
+    //       turishi SHART EMAS). Deploy/restartdan keyin bir marta tortiladi va
+    //       saqlanadi; foydalanuvchi kirsa TAYYOR turadi — jonli tortishni hech
+    //       qachon kutmaydi. Bu — "sahifa sekin ochiladi" muammosining tub yechimi.
+    if (!this.snapshot && !this.running) {
+      this.lastError = null;
+      this.progress.phase = 'idle';
+      this.log.log("CRM sverka: snapshot yo'q — boot'da avtomatik fon tortish rejalashtirildi");
+      // Boot'ni bloklamaymiz; DB/CRM ulanishlari tayyor bo'lishi uchun kichik kechikish
+      setTimeout(() => {
+        if (!this.snapshot && !this.running) {
+          this.log.log("CRM sverka: boot avto-tortish boshlandi (server-side)");
+          this.start('avto (boot)');
+        }
+      }, 8000);
     }
   }
 
