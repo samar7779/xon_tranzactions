@@ -40,6 +40,8 @@ export interface CrmSverkaRow {
   diffInitial: number;
   diffMonthly: number;
   splitMismatch: boolean;
+  crmReversed?: boolean;
+  crmReversalSum?: number;
   status: 'ok' | 'mismatch' | 'crm-only' | 'our-only';
   lastDate: string | null;
   methods: string[];
@@ -856,6 +858,17 @@ function ContractRow({ row, onClick }: { row: CrmSverkaRow; onClick: () => void 
           {row.object && (
             <span className="text-[10.5px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 truncate max-w-[160px]">
               {row.object}
+            </span>
+          )}
+          {row.crmReversed && (
+            <span
+              title={t('reversedHint')}
+              className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300 ring-1 ring-orange-200 dark:ring-orange-900 font-semibold"
+            >
+              ↩ {t('reversedBadge')}
+              {typeof row.crmReversalSum === 'number' && (
+                <b className="tabular-nums">{m(Math.abs(row.crmReversalSum))}</b>
+              )}
             </span>
           )}
         </div>

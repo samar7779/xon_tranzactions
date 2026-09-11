@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   X, Loader2, CheckCircle2, AlertTriangle, Cloud, Database,
-  CalendarClock, Coins, Copy, Check, ArrowRightLeft,
+  CalendarClock, Coins, Copy, Check, ArrowRightLeft, RotateCcw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
@@ -56,10 +56,12 @@ interface DetailResponse {
     amountDiff: Pair[];
     onlyCrm: CrmPayDto[];
     onlyOur: OurPayDto[];
+    reversals?: CrmPayDto[];
   };
   counts: {
     matched: number; dateShift: number; amountDiff: number;
     onlyCrm: number; onlyOur: number; onlyCrmSum: number; onlyOurSum: number;
+    reversals?: number; reversalsSum?: number;
   };
 }
 
@@ -117,7 +119,7 @@ export function CrmContractDrilldown({
   if (!mounted) return null;
 
   const c = data?.counts;
-  const hasDiff = !!c && (c.onlyCrm > 0 || c.onlyOur > 0 || c.amountDiff > 0);
+  const hasDiff = !!c && (c.onlyCrm > 0 || c.onlyOur > 0 || c.amountDiff > 0 || (c.reversals ?? 0) > 0);
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 sm:p-6 overflow-y-auto bg-slate-900/50 backdrop-blur-sm">
@@ -140,6 +142,14 @@ export function CrmContractDrilldown({
                 >
                   {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
                 </button>
+                {(data?.counts.reversals ?? 0) > 0 && (
+                  <span
+                    title={t('reversedHint')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300 ring-1 ring-orange-200 dark:ring-orange-900"
+                  >
+                    ↩ {t('reversedBadge')}
+                  </span>
+                )}
               </div>
               <div className="text-[12px] text-slate-600 dark:text-slate-300 mt-0.5 truncate">
                 {data?.client || row.client || '—'}
@@ -203,6 +213,24 @@ export function CrmContractDrilldown({
                 <div className="flex items-center gap-2 px-3.5 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-200 dark:ring-emerald-900 text-[12px] font-semibold text-emerald-800 dark:text-emerald-300">
                   <CheckCircle2 className="h-4 w-4" /> {t('ddNoDiff')}
                 </div>
+              )}
+
+              {/* ── QAYTARIM (Возврат) — CRM manfiy yozuvlari (bekor/qayta rasmiylashtirilgan) ── */}
+              {(data.pairs.reversals?.length ?? 0) > 0 && (
+                <Section
+                  title={t('ddReversals')}
+                  hint={t('ddReversalsHint')}
+                  count={data.counts.reversals ?? 0}
+                  sum={data.counts.reversalsSum}
+                  tone="orange"
+                  icon={<RotateCcw className="h-3.5 w-3.5" />}
+                >
+                  <div className="divide-y divide-orange-100/70 dark:divide-orange-950">
+                    {data.pairs.reversals!.map((p, i) => (
+                      <SinglePayRow key={`rv-${i}`} date={p.date} amount={p.amount} tags={[p.method, p.type, p.status]} tone="orange" />
+                    ))}
+                  </div>
+                </Section>
               )}
 
               {/* ── FAQAT CRM'DA ── */}
@@ -323,7 +351,7 @@ function Section({
   hint?: string;
   count: number;
   sum?: number;
-  tone: 'rose' | 'violet' | 'amber' | 'sky';
+  tone: 'rose' | 'violet' | 'amber' | 'sky' | 'orange';
   icon: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -332,6 +360,7 @@ function Section({
     violet: { ring: 'ring-violet-200 dark:ring-violet-900', head: 'bg-violet-50/70 dark:bg-violet-950/30 text-violet-800 dark:text-violet-300' },
     amber:  { ring: 'ring-amber-200 dark:ring-amber-900',   head: 'bg-amber-50/70 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300' },
     sky:    { ring: 'ring-sky-200 dark:ring-sky-900',       head: 'bg-sky-50/70 dark:bg-sky-950/30 text-sky-800 dark:text-sky-300' },
+    orange: { ring: 'ring-orange-200 dark:ring-orange-900', head: 'bg-orange-50/70 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300' },
   }[tone];
 
   return (
@@ -361,12 +390,13 @@ function SinglePayRow({
   amount: number;
   tags: (string | null)[];
   note?: string | null;
-  tone: 'rose' | 'violet' | 'emerald';
+  tone: 'rose' | 'violet' | 'emerald' | 'orange';
 }) {
   const amountColor = {
     rose: 'text-rose-700 dark:text-rose-300',
     violet: 'text-violet-700 dark:text-violet-300',
     emerald: 'text-emerald-700 dark:text-emerald-300',
+    orange: 'text-orange-700 dark:text-orange-300',
   }[tone];
 
   return (

@@ -173,6 +173,10 @@ export interface SverkaRow {
   diffMonthly: number; // ourMonthly - crmMonthly
   /** Jami mos, lekin TAQSIMOT farq qiladi — split xato bo'lgan holat */
   splitMismatch: boolean;
+  /** CRM'da qaytarim (manfiy) yozuv bor — shartnoma bekor / qayta rasmiylashtirilgan */
+  crmReversed: boolean;
+  /** Qaytarim (manfiy CRM) summasi — manfiy son (0 = qaytarim yo'q) */
+  crmReversalSum: number;
   status: 'ok' | 'mismatch' | 'crm-only' | 'our-only';
   lastDate: string | null;
   methods: string[];
@@ -846,12 +850,14 @@ export class CrmSverkaService implements OnModuleInit {
       let crmTotal = 0;
       let crmInitial = 0;
       let crmMonthly = 0;
+      let crmReversalSum = 0; // manfiy CRM yozuvlar yig'indisi (qaytarim)
       let lastDate = '';
       const methods = new Set<string>();
       for (const p of crmList) {
         crmTotal += p.amount;
         // CRM to'lov turi bo'yicha (boshlang'ich / oylik)
         if (p.kind === 'initial') crmInitial += p.amount; else crmMonthly += p.amount;
+        if (p.amount < 0) crmReversalSum += p.amount; // qaytarim (Возврат)
         if (p.date > lastDate) lastDate = p.date;
         if (p.method) methods.add(p.method);
       }
@@ -906,6 +912,8 @@ export class CrmSverkaService implements OnModuleInit {
         diffInitial,
         diffMonthly,
         splitMismatch,
+        crmReversed: cents(crmReversalSum) < 0,
+        crmReversalSum,
         status,
         lastDate: lastDate || null,
         methods: Array.from(methods),
@@ -1191,7 +1199,13 @@ export class CrmSverkaService implements OnModuleInit {
     }
 
     // ── 4) Qolganlar ──
-    const onlyCrm = crmLeft.filter((c) => !c.used).map((c) => this.crmDto(c.p));
+    // MANFIY CRM yozuvlari = QAYTARIM (Возврат / storno): CRM shu to'lovlarni
+    // qaytargan (shartnoma bekor / qayta rasmiylashtirilgan). Ularni "faqat
+    // CRM'da"dan AJRATAMIZ — aks holda manfiy summa oddiy "yetishmayotgan to'lov"
+    // bilan aralashib chalkash ko'rinadi.
+    const unusedCrm = crmLeft.filter((c) => !c.used);
+    const reversals = unusedCrm.filter((c) => c.p.amount < 0).map((c) => this.crmDto(c.p));
+    const onlyCrm = unusedCrm.filter((c) => c.p.amount >= 0).map((c) => this.crmDto(c.p));
     const onlyOur = ourLeft.filter((o) => !o.used).map((o) => this.ourDto(o.p));
 
     const crmTotal = crmList.reduce((a, p) => a + p.amount, 0);
@@ -1221,6 +1235,7 @@ export class CrmSverkaService implements OnModuleInit {
         amountDiff,
         onlyCrm,
         onlyOur,
+        reversals,
       },
       counts: {
         matched: matched.length,
@@ -1230,6 +1245,8 @@ export class CrmSverkaService implements OnModuleInit {
         onlyOur: onlyOur.length,
         onlyCrmSum: onlyCrm.reduce((a: number, p: any) => a + p.amount, 0),
         onlyOurSum: onlyOur.reduce((a: number, p: any) => a + p.amount, 0),
+        reversals: reversals.length,
+        reversalsSum: reversals.reduce((a: number, p: any) => a + p.amount, 0),
       },
     };
   }
