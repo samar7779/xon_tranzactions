@@ -272,10 +272,10 @@ export class GoogleExportService {
    */
   async readContractPayment(sheetId: string, contractNo: string): Promise<{
     ok: boolean; available: boolean; reason?: string; sheetName?: string;
-    initial: number; monthly: number; total: number; matchedRows: number;
+    initial: number; monthly: number; total: number; matchedRows: number; rowsScanned?: number;
     payments: Array<{ row: number; first: number; monthly: number; total: number }>;
   }> {
-    const empty = { ok: false, available: false, initial: 0, monthly: 0, total: 0, matchedRows: 0, payments: [] as any[] };
+    const empty = { ok: false, available: false, initial: 0, monthly: 0, total: 0, matchedRows: 0, rowsScanned: 0, payments: [] as any[] };
     const target = String(contractNo || '').replace(/[\s\-_./№]/g, '').toUpperCase();
     if (!target) return { ...empty, reason: "contract bo'sh" };
 
@@ -311,13 +311,14 @@ export class GoogleExportService {
     const spreadsheetId = this.normalizeSpreadsheetId(cfg.spreadsheetId); // config'da to'liq URL bo'lishi mumkin
     if (!spreadsheetId) return { ...empty, sheetName: cfg.name, reason: 'Spreadsheet ID topilmadi' };
     const quotedTab = this.quoteTab(String(cfg.tabName || '').trim());
-    const startRow = Math.max(1, Number(cfg.startRow) || 1);
     let values: any[][] = [];
     try {
       const api = this.makeSheetsClient(creds);
       const resp = await api.spreadsheets.values.get({
         spreadsheetId,
-        range: `${quotedTab}!A${startRow}:${idxToLetter(maxIdx)}`,
+        // BUTUN sheetni row 1 dan o'qiymiz — config.startRow (yozish uchun) katta bo'lsa ham
+        // yuqoridagi qatorlar tushib qolmasin (shartnomaning HAMMA qatori topilsin).
+        range: `${quotedTab}!A1:${idxToLetter(maxIdx)}`,
         // XOM raqam (formatlangan "4 535 420,00" satr EMAS) — rus vergul-o'nlik ×100 xatosini oldini oladi
         valueRenderOption: 'UNFORMATTED_VALUE',
       });
@@ -333,7 +334,7 @@ export class GoogleExportService {
       // Forward-fill (merge'siz "bir marta yozib pastda bo'sh") ATAYIN qilinmagan: subtotal
       // ("Итого") qatori shartnomaga noto'g'ri qo'shilib double-count berishi mumkin. Merge'siz
       // sheet kamroq ko'rsatadi (xavfsiz, ko'zga tashlanadi) — double-count'dan afzal.
-      const base = startRow - 1; // values[i] → 0-based sheet qatori = base + i
+      const base = 0; // A1 dan o'qildi → values[i] = 0-based sheet qatori i
       try {
         const meta = await api.spreadsheets.get({
           spreadsheetId,
@@ -369,10 +370,10 @@ export class GoogleExportService {
       const t = tIdx >= 0 ? num(r[tIdx]) : (f + m); // jami ustuni yo'q bo'lsa boshlang'ich+oylik
       initial += f; monthly += m; total += t;
       matchedRows++;
-      payments.push({ row: startRow + i, first: f, monthly: m, total: t });
+      payments.push({ row: 1 + i, first: f, monthly: m, total: t });
     });
 
-    return { ok: true, available: true, sheetName: cfg.name, initial, monthly, total, matchedRows, payments };
+    return { ok: true, available: true, sheetName: cfg.name, initial, monthly, total, matchedRows, rowsScanned: values.length, payments };
   }
 
   async saveConfig(sheets: SheetTarget[], updatedBy?: string) {
