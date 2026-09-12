@@ -317,6 +317,8 @@ export class GoogleExportService {
       const resp = await api.spreadsheets.values.get({
         spreadsheetId,
         range: `${quotedTab}!A${Math.max(1, Number(cfg.startRow) || 1)}:${idxToLetter(maxIdx)}`,
+        // XOM raqam (formatlangan "4 535 420,00" satr EMAS) — rus vergul-o'nlik ×100 xatosini oldini oladi
+        valueRenderOption: 'UNFORMATTED_VALUE',
       });
       values = resp.data.values || [];
     } catch (e: any) {

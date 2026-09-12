@@ -260,6 +260,8 @@ function ContractCard({ res, cols, tr, showPayments }: { res: ContractResult; co
     return vals.length < 2 || vals.every((v) => Math.abs(v - vals[0]) < 1);
   };
   const hasCrmCol = cols.some((c) => c.key === 'crm');
+  // Kelishilgan narx CRM'dan — mavjud bo'lsa qoldiqni HAR bir manba uchun hisoblaymiz
+  const price = res.crm?.found ? (res.crm.price ?? null) : null;
 
   const metricRow = (label: string, metric: 'initial' | 'monthly' | 'total', strong?: boolean) => {
     const ok = same(metric);
@@ -304,14 +306,21 @@ function ContractCard({ res, cols, tr, showPayments }: { res: ContractResult; co
             {metricRow(tr('payment.initial'), 'initial')}
             {metricRow(tr('payment.monthly'), 'monthly')}
             {metricRow(tr('payment.total'), 'total', true)}
-            {hasCrmCol && (
+            {price != null && (
               <tr>
                 <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{tr('payment.remaining')}</td>
-                {cols.map((c) => (
-                  <td key={c.key} className={cn('px-4 py-2.5 text-right tabular-nums', c.key === 'crm' ? ((res.crm?.remaining ?? 0) > 0 ? 'font-bold text-amber-600 dark:text-amber-400' : 'font-bold text-emerald-600 dark:text-emerald-400') : 'text-slate-300 dark:text-slate-600')}>
-                    {c.key === 'crm' && res.crm?.found ? money(res.crm.remaining) : '—'}
-                  </td>
-                ))}
+                {cols.map((c) => {
+                  const t = val(c.key, 'total');
+                  const rem = t == null ? null : price - t;
+                  return (
+                    <td key={c.key} className={cn('px-4 py-2.5 text-right tabular-nums font-bold',
+                      rem == null ? 'text-slate-300 dark:text-slate-600'
+                        : rem > 0 ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-emerald-600 dark:text-emerald-400')}>
+                      {rem == null ? '—' : money(rem)}
+                    </td>
+                  );
+                })}
                 <td className="px-3 py-2.5"> </td>
               </tr>
             )}
