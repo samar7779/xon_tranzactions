@@ -2677,7 +2677,11 @@
       "rows": "{n} rows",
       "crmNotFound": "Not found in CRM",
       "sheetNa": "Sheet did not return this contract",
-      "paymentsList": "Payments list (each)"
+      "paymentsList": "Payments list (each)",
+      "loading": "Reading from sources...",
+      "statusMatch": "Match",
+      "statusDiff": "Differs",
+      "resultSummary": "{n} contracts · {ok} match · {diff} differ"
     },
     "newCheck": "New check",
     "mode": {

@@ -2677,7 +2677,11 @@
       "rows": "{n} строк",
       "crmNotFound": "Не найдено в CRM",
       "sheetNa": "Sheet не дал этот договор",
-      "paymentsList": "Список платежей (по каждому)"
+      "paymentsList": "Список платежей (по каждому)",
+      "loading": "Чтение из источников...",
+      "statusMatch": "Совпадает",
+      "statusDiff": "Различие",
+      "resultSummary": "{n} договоров · {ok} совпадает · {diff} различие"
     },
     "newCheck": "Новая проверка",
     "mode": {

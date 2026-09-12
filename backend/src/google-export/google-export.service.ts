@@ -311,21 +311,55 @@ export class GoogleExportService {
     const spreadsheetId = this.normalizeSpreadsheetId(cfg.spreadsheetId); // config'da to'liq URL bo'lishi mumkin
     if (!spreadsheetId) return { ...empty, sheetName: cfg.name, reason: 'Spreadsheet ID topilmadi' };
     const quotedTab = this.quoteTab(String(cfg.tabName || '').trim());
+    const startRow = Math.max(1, Number(cfg.startRow) || 1);
     let values: any[][] = [];
     try {
       const api = this.makeSheetsClient(creds);
       const resp = await api.spreadsheets.values.get({
         spreadsheetId,
-        range: `${quotedTab}!A${Math.max(1, Number(cfg.startRow) || 1)}:${idxToLetter(maxIdx)}`,
+        range: `${quotedTab}!A${startRow}:${idxToLetter(maxIdx)}`,
         // XOM raqam (formatlangan "4 535 420,00" satr EMAS) — rus vergul-o'nlik ×100 xatosini oldini oladi
         valueRenderOption: 'UNFORMATTED_VALUE',
       });
       values = resp.data.values || [];
+
+      // ── MERGED shartnoma katagini hal qilish ──
+      // Guruhlangan hisobotda ('Сотув бўлими') shartnoma katagi vertikal MERGE bo'ladi:
+      // qiymat FAQAT anchor (yuqori) qatorda saqlanadi, values.get qolgan qatorlar uchun
+      // BO'SH qaytaradi → bir shartnomaning bir necha qatoridan faqat bittasi (anchor) mos
+      // kelardi. Merge diapazonlaridan anchor qiymatini blokdagi barcha qatorlarga tarqatamiz.
+      // Merge diapazonlaridan anchor qiymatini blokdagi BO'SH kataklariga tarqatamiz.
+      // FAQAT bo'sh katak to'ldiriladi → anchor qatori qayta hisoblanmaydi (double-count YO'Q).
+      // Forward-fill (merge'siz "bir marta yozib pastda bo'sh") ATAYIN qilinmagan: subtotal
+      // ("Итого") qatori shartnomaga noto'g'ri qo'shilib double-count berishi mumkin. Merge'siz
+      // sheet kamroq ko'rsatadi (xavfsiz, ko'zga tashlanadi) — double-count'dan afzal.
+      const base = startRow - 1; // values[i] → 0-based sheet qatori = base + i
+      try {
+        const meta = await api.spreadsheets.get({
+          spreadsheetId,
+          ranges: [String(cfg.tabName || '').trim()],
+          fields: 'sheets(merges)',
+        });
+        const merges = (meta.data.sheets?.[0] as any)?.merges || [];
+        for (const mg of merges as any[]) {
+          const s = Number(mg.startColumnIndex), e = Number(mg.endColumnIndex);
+          if (!(s <= cIdx && cIdx < e)) continue;      // faqat shartnoma ustunini qamragan merge
+          const r0 = Number(mg.startRowIndex), r1 = Number(mg.endRowIndex);
+          if (r1 - r0 <= 1) continue;                   // faqat vertikal (ko'p qatorli) merge
+          const anchorVal = values[r0 - base]?.[cIdx];
+          if (anchorVal == null || String(anchorVal).trim() === '') continue;
+          for (let ar = r0; ar < r1; ar++) {
+            const rel = ar - base;
+            if (rel < 0 || rel >= values.length) continue;
+            if (!values[rel]) values[rel] = [];
+            const cur = values[rel][cIdx];
+            if (cur == null || String(cur).trim() === '') values[rel][cIdx] = anchorVal; // faqat bo'shini
+          }
+        }
+      } catch { /* merges o'qib bo'lmasa — oddiy (merge'siz) o'qishga qaytamiz */ }
     } catch (e: any) {
       return { ...empty, sheetName: cfg.name, reason: this.extractApiError(e) };
     }
-
-    const startRow = Math.max(1, Number(cfg.startRow) || 1);
     let initial = 0, monthly = 0, total = 0, matchedRows = 0;
     const payments: Array<{ row: number; first: number; monthly: number; total: number }> = [];
     values.forEach((r, i) => {

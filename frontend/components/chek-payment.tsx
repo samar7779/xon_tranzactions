@@ -202,13 +202,26 @@ export function ChekPayment() {
       </Card>
 
       {/* ── Natija ── */}
-      {isLoading && <Card className="border-0 shadow-soft"><div className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-500" /></div></Card>}
+      {isLoading && submitted && (
+        <>
+          {submitted.contracts.slice(0, 2).map((c) => (
+            <LoadingCard key={c} contract={c} cols={cols} tr={tr} />
+          ))}
+        </>
+      )}
       {error && !isLoading && <Card className="border-0 shadow-soft"><div className="p-6 text-center text-[13px] text-rose-600 dark:text-rose-400">{(error as any)?.message || 'Xato'}</div></Card>}
 
       {data && !isLoading && (
         <>
-          <div className="flex items-center justify-end">
-            <button onClick={() => setShowPayments((s) => !s)} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400">
+              {tr('payment.resultSummary', {
+                n: data.results.length,
+                ok: data.results.filter((r) => isAllMatch(r, cols)).length,
+                diff: data.results.filter((r) => !isAllMatch(r, cols)).length,
+              })}
+            </span>
+            <button onClick={() => setShowPayments((s) => !s)} className="ml-auto inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400">
               {tr('payment.paymentsList')} <ChevronDown className={cn('h-4 w-4 transition-transform', showPayments && 'rotate-180')} />
             </button>
           </div>
@@ -218,6 +231,57 @@ export function ChekPayment() {
         </>
       )}
     </div>
+  );
+}
+
+// Bitta manba ustuni uchun ko'rsatkich (bir joyda — solishtirishda ham, xulosada ham)
+function metricVal(res: ContractResult, colKey: string, metric: 'initial' | 'monthly' | 'total'): number | null {
+  if (colKey === 'oplata') return res.oplata ? (res.oplata as any)[metric] : null;
+  if (colKey === 'crm') return res.crm?.found ? (res.crm as any)[metric] : null;
+  if (colKey.startsWith('sheet:')) {
+    const s = res.sheets?.find((x) => x.id === colKey.slice(6));
+    return s?.available ? (s as any)[metric] : null;
+  }
+  return null;
+}
+function isAllMatch(res: ContractResult, cols: Col[]): boolean {
+  return (['initial', 'monthly', 'total'] as const).every((m) => {
+    const vals = cols.map((c) => metricVal(res, c.key, m)).filter((v) => v != null) as number[];
+    return vals.length < 2 || vals.every((v) => Math.abs(v - vals[0]) < 1);
+  });
+}
+
+// Loading skeleton — tanlangan manba ustunlari bilan (bo'sh spinner o'rniga)
+function LoadingCard({ contract, cols, tr }: { contract: string; cols: Col[]; tr: any }) {
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <div className="px-4 py-3 bg-gradient-to-r from-indigo-50 via-violet-50/60 to-fuchsia-50 dark:from-indigo-950/40 dark:via-violet-950/30 dark:to-fuchsia-950/40 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+        <code className="text-[14px] font-mono font-bold text-slate-900 dark:text-slate-100">{contract}</code>
+        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-indigo-600 dark:text-indigo-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> {tr('payment.loading')}
+        </span>
+        <div className="ml-auto flex items-center gap-1.5">
+          {cols.map((c) => (
+            <span key={c.key} className={cn('h-6 px-2.5 rounded-full text-[11px] font-semibold inline-flex items-center animate-pulse', {
+              violet: 'bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300',
+              sky: 'bg-sky-100 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300',
+              emerald: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300',
+            }[c.tone])}>{c.label}</span>
+          ))}
+        </div>
+      </div>
+      <div className="p-4 space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-4">
+            <div className="h-4 w-32 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" style={{ animationDelay: `${i * 90}ms` }} />
+            <div className="flex-1" />
+            {cols.map((c) => (
+              <div key={c.key} className="h-4 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" style={{ animationDelay: `${i * 90}ms` }} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -246,15 +310,7 @@ function SrcToggle({ active, onClick, tone, icon, label, disabled }: {
 }
 
 function ContractCard({ res, cols, tr, showPayments }: { res: ContractResult; cols: Col[]; tr: any; showPayments: boolean }) {
-  const val = (colKey: string, metric: 'initial' | 'monthly' | 'total'): number | null => {
-    if (colKey === 'oplata') return res.oplata ? (res.oplata as any)[metric] : null;
-    if (colKey === 'crm') return res.crm?.found ? (res.crm as any)[metric] : null;
-    if (colKey.startsWith('sheet:')) {
-      const s = res.sheets?.find((x) => x.id === colKey.slice(6));
-      return s?.available ? (s as any)[metric] : null;
-    }
-    return null;
-  };
+  const val = (colKey: string, metric: 'initial' | 'monthly' | 'total') => metricVal(res, colKey, metric);
   const same = (metric: 'initial' | 'monthly' | 'total') => {
     const vals = cols.map((c) => val(c.key, metric)).filter((v) => v != null) as number[];
     return vals.length < 2 || vals.every((v) => Math.abs(v - vals[0]) < 1);
@@ -262,6 +318,7 @@ function ContractCard({ res, cols, tr, showPayments }: { res: ContractResult; co
   const hasCrmCol = cols.some((c) => c.key === 'crm');
   // Kelishilgan narx CRM'dan — mavjud bo'lsa qoldiqni HAR bir manba uchun hisoblaymiz
   const price = res.crm?.found ? (res.crm.price ?? null) : null;
+  const allMatch = isAllMatch(res, cols);
 
   const metricRow = (label: string, metric: 'initial' | 'monthly' | 'total', strong?: boolean) => {
     const ok = same(metric);
@@ -281,6 +338,12 @@ function ContractCard({ res, cols, tr, showPayments }: { res: ContractResult; co
     <Card className="border-0 shadow-soft overflow-hidden">
       <div className="px-4 py-3 bg-gradient-to-r from-indigo-50 via-violet-50/60 to-fuchsia-50 dark:from-indigo-950/40 dark:via-violet-950/30 dark:to-fuchsia-950/40 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
         <code className="text-[14px] font-mono font-bold text-slate-900 dark:text-slate-100">{res.contract}</code>
+        <span className={cn('inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full',
+          allMatch ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+            : 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300')}>
+          {allMatch ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+          {allMatch ? tr('payment.statusMatch') : tr('payment.statusDiff')}
+        </span>
         {hasCrmCol && res.crm?.found && res.crm.price != null && (
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/70 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 font-semibold">
             {tr('payment.price')}: <b className="tabular-nums">{money(res.crm.price)}</b>

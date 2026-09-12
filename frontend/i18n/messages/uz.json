@@ -2677,7 +2677,11 @@
       "rows": "{n} qator",
       "crmNotFound": "CRM'da topilmadi",
       "sheetNa": "Sheet bu shartnomani bermadi",
-      "paymentsList": "To'lovlar ro'yxati (har biri)"
+      "paymentsList": "To'lovlar ro'yxati (har biri)",
+      "loading": "Manbalardan o'qilyapti...",
+      "statusMatch": "Mos",
+      "statusDiff": "Farqli",
+      "resultSummary": "{n} shartnoma · {ok} mos · {diff} farqli"
     },
     "newCheck": "Yangi tekshiruv",
     "mode": {
