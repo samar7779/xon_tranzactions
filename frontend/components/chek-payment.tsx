@@ -27,7 +27,7 @@ const normC = (s: string) => s.replace(/[\s\-_./№]/g, '').toUpperCase();
 
 type SheetSrc = { id: string; name: string; source: string; hasPayColumns: boolean };
 type OplataPart = { ok: boolean; initial: number; monthly: number; total: number; count: number; payments: { date: string | null; first: number; monthly: number; total: number }[] } | null;
-type CrmPart = { ok: boolean; found: boolean; viaPaymentHistory?: boolean; price?: number | null; initial?: number; monthly?: number; total?: number; remaining?: number | null; count?: number; payments?: { date: string | null; amount: number; kind: string; type: string | null }[] } | null;
+type CrmPart = { ok: boolean; found: boolean; viaPaymentHistory?: boolean; price?: number | null; initial?: number; monthly?: number; total?: number; remaining?: number | null; count?: number; payments?: { date: string | null; amount: number; kind: string; type: string | null }[]; debug?: string } | null;
 type SheetPart = { id: string; name: string; ok: boolean; available: boolean; reason?: string; initial: number; monthly: number; total: number; matchedRows: number; rowsScanned?: number; payments: { row: number; first: number; monthly: number; total: number }[] };
 type ContractResult = { contract: string; oplata: OplataPart; crm: CrmPart; sheets: SheetPart[] };
 type CheckResp = { ok: boolean; results: ContractResult[] };
@@ -477,6 +477,9 @@ function ContractCard({ res, cols, tr, showPayments }: { res: ContractResult; co
         {cols.some((c) => c.key === 'crm') && (res.crm?.found
           ? <span className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400"><Cloud className="h-3 w-3" /> {tr('payment.rows', { n: res.crm.count ?? 0 })}</span>
           : <span className="inline-flex items-center gap-1 text-rose-500"><AlertTriangle className="h-3 w-3" /> {tr('payment.crmNotFound')}</span>)}
+        {cols.some((c) => c.key === 'crm') && res.crm?.debug && (
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono break-all">🐞 {res.crm.debug}</span>
+        )}
         {res.sheets?.map((s) => (
           s.available
             ? <span key={s.id} className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><SheetIcon className="h-3 w-3" /> {s.name}: {tr('payment.rows', { n: s.matchedRows })}{s.rowsScanned != null ? ` · ${s.rowsScanned.toLocaleString('ru-RU')} skan` : ''}</span>

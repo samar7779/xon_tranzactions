@@ -415,7 +415,7 @@ export class ChekOrderService {
         // ZAXIRA: order jadvalida yo'q, lekin to'lovlar /payment-history'da bo'lishi mumkin
         // (ОплатыКв bilan bir manba). Narx/qoldiq/grafik yo'q, faqat to'lov summalari.
         const rows = await this.crm.paymentsByContract(cn).catch(() => [] as any[]);
-        if (!rows.length) return { ok: false, found: false as const };
+        if (!rows.length) return { ok: false, found: false as const, debug: `noDetail|resOk=${res?.ok}|ledger=0` };
         const payments = rows.map((p: any) => ({
           date: toDay(p.date_paid ?? p.date),
           amount: toNum(p.amount) || 0,
@@ -439,6 +439,7 @@ export class ChekOrderService {
           price: null, initialPlan: null, monthlyPlan: null,
           initial, monthly, total: initial + monthly, remaining: null,
           count: payments.length, payments,
+          debug: `noDetail|resOk=${res?.ok}|ledger=${rows.length}`,
         };
       }
 
@@ -486,11 +487,17 @@ export class ChekOrderService {
       const total = initial + monthly;
       const remaining = price != null ? price - total : null;
 
+      const debug = `detail|keys=${Object.keys(d).slice(0, 18).join(',')}`
+        + `|init=${Object.keys(d.initial || {}).join(',')}`
+        + `|paid=${JSON.stringify(d.initial?.total?.paid)}/${JSON.stringify(d.monthly?.total?.paid)}`
+        + `|sched=${schedInitial}/${schedMonthly}(${d.initial?.schedules?.length || 0}/${d.monthly?.schedules?.length || 0})`
+        + `|hist=${hist.length}`;
+
       return {
         ok: true, found: true as const,
         price, initialPlan, monthlyPlan,
         initial, monthly, total, remaining,
-        count: payments.length, payments,
+        count: payments.length, payments, debug,
       };
     } catch (e: any) {
       return { ok: false, found: false as const, error: e?.message || 'CRM javob bermadi' };
