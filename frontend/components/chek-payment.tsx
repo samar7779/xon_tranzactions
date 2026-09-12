@@ -3,15 +3,17 @@
 // Chek payment — bir yoki bir nechta shartnoma to'lovlarini TANLANGAN manbalardan
 // (ОплатыКв / CRM / bir yoki bir necha Google Sheet) O'QIB solishtiradi.
 // Read-only — hech narsa o'zgartirmaydi.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 import {
   Search, Loader2, Cloud, Database, Sheet as SheetIcon, FileSignature,
   AlertTriangle, CheckCircle2, ChevronDown, ShieldCheck, X, Plus,
+  Download, FileUp,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 
 const money = (n: number | null | undefined) => (n == null ? '—' : formatMoney(Number(n || 0)).replace(' UZS', ''));
@@ -50,6 +52,9 @@ export function ChekPayment() {
   const [sheetSel, setSheetSel] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState<Submitted | null>(null);
   const [showPayments, setShowPayments] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'match' | 'diff'>('all');
+  const [importing, setImporting] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { const id = setTimeout(() => setQDeb(input), 300); return () => clearTimeout(id); }, [input]);
 
@@ -82,12 +87,40 @@ export function ChekPayment() {
       const seen = new Set(prev.map(normC));
       const next = [...prev];
       for (const p of parts) if (!seen.has(normC(p))) { next.push(p); seen.add(normC(p)); }
-      return next.slice(0, 15);
+      return next.slice(0, 50);
     });
     setInput('');
   };
   const removeContract = (c: string) => setContracts((prev) => prev.filter((x) => x !== c));
   const toggleSheet = (id: string) => setSheetSel((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  // Excel'dan shartnoma raqamlarini import qilish (search'ga qo'shish)
+  const onImportFile = async (file: File) => {
+    setImporting(true);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await api.postForm<{ contracts: string[] }>('/chek-order/payment-check/import-contracts', fd, { timeout: 60_000 });
+      if (r.contracts?.length) { addContract(r.contracts.join(' ')); toast.success(tr('payment.imported', { n: r.contracts.length })); }
+      else toast.error(tr('payment.importEmpty'));
+    } catch (e: any) {
+      toast.error(e?.message || tr('payment.importError'));
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = '';
+    }
+  };
+
+  // Natijani Excel qilib yuklab olish (joriy filtr bilan)
+  const exportExcel = () => {
+    if (!submitted) return;
+    const p = new URLSearchParams();
+    p.set('contracts', submitted.contracts.join(','));
+    p.set('oplata', submitted.oplata ? '1' : '0');
+    p.set('crm', submitted.crm ? '1' : '0');
+    if (submitted.sheetIds.length) p.set('sheetIds', submitted.sheetIds.join(','));
+    p.set('filter', filter);
+    apiDownload(`/chek-order/payment-check/export?${p.toString()}`, 'chek-payment.xlsx');
+  };
 
   const anySource = useOplata || useCrm || sheetSel.length > 0;
   const canRun = contracts.length > 0 && anySource;
@@ -96,6 +129,7 @@ export function ChekPayment() {
     if (!canRun) return;
     setSubmitted({ contracts: [...contracts], oplata: useOplata, crm: useCrm, sheetIds: [...sheetSel] });
     setShowPayments(false);
+    setFilter('all');
   };
 
   // Ustunlar (submitted asosida — natija shu tanlovga mos bo'lsin)
@@ -136,7 +170,24 @@ export function ChekPayment() {
 
           {/* Shartnoma chip-input */}
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5 block">{tr('payment.contractsLabel')}</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 block">{tr('payment.contractsLabel')}</label>
+              <button
+                onClick={() => importRef.current?.click()}
+                disabled={importing}
+                className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
+              >
+                {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileUp className="h-3.5 w-3.5" />}
+                {tr('payment.importExcel')}
+              </button>
+              <input
+                ref={importRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportFile(f); }}
+              />
+            </div>
             <div className="relative">
               <div className="flex flex-wrap items-center gap-1.5 min-h-[44px] px-2 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 focus-within:ring-2 focus-within:ring-indigo-400">
                 {contracts.map((c) => (
@@ -211,25 +262,39 @@ export function ChekPayment() {
       )}
       {error && !isLoading && <Card className="border-0 shadow-soft"><div className="p-6 text-center text-[13px] text-rose-600 dark:text-rose-400">{(error as any)?.message || 'Xato'}</div></Card>}
 
-      {data && !isLoading && (
-        <>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400">
-              {tr('payment.resultSummary', {
-                n: data.results.length,
-                ok: data.results.filter((r) => isAllMatch(r, cols)).length,
-                diff: data.results.filter((r) => !isAllMatch(r, cols)).length,
-              })}
-            </span>
-            <button onClick={() => setShowPayments((s) => !s)} className="ml-auto inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400">
-              {tr('payment.paymentsList')} <ChevronDown className={cn('h-4 w-4 transition-transform', showPayments && 'rotate-180')} />
-            </button>
-          </div>
-          {data.results.map((res) => (
-            <ContractCard key={res.contract} res={res} cols={cols} tr={tr} showPayments={showPayments} />
-          ))}
-        </>
-      )}
+      {data && !isLoading && (() => {
+        const matchCount = data.results.filter((r) => isAllMatch(r, cols)).length;
+        const diffCount = data.results.length - matchCount;
+        const visible = filter === 'match' ? data.results.filter((r) => isAllMatch(r, cols))
+          : filter === 'diff' ? data.results.filter((r) => !isAllMatch(r, cols))
+            : data.results;
+        return (
+          <>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Filtr: Hammasi / Mos / Farqli */}
+              <div className="inline-flex items-center gap-0.5 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label={tr('payment.filterAll')} n={data.results.length} />
+                <FilterChip active={filter === 'match'} onClick={() => setFilter('match')} label={tr('payment.statusMatch')} n={matchCount} tone="emerald" />
+                <FilterChip active={filter === 'diff'} onClick={() => setFilter('diff')} label={tr('payment.statusDiff')} n={diffCount} tone="amber" />
+              </div>
+              <div className="ml-auto flex items-center gap-3">
+                <button onClick={exportExcel} className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold shadow-sm shadow-emerald-500/25 transition-colors">
+                  <Download className="h-3.5 w-3.5" /> {tr('payment.exportExcel')}
+                </button>
+                <button onClick={() => setShowPayments((s) => !s)} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400">
+                  {tr('payment.paymentsList')} <ChevronDown className={cn('h-4 w-4 transition-transform', showPayments && 'rotate-180')} />
+                </button>
+              </div>
+            </div>
+            {visible.map((res) => (
+              <ContractCard key={res.contract} res={res} cols={cols} tr={tr} showPayments={showPayments} />
+            ))}
+            {visible.length === 0 && (
+              <Card className="border-0 shadow-soft"><div className="p-6 text-center text-[13px] text-slate-400 dark:text-slate-500">{tr('payment.filterEmpty')}</div></Card>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -282,6 +347,21 @@ function LoadingCard({ contract, cols, tr }: { contract: string; cols: Col[]; tr
         ))}
       </div>
     </Card>
+  );
+}
+
+function FilterChip({ active, onClick, label, n, tone }: {
+  active: boolean; onClick: () => void; label: string; n: number; tone?: 'emerald' | 'amber';
+}) {
+  return (
+    <button onClick={onClick} className={cn('inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[12px] font-semibold transition-all',
+      active ? 'bg-white dark:bg-slate-950 shadow-sm text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200')}>
+      {label}
+      <span className={cn('min-w-[20px] h-5 px-1 rounded-full text-[11px] font-bold grid place-items-center tabular-nums',
+        tone === 'emerald' ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+          : tone === 'amber' ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
+            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300')}>{n}</span>
+    </button>
   );
 }
 

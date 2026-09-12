@@ -2681,7 +2681,14 @@
       "loading": "Reading from sources...",
       "statusMatch": "Match",
       "statusDiff": "Differs",
-      "resultSummary": "{n} contracts · {ok} match · {diff} differ"
+      "resultSummary": "{n} contracts · {ok} match · {diff} differ",
+      "filterAll": "All",
+      "exportExcel": "Excel",
+      "importExcel": "Import from Excel",
+      "imported": "{n} contracts added",
+      "importEmpty": "No contracts found in Excel",
+      "importError": "Import error",
+      "filterEmpty": "No contracts for this filter"
     },
     "newCheck": "New check",
     "mode": {

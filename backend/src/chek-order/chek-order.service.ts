@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
@@ -295,7 +296,7 @@ export class ChekOrderService {
   ) {
     const contracts = [...new Set(
       String(contractsRaw || '').split(/[\s,;\n]+/).map((c) => c.trim().toUpperCase()).filter(Boolean),
-    )].slice(0, 15); // ko'pi bilan 15 shartnoma (CRM jonli chaqiruvlarni cheklash uchun)
+    )].slice(0, 50); // ko'pi bilan 50 shartnoma (CRM jonli chaqiruvlarni cheklash uchun)
     if (!contracts.length) throw new BadRequestException("contract bo'sh");
 
     const wantOplata = opts.oplata !== false; // default yoqilgan
@@ -419,6 +420,113 @@ export class ChekOrderService {
     } catch (e: any) {
       return { ok: false, found: false as const, error: e?.message || 'CRM javob bermadi' };
     }
+  }
+
+  // Bir manba ustuni qiymati (export/filter uchun — frontend metricVal bilan bir xil)
+  private srcVal(res: any, key: string, metric: 'initial' | 'monthly' | 'total'): number | null {
+    if (key === 'oplata') return res.oplata ? (res.oplata[metric] ?? null) : null;
+    if (key === 'crm') return res.crm?.found ? (res.crm[metric] ?? null) : null;
+    if (key.startsWith('sheet:')) {
+      const s = res.sheets?.find((x: any) => x.id === key.slice(6));
+      return s?.available ? (s[metric] ?? null) : null;
+    }
+    return null;
+  }
+  private resAllMatch(res: any, srcKeys: string[]): boolean {
+    return (['initial', 'monthly', 'total'] as const).every((m) => {
+      const vals = srcKeys.map((k) => this.srcVal(res, k, m)).filter((v) => v != null) as number[];
+      return vals.length < 2 || vals.every((v) => Math.abs(v - vals[0]) < 1);
+    });
+  }
+
+  /** Chek payment natijasini Excel (.xlsx) qilib qaytaradi — filter: all | match | diff. */
+  async paymentCheckExport(
+    contractsRaw: string,
+    opts: { oplata?: boolean; crm?: boolean; sheetIds?: string[] },
+    filter: 'all' | 'match' | 'diff' = 'all',
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const { results } = await this.paymentCheck(contractsRaw, opts);
+
+    const sheetMeta = (opts.sheetIds || []).length ? await this.googleExport.listSheetSources().catch(() => [] as any[]) : [];
+    const srcCols: { key: string; label: string }[] = [];
+    if (opts.oplata !== false) srcCols.push({ key: 'oplata', label: 'ОплатыКв' });
+    if (opts.crm) srcCols.push({ key: 'crm', label: 'CRM' });
+    for (const id of opts.sheetIds || []) srcCols.push({ key: `sheet:${id}`, label: sheetMeta.find((m: any) => m.id === id)?.name || 'Sheet' });
+    const srcKeys = srcCols.map((c) => c.key);
+
+    let rows = results as any[];
+    if (filter === 'match') rows = rows.filter((r) => this.resAllMatch(r, srcKeys));
+    else if (filter === 'diff') rows = rows.filter((r) => !this.resAllMatch(r, srcKeys));
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Chek payment');
+    const cols: Partial<ExcelJS.Column>[] = [
+      { header: 'Дог №', key: 'contract', width: 16 },
+      { header: 'Ҳолат', key: 'status', width: 10 },
+      { header: 'Нарх', key: 'price', width: 16 },
+    ];
+    for (const c of srcCols) {
+      cols.push({ header: `${c.label} · 1взнос`, key: `${c.key}__i`, width: 16 });
+      cols.push({ header: `${c.label} · ойлик`, key: `${c.key}__m`, width: 16 });
+      cols.push({ header: `${c.label} · жами`, key: `${c.key}__t`, width: 16 });
+    }
+    ws.columns = cols;
+    const head = ws.getRow(1); head.font = { bold: true, size: 10 }; head.height = 26;
+    head.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+
+    for (const r of rows) {
+      const match = this.resAllMatch(r, srcKeys);
+      const rowObj: any = { contract: r.contract, status: match ? 'Мос' : 'Фарқли', price: r.crm?.found ? (r.crm.price ?? '') : '' };
+      for (const c of srcCols) {
+        rowObj[`${c.key}__i`] = this.srcVal(r, c.key, 'initial') ?? '';
+        rowObj[`${c.key}__m`] = this.srcVal(r, c.key, 'monthly') ?? '';
+        rowObj[`${c.key}__t`] = this.srcVal(r, c.key, 'total') ?? '';
+      }
+      const row = ws.addRow(rowObj);
+      row.font = { size: 9 };
+      row.getCell('status').font = { size: 9, bold: true, color: { argb: match ? 'FF047857' : 'FFB45309' } };
+      for (const c of srcCols) for (const suf of ['__i', '__m', '__t']) row.getCell(`${c.key}${suf}`).numFmt = '#,##0.00';
+      if (r.crm?.found) row.getCell('price').numFmt = '#,##0.00';
+    }
+
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const filename = `chek-payment-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    return { buffer, filename };
+  }
+
+  /** Excel fayldan shartnoma raqamlarini ajratadi (import — search'ga qo'shish uchun). */
+  async parseContractsFromExcel(buffer: Buffer): Promise<{ ok: true; contracts: string[] }> {
+    const wb = new ExcelJS.Workbook();
+    try { await wb.xlsx.load(buffer as any); }
+    catch { throw new BadRequestException("Excel fayl o'qilmadi (.xlsx bo'lishi kerak)"); }
+    const ws = wb.worksheets[0];
+    if (!ws) throw new BadRequestException("Excel bo'sh");
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const headerRe = /^(дог|shartnoma|contract|№|no|raqam)/i;
+    ws.eachRow((row) => {
+      for (let c = 1; c <= 2; c++) { // shartnomaga o'xshash birinchi katak (1-2 ustun)
+        const raw: any = row.getCell(c).value;
+        let s = '';
+        if (raw != null) {
+          if (typeof raw === 'object' && raw.text) s = String(raw.text);
+          else if (typeof raw === 'object' && raw.result != null) s = String(raw.result);
+          else s = String(raw);
+        }
+        s = s.trim().toUpperCase();
+        if (!s || headerRe.test(s)) continue;
+        const norm = s.replace(/[\s\-_./№]/g, '');
+        if (norm.length < 3) continue; // juda qisqa — shartnoma emas
+        if (!seen.has(norm)) { seen.add(norm); out.push(s); }
+        break;
+      }
+    });
+    return { ok: true, contracts: out.slice(0, 200) };
   }
 
   // ───────────────── SURAT / PDF YUKLASH → AGENT ─────────────────

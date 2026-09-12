@@ -2681,7 +2681,14 @@
       "loading": "Чтение из источников...",
       "statusMatch": "Совпадает",
       "statusDiff": "Различие",
-      "resultSummary": "{n} договоров · {ok} совпадает · {diff} различие"
+      "resultSummary": "{n} договоров · {ok} совпадает · {diff} различие",
+      "filterAll": "Все",
+      "exportExcel": "Excel",
+      "importExcel": "Импорт из Excel",
+      "imported": "Добавлено {n} договоров",
+      "importEmpty": "В Excel договоры не найдены",
+      "importError": "Ошибка импорта",
+      "filterEmpty": "Нет договоров по этому фильтру"
     },
     "newCheck": "Новая проверка",
     "mode": {

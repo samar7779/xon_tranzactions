@@ -357,7 +357,25 @@ export class GoogleExportService {
             if (cur == null || String(cur).trim() === '') values[rel][cIdx] = anchorVal; // faqat bo'shini
           }
         }
-      } catch { /* merges o'qib bo'lmasa — oddiy (merge'siz) o'qishga qaytamiz */ }
+      } catch { /* merges o'qib bo'lmasa — quyidagi forward-fill zaxira */ }
+
+      // ── FORWARD-FILL: "blank-repeat" guruhlangan hisobot ──
+      // Ko'p hisobotda shartnoma raqami guruhning FAQAT birinchi qatoriga yoziladi,
+      // ostidagi qatorlar BO'SH qoladi (merge bo'lmasa ham). values.get bo'shni bo'sh
+      // qaytaradi → bir shartnomaning ko'p qatoridan faqat 1 tasi mos kelardi. Oxirgi
+      // ko'rilgan shartnomani PASTGA tarqatamiz — FAQAT to'lov ma'lumoti bor bo'sh qatorga.
+      // (Bu — flat to'lov jurnali; "Итого"/subtotal qatori yo'q, double-count xavfi amalda yo'q.)
+      {
+        let last: any = null;
+        for (const row of values) {
+          if (!row) continue;
+          const cur = row[cIdx];
+          if (cur != null && String(cur).trim() !== '') { last = cur; continue; }
+          if (last == null) continue;
+          const hasPay = (fIdx >= 0 && num(row[fIdx])) || (mIdx >= 0 && num(row[mIdx])) || (tIdx >= 0 && num(row[tIdx]));
+          if (hasPay) row[cIdx] = last;
+        }
+      }
     } catch (e: any) {
       return { ...empty, sheetName: cfg.name, reason: this.extractApiError(e) };
     }

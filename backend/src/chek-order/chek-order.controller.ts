@@ -112,6 +112,36 @@ export class ChekOrderController {
     });
   }
 
+  @Get('payment-check/export')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
+  @ApiOperation({ summary: 'Chek payment natijasini Excel qilib yuklab olish (filter: all/match/diff)' })
+  async paymentCheckExport(@Query() q: any, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.paymentCheckExport(
+      q.contracts || q.contract || '',
+      {
+        oplata: q.oplata !== '0' && q.oplata !== 'false',
+        crm: q.crm === '1' || q.crm === 'true',
+        sheetIds: String(q.sheetIds || '').split(',').map((s: string) => s.trim()).filter(Boolean),
+      },
+      q.filter === 'match' ? 'match' : q.filter === 'diff' ? 'diff' : 'all',
+    );
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
+  @Post('payment-check/import-contracts')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Excel fayldan shartnoma raqamlarini import qilish (search uchun)' })
+  async importContracts(@UploadedFile() file: any) {
+    if (!file?.buffer) throw new BadRequestException('Fayl (file) majburiy');
+    return this.svc.parseContractsFromExcel(file.buffer);
+  }
+
   // ─── AI yordamchi ───
   @Post('assistant/chat')
   @RequirePermissions(PERMISSIONS.CHEKORDER_ASSISTANT)

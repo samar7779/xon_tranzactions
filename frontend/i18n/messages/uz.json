@@ -2681,7 +2681,14 @@
       "loading": "Manbalardan o'qilyapti...",
       "statusMatch": "Mos",
       "statusDiff": "Farqli",
-      "resultSummary": "{n} shartnoma · {ok} mos · {diff} farqli"
+      "resultSummary": "{n} shartnoma · {ok} mos · {diff} farqli",
+      "filterAll": "Hammasi",
+      "exportExcel": "Excel",
+      "importExcel": "Excel'dan import",
+      "imported": "{n} ta shartnoma qo'shildi",
+      "importEmpty": "Excel'da shartnoma topilmadi",
+      "importError": "Import xatosi",
+      "filterEmpty": "Bu filtrga mos shartnoma yo'q"
     },
     "newCheck": "Yangi tekshiruv",
     "mode": {
