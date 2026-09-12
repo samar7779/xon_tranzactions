@@ -964,25 +964,26 @@ export class CrmService {
         if (idxRes.ok) {
           const items: any[] = idxRes.data?.data || [];
           this.log.log(`CRM /index fallback: ${contractNo} uchun ${items.length} ta item topildi`);
-          // 1) Exact match (UPPER)
-          const exact = items.find((it) => String(it.contract || '').toUpperCase() === contractNo.toUpperCase());
-          if (exact) {
-            detail = exact;
-            this.log.log(`  → exact match: status=${exact.status || '-'}`);
-          } else if (items.length > 0) {
-            // 2) Trimmed/normalized match (whitespace, dash, slash, nuqta bilan farqlar)
-            // Masalan "393FZO26RNK/SH" (izohda) ~ "393FZO26RNK-SH" (CRM) — ajratuvchi farqi.
-            const norm = (s: string) => s.replace(/[\s\-_./]/g, '').toUpperCase();
-            const target = norm(contractNo);
-            const fuzzy = items.find((it) => norm(String(it.contract || '')) === target);
-            if (fuzzy) {
-              detail = fuzzy;
-              this.log.log(`  → normalized match: ${fuzzy.contract} (status=${fuzzy.status || '-'})`);
-            } else {
-              // Topilmadi — sample log qilamiz
-              const sample = items.slice(0, 3).map((i) => i.contract).join(', ');
-              this.log.log(`  → exact/normalized match yo'q. Sample: ${sample}`);
+          // 1) Exact (UPPER), bo'lmasa 2) normalized (whitespace/dash/slash/nuqta farqi)
+          // Masalan "393FZO26RNK/SH" (izohda) ~ "393FZO26RNK-SH" (CRM) — ajratuvchi farqi.
+          const norm = (s: string) => s.replace(/[\s\-_./]/g, '').toUpperCase();
+          const target = norm(contractNo);
+          const hit = items.find((it) => String(it.contract || '').toUpperCase() === contractNo.toUpperCase())
+            || items.find((it) => norm(String(it.contract || '')) === target);
+          if (hit) {
+            detail = hit;
+            // MUHIM: /index item CHALA — total.paid / schedules / payment_histories YO'Q
+            // (ular faqat /show'da). id bo'yicha TO'LIQ detail'ni qayta olamiz (payerHint yo'li kabi),
+            // aks holda "to'lov 0" (paid/grafik ko'rinmaydi) bo'lib qolardi.
+            if (hit.id != null) {
+              const full: any = await this.call('/show', { id: hit.id, is_trashed: 1, trashed_status: 1, with_trashed: 1 });
+              const fd = full.ok ? (full.data?.data || null) : null;
+              if (fd) detail = fd;
             }
+            this.log.log(`  → match: ${hit.contract} (status=${hit.status || '-'}${hit.id != null ? `, id=${hit.id} to'liq` : ''})`);
+          } else if (items.length > 0) {
+            const sample = items.slice(0, 3).map((i) => i.contract).join(', ');
+            this.log.log(`  → exact/normalized match yo'q. Sample: ${sample}`);
           }
         } else {
           this.log.warn(`CRM /index fallback xato: ${(idxRes as any).status} ${(idxRes as any).error?.slice(0, 150)}`);
