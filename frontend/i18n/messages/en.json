@@ -2647,8 +2647,32 @@
     "subtitle": "Memorial order / receipt → check whether it exists in transactions",
     "tabs": {
       "check": "Check",
+      "payment": "Chek payment",
       "history": "History",
       "tickets": "Tickets"
+    },
+    "payment": {
+      "readonly": "Read-only — nothing is changed",
+      "contractLabel": "Contract number",
+      "contractPlaceholder": "e.g. 0010CNA",
+      "sheetLabel": "Google Sheet (optional)",
+      "sheetNone": "— not selected —",
+      "sheetNoCols": "no columns",
+      "check": "Check",
+      "price": "Contract price",
+      "srcOplata": "ОплатыКв",
+      "srcCrm": "CRM",
+      "srcSheet": "Sheet",
+      "initial": "Initial (1st payment)",
+      "monthly": "Monthly",
+      "total": "Total paid",
+      "remaining": "Remaining",
+      "initialShort": "init.",
+      "monthlyShort": "monthly",
+      "rows": "{n} rows",
+      "crmNotFound": "Not found in CRM",
+      "sheetNa": "Sheet did not return this contract",
+      "paymentsList": "Payments list (each)"
     },
     "newCheck": "New check",
     "mode": {

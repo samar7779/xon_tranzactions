@@ -2647,8 +2647,32 @@
     "subtitle": "Memorial order / kvitansiya → tranzaksiyada bor-yo'qligini tekshirish",
     "tabs": {
       "check": "Tekshirish",
+      "payment": "Chek payment",
       "history": "Tarix",
       "tickets": "Murojaatlar"
+    },
+    "payment": {
+      "readonly": "Faqat o'qish — hech narsa o'zgartirilmaydi",
+      "contractLabel": "Shartnoma raqami",
+      "contractPlaceholder": "Masalan: 0010CNA",
+      "sheetLabel": "Google Sheet (ixtiyoriy)",
+      "sheetNone": "— tanlanmagan —",
+      "sheetNoCols": "ustunlar yo'q",
+      "check": "Tekshirish",
+      "price": "Kelishilgan narx",
+      "srcOplata": "ОплатыКв",
+      "srcCrm": "CRM",
+      "srcSheet": "Sheet",
+      "initial": "Boshlang'ich (1 взнос)",
+      "monthly": "Oylik (ежемесячный)",
+      "total": "Jami to'langan",
+      "remaining": "Qoldiq (остаток)",
+      "initialShort": "boshl.",
+      "monthlyShort": "oylik",
+      "rows": "{n} qator",
+      "crmNotFound": "CRM'da topilmadi",
+      "sheetNa": "Sheet bu shartnomani bermadi",
+      "paymentsList": "To'lovlar ro'yxati (har biri)"
     },
     "newCheck": "Yangi tekshiruv",
     "mode": {

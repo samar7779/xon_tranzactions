@@ -248,6 +248,95 @@ export class GoogleExportService {
     };
   }
 
+  // ─── O'QISH (Chek payment uchun) — READ-ONLY, hech narsa yozmaydi ───
+
+  /** Sozlangan sheetlar ro'yxati (Chek payment manba dropdowni uchun). */
+  async listSheetSources(): Promise<Array<{ id: string; name: string; source: string; hasPayColumns: boolean }>> {
+    const sheets = await this.getRawConfig();
+    return sheets.map((s) => {
+      const fields = new Set((s.columns || []).map((c) => c.field));
+      return {
+        id: s.id,
+        name: s.name,
+        source: s.source || 'oplatakv',
+        // boshlang'ich/oylik/jami ustunlaridan kamida bittasi map qilinganmi
+        hasPayColumns: fields.has('firstInstallment') || fields.has('monthlyAmount') || fields.has('paymentAmount'),
+      };
+    });
+  }
+
+  /**
+   * Bitta sheet'dan shartnoma raqami bo'yicha to'lovlarni O'QIYDI (read-only) va
+   * boshlang'ich/oylik/jami yig'indisini qaytaradi. HECH NARSA YOZMAYDI.
+   * Sheet bir shartnoma uchun bir necha qatorga ega bo'lishi mumkin — hammasi yig'iladi.
+   */
+  async readContractPayment(sheetId: string, contractNo: string): Promise<{
+    ok: boolean; available: boolean; reason?: string; sheetName?: string;
+    initial: number; monthly: number; total: number; matchedRows: number;
+    payments: Array<{ row: number; first: number; monthly: number; total: number }>;
+  }> {
+    const empty = { ok: false, available: false, initial: 0, monthly: 0, total: 0, matchedRows: 0, payments: [] as any[] };
+    const target = String(contractNo || '').replace(/[\s\-_./№]/g, '').toUpperCase();
+    if (!target) return { ...empty, reason: "contract bo'sh" };
+
+    const cfg = (await this.getRawConfig()).find((s) => s.id === sheetId);
+    if (!cfg) return { ...empty, reason: 'Sheet topilmadi' };
+
+    const colOf = (field: string) => (cfg.columns || []).find((c) => c.field === field)?.col;
+    const cCol = colOf('contractNo');
+    const fCol = colOf('firstInstallment');
+    const mCol = colOf('monthlyAmount');
+    const tCol = colOf('paymentAmount');
+    if (!cCol) return { ...empty, sheetName: cfg.name, reason: "Sheet shartnoma raqami ustuniga bog'lanmagan" };
+    if (!fCol && !mCol && !tCol) return { ...empty, sheetName: cfg.name, reason: "Sheet boshlang'ich/oylik/jami ustunlariga bog'lanmagan" };
+
+    const creds = await this.loadCredentials();
+    if (!creds) return { ...empty, sheetName: cfg.name, reason: 'Google credential topilmadi' };
+
+    const colIdx = (letter: string): number => {
+      let n = 0; for (const ch of String(letter).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1;
+    };
+    const idxToLetter = (i: number): string => {
+      let s = ''; let x = i + 1; while (x > 0) { const m = (x - 1) % 26; s = String.fromCharCode(65 + m) + s; x = Math.floor((x - 1) / 26); } return s;
+    };
+    const num = (v: any): number => { const n = Number(String(v ?? '').replace(/[\s ,]/g, '')); return Number.isFinite(n) ? n : 0; };
+    const normC = (v: any) => String(v ?? '').replace(/[\s\-_./№]/g, '').toUpperCase();
+
+    const cIdx = colIdx(cCol);
+    const fIdx = fCol ? colIdx(fCol) : -1;
+    const mIdx = mCol ? colIdx(mCol) : -1;
+    const tIdx = tCol ? colIdx(tCol) : -1;
+    const maxIdx = Math.max(cIdx, fIdx, mIdx, tIdx);
+
+    const quotedTab = `'${String(cfg.tabName).replace(/'/g, "''")}'`;
+    let values: any[][] = [];
+    try {
+      const api = this.makeSheetsClient(creds);
+      const resp = await api.spreadsheets.values.get({
+        spreadsheetId: cfg.spreadsheetId,
+        range: `${quotedTab}!A${Math.max(1, Number(cfg.startRow) || 1)}:${idxToLetter(maxIdx)}`,
+      });
+      values = resp.data.values || [];
+    } catch (e: any) {
+      return { ...empty, sheetName: cfg.name, reason: this.extractApiError(e) };
+    }
+
+    const startRow = Math.max(1, Number(cfg.startRow) || 1);
+    let initial = 0, monthly = 0, total = 0, matchedRows = 0;
+    const payments: Array<{ row: number; first: number; monthly: number; total: number }> = [];
+    values.forEach((r, i) => {
+      if (normC(r[cIdx]) !== target) return;
+      const f = fIdx >= 0 ? num(r[fIdx]) : 0;
+      const m = mIdx >= 0 ? num(r[mIdx]) : 0;
+      const t = tIdx >= 0 ? num(r[tIdx]) : (f + m); // jami ustuni yo'q bo'lsa boshlang'ich+oylik
+      initial += f; monthly += m; total += t;
+      matchedRows++;
+      payments.push({ row: startRow + i, first: f, monthly: m, total: t });
+    });
+
+    return { ok: true, available: true, sheetName: cfg.name, initial, monthly, total, matchedRows, payments };
+  }
+
   async saveConfig(sheets: SheetTarget[], updatedBy?: string) {
     if (!Array.isArray(sheets)) throw new BadRequestException("sheets massiv bo'lishi kerak");
     // XOM (validateTarget'dan OLDIN) kelgan filtr — pipe qirqib tashlaganini fosh qiladi.

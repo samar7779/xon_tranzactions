@@ -87,6 +87,21 @@ export class ChekOrderController {
     return this.svc.contractPayments(contract);
   }
 
+  // ─── Chek payment (manba solishtiruv — READ-ONLY) ───
+  @Get('payment-sheets')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
+  @ApiOperation({ summary: 'Chek payment uchun Google Sheet manbalari ro\'yxati' })
+  paymentSheets() {
+    return this.svc.paymentSheets();
+  }
+
+  @Get('payment-check')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
+  @ApiOperation({ summary: 'Shartnoma to\'lovlarini ОплатыКв / CRM / Sheet manbalaridan solishtirish (o\'qish)' })
+  paymentCheck(@Query('contract') contract: string, @Query('sheetId') sheetId?: string) {
+    return this.svc.paymentCheck(contract, sheetId);
+  }
+
   // ─── AI yordamchi ───
   @Post('assistant/chat')
   @RequirePermissions(PERMISSIONS.CHEKORDER_ASSISTANT)

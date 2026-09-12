@@ -2647,8 +2647,32 @@
     "subtitle": "Мемориальный ордер / квитанция → проверка наличия в транзакциях",
     "tabs": {
       "check": "Проверка",
+      "payment": "Chek payment",
       "history": "История",
       "tickets": "Обращения"
+    },
+    "payment": {
+      "readonly": "Только чтение — ничего не изменяется",
+      "contractLabel": "Номер договора",
+      "contractPlaceholder": "Например: 0010CNA",
+      "sheetLabel": "Google Sheet (необязательно)",
+      "sheetNone": "— не выбрано —",
+      "sheetNoCols": "нет колонок",
+      "check": "Проверить",
+      "price": "Стоимость договора",
+      "srcOplata": "ОплатыКв",
+      "srcCrm": "CRM",
+      "srcSheet": "Sheet",
+      "initial": "Первоначальный (1 взнос)",
+      "monthly": "Ежемесячный",
+      "total": "Всего оплачено",
+      "remaining": "Остаток",
+      "initialShort": "первонач.",
+      "monthlyShort": "ежемес.",
+      "rows": "{n} строк",
+      "crmNotFound": "Не найдено в CRM",
+      "sheetNa": "Sheet не дал этот договор",
+      "paymentsList": "Список платежей (по каждому)"
     },
     "newCheck": "Новая проверка",
     "mode": {

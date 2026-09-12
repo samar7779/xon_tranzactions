@@ -7,6 +7,7 @@ import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { CrmService } from '../crm/crm.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
+import { GoogleExportService } from '../google-export/google-export.service';
 import { ListChekOrderDto, AssistantChatDto, CreateTicketDto, UpdateTicketDto, ListTicketsDto, ResolveChatDto, ApplyCorrectionDto } from './dto/chek-order.dto';
 
 type Actor = { id: string | null; name: string | null };
@@ -53,6 +54,36 @@ const normContract = (s: any) => String(s ?? '').replace(/[\s\-_./№]/g, '').to
 const cleanOrderNo = (s: any) => String(s ?? '').replace(/[^\d]/g, '').trim();
 const digitsOnly = (s: any) => String(s ?? '').replace(/\D/g, '');
 
+// ── Chek payment yordamchilari (CRM show natijasini o'qish uchun) ──
+/** CRM to'lov turi — boshlang'ich (1-взнос) yoki oylik (ежемесячный). */
+function crmKindOf(typeObj: any, label = ''): 'initial' | 'monthly' {
+  const key = String(typeObj?.key ?? '').toLowerCase();
+  if (key) return key.includes('init') || key.includes('boshlang') || key.includes('перво') ? 'initial' : 'monthly';
+  return /перв|нач|boshlang|1\s*[-. ]?\s*взнос/i.test(String(label)) ? 'initial' : 'monthly';
+}
+/** CRM ko'p tilli maydonidan ko'rinadigan matn. */
+function crmRu(obj: any): string {
+  if (!obj) return '';
+  if (typeof obj === 'string') return obj;
+  const v = obj.value ?? obj;
+  if (v?.name && typeof v.name === 'object') return v.name.ru || v.name.uz || v.name.en || '';
+  if (typeof v?.name === 'string') return v.name;
+  if (typeof v === 'object') return v.ru || v.uz || v.en || '';
+  return '';
+}
+/** 'YYYY-MM-DD' (Date yoki string'dan). */
+function toDay(v: any): string | null {
+  if (!v) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = String(v).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+function toNum(v: any): number | null {
+  if (v == null || v === '') return null;
+  const n = Number(String(v).replace(/[\s,]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
 // Levenshtein masofa (OCR xatosi — 1-2 raqam ortiqcha/kam bo'lishi mumkin)
 function editDistance(a: string, b: string): number {
   const m = a.length, n = b.length;
@@ -93,6 +124,7 @@ export class ChekOrderService {
     private readonly config: ConfigService,
     private readonly crm: CrmService,
     private readonly oplataKv: OplataKvService,
+    private readonly googleExport: GoogleExportService,
   ) {
     this.uploadsDir = this.config.get<string>('UPLOADS_DIR') || '/var/www/xon_tranzactions/uploads';
   }
@@ -239,6 +271,109 @@ export class ChekOrderService {
       },
     });
     return { ok: true, contract: cn, items: rows.map((t) => ({ ...t, amount: Number(t.amount) })) };
+  }
+
+  // ───────────────── CHEK PAYMENT — manba solishtiruv (READ-ONLY) ─────────────────
+  /** Sozlangan Google Sheet manbalari (Chek payment dropdowni uchun). */
+  async paymentSheets() {
+    try {
+      const sheets = await this.googleExport.listSheetSources();
+      return { ok: true, sheets };
+    } catch (e: any) {
+      return { ok: true, sheets: [] as any[], error: e?.message };
+    }
+  }
+
+  /**
+   * Bitta shartnoma bo'yicha to'lovlarni 3 manbadan (ОплатыКв / CRM / Google Sheet)
+   * o'qib SOLISHTIRADI. FAQAT O'QISH — hech narsani o'zgartirmaydi.
+   */
+  async paymentCheck(contract: string, sheetId?: string) {
+    const cn = String(contract || '').trim().toUpperCase();
+    if (!cn) throw new BadRequestException("contract bo'sh");
+
+    const [oplata, crm, sheet] = await Promise.all([
+      this.oplatakvPaymentPart(cn),
+      this.crmPaymentPart(cn),
+      sheetId
+        ? this.googleExport.readContractPayment(sheetId, cn).catch((e: any) => ({
+            ok: false, available: false, reason: e?.message || "Sheet o'qishda xato",
+            initial: 0, monthly: 0, total: 0, matchedRows: 0, payments: [] as any[],
+          }))
+        : Promise.resolve(null),
+    ]);
+
+    return { ok: true, contract: cn, oplata, crm, sheet };
+  }
+
+  /** ОплатыКв (bizning baza) — shartnoma bo'yicha boshlang'ich/oylik/jami + to'lovlar. */
+  private async oplatakvPaymentPart(cn: string) {
+    const [agg, rows] = await Promise.all([
+      this.prisma.oplataKv.aggregate({
+        where: { contractNo: cn },
+        _sum: { firstInstallment: true, monthlyAmount: true, paymentAmount: true },
+        _count: true,
+      }),
+      this.prisma.oplataKv.findMany({
+        where: { contractNo: cn },
+        select: { date: true, firstInstallment: true, monthlyAmount: true, paymentAmount: true },
+        orderBy: { date: 'asc' },
+        take: 500,
+      }),
+    ]);
+    return {
+      ok: true,
+      initial: Number(agg._sum.firstInstallment || 0),
+      monthly: Number(agg._sum.monthlyAmount || 0),
+      total: Number(agg._sum.paymentAmount || 0),
+      count: agg._count || 0,
+      payments: rows.map((r) => ({
+        date: toDay(r.date),
+        first: Number(r.firstInstallment || 0),
+        monthly: Number(r.monthlyAmount || 0),
+        total: Number(r.paymentAmount || 0),
+      })),
+    };
+  }
+
+  /** CRM (jonli /order/show) — kelishilgan narx + boshlang'ich/oylik (to'langan) + qoldiq + to'lovlar. */
+  private async crmPaymentPart(cn: string) {
+    try {
+      const res: any = await this.crm.show({ contract: cn });
+      const d: any = res?.ok ? res.detail : null;
+      if (!d) return { ok: false, found: false as const };
+
+      const price = toNum(d.price ?? d.total_amount ?? d.contract_amount);
+      const initialPlan = toNum(d.initial?.total?.amount);
+      const initialPaid = toNum(d.initial?.total?.paid);
+      const monthlyPlan = toNum(d.monthly?.total?.amount);
+      const monthlyPaid = toNum(d.monthly?.total?.paid);
+
+      const hist: any[] = Array.isArray(d.payment_histories) ? d.payment_histories : [];
+      const payments = hist.map((h) => ({
+        date: toDay(h.date_paid ?? h.date),
+        amount: toNum(h.amount) || 0,
+        kind: crmKindOf(h.type, crmRu(h.type)),
+        type: crmRu(h.type) || null,
+      }));
+      const histInitial = payments.filter((p) => p.kind === 'initial').reduce((a, p) => a + p.amount, 0);
+      const histMonthly = payments.filter((p) => p.kind === 'monthly').reduce((a, p) => a + p.amount, 0);
+
+      // "to'langan" — total.paid ustunlari ishonchli; bo'lmasa to'lov tarixidan yig'amiz
+      const initial = initialPaid != null ? initialPaid : histInitial;
+      const monthly = monthlyPaid != null ? monthlyPaid : histMonthly;
+      const total = initial + monthly;
+      const remaining = price != null ? price - total : null;
+
+      return {
+        ok: true, found: true as const,
+        price, initialPlan, monthlyPlan,
+        initial, monthly, total, remaining,
+        count: payments.length, payments,
+      };
+    } catch (e: any) {
+      return { ok: false, found: false as const, error: e?.message || 'CRM javob bermadi' };
+    }
   }
 
   // ───────────────── SURAT / PDF YUKLASH → AGENT ─────────────────

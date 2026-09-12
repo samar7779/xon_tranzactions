@@ -11,12 +11,13 @@ import {
   Hash, Search, Image as ImageIcon, ScanLine, Trash2, ChevronLeft, ChevronRight,
   Building2, CalendarDays, Coins, FileSignature, Landmark, FileText, RotateCcw,
   ZoomIn, X, ScrollText, ArrowRightLeft, Home, ClipboardList, History as HistoryIcon,
-  User2, Tag, ListChecks, Eraser, Ticket,
+  User2, Tag, ListChecks, Eraser, Ticket, Scale,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card } from '@/components/ui/card';
 import { ChekAssistant } from '@/components/chek-assistant';
 import { ChekTickets } from '@/components/chek-tickets';
+import { ChekPayment } from '@/components/chek-payment';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 import { useHasPermission } from '@/lib/auth';
@@ -86,7 +87,7 @@ export default function ChekOrderPage() {
   const canAssistant = useHasPermission(PERMS.CHEKORDER_ASSISTANT);
   const canTickets = useHasPermission(PERMS.CHEKORDER_TICKETS);
 
-  const [view, setView] = useState<'check' | 'history' | 'tickets'>('check');
+  const [view, setView] = useState<'check' | 'history' | 'tickets' | 'payment'>('check');
   const [mode, setMode] = useState<'upload' | 'manual' | 'contract'>('upload');
   const [orderNos, setOrderNos] = useState('');
   const [results, setResults] = useState<OrderResult[] | null>(null);
@@ -236,6 +237,9 @@ export default function ChekOrderPage() {
         <div className="flex items-end justify-between gap-3 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-1">
             <SubTab active={view === 'check'} onClick={() => setView('check')} icon={<ClipboardList className="h-4 w-4" />} label={tr('tabs.check')} />
+            {canView && (
+              <SubTab active={view === 'payment'} onClick={() => setView('payment')} icon={<Scale className="h-4 w-4" />} label={tr('tabs.payment')} />
+            )}
             {canHistory && (
               <SubTab active={view === 'history'} onClick={() => setView('history')} icon={<HistoryIcon className="h-4 w-4" />} label={tr('tabs.history')}
                 badge={stats ? (stats.found + stats.mismatch + stats.not_found) : undefined} />
@@ -454,6 +458,8 @@ export default function ChekOrderPage() {
             )}
             {canManage && panelContract && <ContractInfoPanel contract={panelContract} />}
           </>
+        ) : view === 'payment' ? (
+          <ChekPayment />
         ) : view === 'tickets' ? (
           <ChekTickets />
         ) : (
