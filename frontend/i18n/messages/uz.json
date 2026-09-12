@@ -2653,6 +2653,11 @@
     },
     "payment": {
       "readonly": "Faqat o'qish — hech narsa o'zgartirilmaydi",
+      "sources": "Manbalar (belgilab tanlang)",
+      "contractsLabel": "Shartnomalar (bir nechta bo'lishi mumkin)",
+      "addContractHint": "Shartnoma raqamini yozing — Enter bilan qo'shing",
+      "selectHint": "Kamida bitta manba va bitta shartnoma tanlang",
+      "remove": "Olib tashlash",
       "contractLabel": "Shartnoma raqami",
       "contractPlaceholder": "Masalan: 0010CNA",
       "sheetLabel": "Google Sheet (ixtiyoriy)",

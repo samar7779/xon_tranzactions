@@ -285,25 +285,41 @@ export class ChekOrderService {
   }
 
   /**
-   * Bitta shartnoma bo'yicha to'lovlarni 3 manbadan (ОплатыКв / CRM / Google Sheet)
-   * o'qib SOLISHTIRADI. FAQAT O'QISH — hech narsani o'zgartirmaydi.
+   * BIR YOKI KO'P shartnoma bo'yicha to'lovlarni TANLANGAN manbalardan
+   * (ОплатыКв / CRM / bir yoki bir necha Google Sheet) o'qib SOLISHTIRADI.
+   * Faqat tanlangan manba tortiladi. FAQAT O'QISH — hech narsa o'zgarmaydi.
    */
-  async paymentCheck(contract: string, sheetId?: string) {
-    const cn = String(contract || '').trim().toUpperCase();
-    if (!cn) throw new BadRequestException("contract bo'sh");
+  async paymentCheck(
+    contractsRaw: string,
+    opts: { oplata?: boolean; crm?: boolean; sheetIds?: string[] } = {},
+  ) {
+    const contracts = [...new Set(
+      String(contractsRaw || '').split(/[\s,;\n]+/).map((c) => c.trim().toUpperCase()).filter(Boolean),
+    )].slice(0, 15); // ko'pi bilan 15 shartnoma (CRM jonli chaqiruvlarni cheklash uchun)
+    if (!contracts.length) throw new BadRequestException("contract bo'sh");
 
-    const [oplata, crm, sheet] = await Promise.all([
-      this.oplatakvPaymentPart(cn),
-      this.crmPaymentPart(cn),
-      sheetId
-        ? this.googleExport.readContractPayment(sheetId, cn).catch((e: any) => ({
+    const wantOplata = opts.oplata !== false; // default yoqilgan
+    const wantCrm = !!opts.crm;               // faqat tanlansa
+    const sheetIds = (opts.sheetIds || []).filter(Boolean);
+    const sheetMeta = sheetIds.length ? await this.googleExport.listSheetSources().catch(() => [] as any[]) : [];
+
+    const results = await Promise.all(contracts.map(async (cn) => {
+      const [oplata, crm, sheets] = await Promise.all([
+        wantOplata ? this.oplatakvPaymentPart(cn) : Promise.resolve(null),
+        wantCrm ? this.crmPaymentPart(cn) : Promise.resolve(null),
+        Promise.all(sheetIds.map(async (sid) => {
+          const r = await this.googleExport.readContractPayment(sid, cn).catch((e: any) => ({
             ok: false, available: false, reason: e?.message || "Sheet o'qishda xato",
             initial: 0, monthly: 0, total: 0, matchedRows: 0, payments: [] as any[],
-          }))
-        : Promise.resolve(null),
-    ]);
+          }));
+          const meta = sheetMeta.find((m: any) => m.id === sid);
+          return { id: sid, name: meta?.name || (r as any).sheetName || sid, ...r };
+        })),
+      ]);
+      return { contract: cn, oplata, crm, sheets };
+    }));
 
-    return { ok: true, contract: cn, oplata, crm, sheet };
+    return { ok: true, results };
   }
 
   /** ОплатыКв (bizning baza) — shartnoma bo'yicha boshlang'ich/oylik/jami + to'lovlar. */
@@ -341,7 +357,36 @@ export class ChekOrderService {
     try {
       const res: any = await this.crm.show({ contract: cn });
       const d: any = res?.ok ? res.detail : null;
-      if (!d) return { ok: false, found: false as const };
+      if (!d) {
+        // ZAXIRA: order jadvalida yo'q, lekin to'lovlar /payment-history'da bo'lishi mumkin
+        // (ОплатыКв bilan bir manba). Narx/qoldiq/grafik yo'q, faqat to'lov summalari.
+        const rows = await this.crm.paymentsByContract(cn).catch(() => [] as any[]);
+        if (!rows.length) return { ok: false, found: false as const };
+        const payments = rows.map((p: any) => ({
+          date: toDay(p.date_paid ?? p.date),
+          amount: toNum(p.amount) || 0,
+          kind: crmKindOf(p.type, crmRu(p.type)),
+          type: crmRu(p.type) || null,
+        }));
+        // Split: INDEX qatorlarida initial_amount/monthly_amount alohida bo'lsa AYNAN
+        // shuni ishlatamiz (aralash to'lov to'g'ri taqsimlanadi); aks holda kind bo'yicha.
+        let initial = 0, monthly = 0;
+        for (const p of rows as any[]) {
+          const ia = toNum(p.initial_amount);
+          const ma = toNum(p.monthly_amount);
+          if (ia != null || ma != null) { initial += ia || 0; monthly += ma || 0; }
+          else {
+            const amt = toNum(p.amount) || 0;
+            if (crmKindOf(p.type, crmRu(p.type)) === 'initial') initial += amt; else monthly += amt;
+          }
+        }
+        return {
+          ok: true, found: true as const, viaPaymentHistory: true,
+          price: null, initialPlan: null, monthlyPlan: null,
+          initial, monthly, total: initial + monthly, remaining: null,
+          count: payments.length, payments,
+        };
+      }
 
       const price = toNum(d.price ?? d.total_amount ?? d.contract_amount);
       const initialPlan = toNum(d.initial?.total?.amount);

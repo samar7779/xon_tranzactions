@@ -308,12 +308,14 @@ export class GoogleExportService {
     const tIdx = tCol ? colIdx(tCol) : -1;
     const maxIdx = Math.max(cIdx, fIdx, mIdx, tIdx);
 
-    const quotedTab = `'${String(cfg.tabName).replace(/'/g, "''")}'`;
+    const spreadsheetId = this.normalizeSpreadsheetId(cfg.spreadsheetId); // config'da to'liq URL bo'lishi mumkin
+    if (!spreadsheetId) return { ...empty, sheetName: cfg.name, reason: 'Spreadsheet ID topilmadi' };
+    const quotedTab = this.quoteTab(String(cfg.tabName || '').trim());
     let values: any[][] = [];
     try {
       const api = this.makeSheetsClient(creds);
       const resp = await api.spreadsheets.values.get({
-        spreadsheetId: cfg.spreadsheetId,
+        spreadsheetId,
         range: `${quotedTab}!A${Math.max(1, Number(cfg.startRow) || 1)}:${idxToLetter(maxIdx)}`,
       });
       values = resp.data.values || [];

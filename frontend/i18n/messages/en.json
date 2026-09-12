@@ -2653,6 +2653,11 @@
     },
     "payment": {
       "readonly": "Read-only — nothing is changed",
+      "sources": "Sources (select)",
+      "contractsLabel": "Contracts (multiple allowed)",
+      "addContractHint": "Type a contract number — press Enter to add",
+      "selectHint": "Select at least one source and one contract",
+      "remove": "Remove",
       "contractLabel": "Contract number",
       "contractPlaceholder": "e.g. 0010CNA",
       "sheetLabel": "Google Sheet (optional)",

@@ -174,6 +174,23 @@ export class CrmService {
   }
 
   /**
+   * Bitta shartnoma bo'yicha to'lovlar (/payment-history INDEX, server-side contract filtri).
+   * /order/show shartnomani topa olmaganda (order jadvalida yo'q, lekin to'lovlar
+   * payment-history'da bor) ZAXIRA sifatida ishlatiladi — ОплатыКв bilan bir manba.
+   */
+  async paymentsByContract(contract: string): Promise<any[]> {
+    const c = (contract || '').trim();
+    if (!c) return [];
+    const r: any = await this.callClientGet('/payment-history', { contract: c, limit: 500 }, 60_000);
+    const raw: any = r?.ok ? (r.data?.data ?? r.data) : null;
+    const rows: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+    const norm = (s: any) => String(s || '').replace(/[\s\-_./]/g, '').toUpperCase();
+    const target = norm(c);
+    // Server LIKE qaytarishi mumkin — aniq (normalized) mos kelganlarini qoldiramiz
+    return rows.filter((p) => norm(p.contract) === target);
+  }
+
+  /**
    * Kompozit bank ID'ni ajratadi: [IP_]general_id_num_ddate_acc_ct_acc_dt_amount_sign
    * (ddate dd.MM.yyyy). null — format noto'g'ri.
    */

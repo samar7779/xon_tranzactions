@@ -2653,6 +2653,11 @@
     },
     "payment": {
       "readonly": "Только чтение — ничего не изменяется",
+      "sources": "Источники (отметьте)",
+      "contractsLabel": "Договоры (можно несколько)",
+      "addContractHint": "Введите номер договора — добавьте через Enter",
+      "selectHint": "Выберите хотя бы один источник и один договор",
+      "remove": "Убрать",
       "contractLabel": "Номер договора",
       "contractPlaceholder": "Например: 0010CNA",
       "sheetLabel": "Google Sheet (необязательно)",

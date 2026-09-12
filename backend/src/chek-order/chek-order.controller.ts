@@ -97,9 +97,19 @@ export class ChekOrderController {
 
   @Get('payment-check')
   @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
-  @ApiOperation({ summary: 'Shartnoma to\'lovlarini ОплатыКв / CRM / Sheet manbalaridan solishtirish (o\'qish)' })
-  paymentCheck(@Query('contract') contract: string, @Query('sheetId') sheetId?: string) {
-    return this.svc.paymentCheck(contract, sheetId);
+  @ApiOperation({ summary: 'Bir/ko\'p shartnoma to\'lovlarini tanlangan manbalardan (ОплатыКв/CRM/Sheet) solishtirish (o\'qish)' })
+  paymentCheck(
+    @Query('contract') contract?: string,
+    @Query('contracts') contracts?: string,
+    @Query('oplata') oplata?: string,
+    @Query('crm') crm?: string,
+    @Query('sheetIds') sheetIds?: string,
+  ) {
+    return this.svc.paymentCheck(contracts || contract || '', {
+      oplata: oplata !== '0' && oplata !== 'false', // default: yoqilgan
+      crm: crm === '1' || crm === 'true',
+      sheetIds: (sheetIds || '').split(',').map((s) => s.trim()).filter(Boolean),
+    });
   }
 
   // ─── AI yordamchi ───
