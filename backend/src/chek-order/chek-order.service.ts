@@ -368,7 +368,7 @@ export class ChekOrderService {
   private async crmBatch(contracts: string[]): Promise<Record<string, any>> {
     const acc: Record<string, any> = {};
     let i = 0;
-    const CONC = 6;
+    const CONC = 4; // CRM'ni bosmaslik uchun (yuk ostida chala javob bermasin)
     const worker = async () => {
       while (i < contracts.length) { const cn = contracts[i++]; acc[cn] = await this.crmPaymentPart(cn); }
     };
@@ -444,12 +444,10 @@ export class ChekOrderService {
 
       const price = toNum(d.price ?? d.total_amount ?? d.contract_amount);
       const initialPlan = toNum(d.initial?.total?.amount);
-      const initialPaid = toNum(d.initial?.total?.paid);
       const monthlyPlan = toNum(d.monthly?.total?.amount);
-      const monthlyPaid = toNum(d.monthly?.total?.paid);
 
       const hist: any[] = Array.isArray(d.payment_histories) ? d.payment_histories : [];
-      const payments = hist.map((h) => ({
+      let payments = hist.map((h) => ({
         date: toDay(h.date_paid ?? h.date),
         amount: toNum(h.amount) || 0,
         kind: crmKindOf(h.type, crmRu(h.type)),
@@ -458,9 +456,33 @@ export class ChekOrderService {
       const histInitial = payments.filter((p) => p.kind === 'initial').reduce((a, p) => a + p.amount, 0);
       const histMonthly = payments.filter((p) => p.kind === 'monthly').reduce((a, p) => a + p.amount, 0);
 
-      // "to'langan" — total.paid ustunlari ishonchli; bo'lmasa to'lov tarixidan yig'amiz
-      const initial = initialPaid != null ? initialPaid : histInitial;
-      const monthly = monthlyPaid != null ? monthlyPaid : histMonthly;
+      // Grafik (schedule) bo'yicha to'langan — CRM График'da ko'rinadigan ОПЛАЧЕНО
+      // (Переброска/ko'chirma ham grafikka aks etadi, total.paid'da ba'zan 0 turadi).
+      const sumPaid = (arr: any) => (Array.isArray(arr) ? arr.reduce((a: number, s: any) => a + (toNum(s.amount_paid) || 0), 0) : 0);
+      const schedInitial = sumPaid(d.initial?.schedules);
+      const schedMonthly = sumPaid(d.monthly?.schedules);
+
+      // Chala javob (yuk ostida total.paid=0) va maydon nomuvofiqligidan himoya:
+      // total.paid / grafik / to'lov tarixi — ENG KATTASINI olamiz.
+      let initial = Math.max(toNum(d.initial?.total?.paid) || 0, schedInitial, histInitial);
+      let monthly = Math.max(toNum(d.monthly?.total?.paid) || 0, schedMonthly, histMonthly);
+
+      // Hammasi 0 — lekin shartnoma real: ledger (/payment-history) dan tekshiramiz
+      // (ОплатыКв bilan bir manba; Переброска o'sha yerda bo'lishi mumkin).
+      if (initial + monthly < 1) {
+        const rows = await this.crm.paymentsByContract(cn).catch(() => [] as any[]);
+        if (rows.length) {
+          let li = 0, lm = 0;
+          const lpay = rows.map((p: any) => ({ date: toDay(p.date_paid ?? p.date), amount: toNum(p.amount) || 0, kind: crmKindOf(p.type, crmRu(p.type)), type: crmRu(p.type) || null }));
+          for (const p of rows as any[]) {
+            const ia = toNum(p.initial_amount); const ma = toNum(p.monthly_amount);
+            if (ia != null || ma != null) { li += ia || 0; lm += ma || 0; }
+            else { const amt = toNum(p.amount) || 0; if (crmKindOf(p.type, crmRu(p.type)) === 'initial') li += amt; else lm += amt; }
+          }
+          if (li + lm > 0) { initial = li; monthly = lm; payments = lpay; }
+        }
+      }
+
       const total = initial + monthly;
       const remaining = price != null ? price - total : null;
 
