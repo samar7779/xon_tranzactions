@@ -296,7 +296,7 @@ export class ChekOrderService {
   ) {
     const contracts = [...new Set(
       String(contractsRaw || '').split(/[\s,;\n]+/).map((c) => c.trim().toUpperCase()).filter(Boolean),
-    )].slice(0, 50); // ko'pi bilan 50 shartnoma (CRM jonli chaqiruvlarni cheklash uchun)
+    )].slice(0, 200); // ko'pi bilan 200 shartnoma (batched — ОплатыКв/Sheet tez; CRM 6-parallel)
     if (!contracts.length) throw new BadRequestException("contract bo'sh");
 
     const wantOplata = opts.oplata !== false; // default yoqilgan
