@@ -270,6 +270,104 @@ export class GoogleExportService {
    * boshlang'ich/oylik/jami yig'indisini qaytaradi. HECH NARSA YOZMAYDI.
    * Sheet bir shartnoma uchun bir necha qatorga ega bo'lishi mumkin — hammasi yig'iladi.
    */
+  /**
+   * BATCHED: bir sheetni BIR marta o'qib, KO'P shartnomani birdan solishtiradi.
+   * 180+ shartnoma uchun muhim — har shartnomani alohida o'qish (262k qator ×N) juda og'ir.
+   */
+  async readContractsPayments(sheetId: string, contracts: string[]): Promise<{
+    ok: boolean; available: boolean; reason?: string; sheetName?: string; rowsScanned: number;
+    byContract: Record<string, { initial: number; monthly: number; total: number; matchedRows: number; payments: Array<{ row: number; first: number; monthly: number; total: number }> }>;
+  }> {
+    const norm = (v: any) => String(v ?? '').replace(/[\s\-_./№]/g, '').toUpperCase();
+    const fail = (reason: string, sheetName?: string) =>
+      ({ ok: false as const, available: false, reason, sheetName, rowsScanned: 0, byContract: {} as any });
+
+    const cfg = (await this.getRawConfig()).find((s) => s.id === sheetId);
+    if (!cfg) return fail('Sheet topilmadi');
+    const colOf = (field: string) => (cfg.columns || []).find((c) => c.field === field)?.col;
+    const cCol = colOf('contractNo');
+    const fCol = colOf('firstInstallment');
+    const mCol = colOf('monthlyAmount');
+    const tCol = colOf('paymentAmount');
+    if (!cCol) return fail("Sheet shartnoma raqami ustuniga bog'lanmagan", cfg.name);
+    if (!fCol && !mCol && !tCol) return fail("Sheet boshlang'ich/oylik/jami ustunlariga bog'lanmagan", cfg.name);
+    const creds = await this.loadCredentials();
+    if (!creds) return fail('Google credential topilmadi', cfg.name);
+
+    const colIdx = (letter: string): number => { let n = 0; for (const ch of String(letter).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1; };
+    const idxToLetter = (i: number): string => { let s = ''; let x = i + 1; while (x > 0) { const m = (x - 1) % 26; s = String.fromCharCode(65 + m) + s; x = Math.floor((x - 1) / 26); } return s; };
+    const num = (v: any): number => { const n = Number(String(v ?? '').replace(/[\s ,]/g, '')); return Number.isFinite(n) ? n : 0; };
+    const cIdx = colIdx(cCol);
+    const fIdx = fCol ? colIdx(fCol) : -1;
+    const mIdx = mCol ? colIdx(mCol) : -1;
+    const tIdx = tCol ? colIdx(tCol) : -1;
+    const maxIdx = Math.max(cIdx, fIdx, mIdx, tIdx);
+    const spreadsheetId = this.normalizeSpreadsheetId(cfg.spreadsheetId);
+    if (!spreadsheetId) return fail('Spreadsheet ID topilmadi', cfg.name);
+    const quotedTab = this.quoteTab(String(cfg.tabName || '').trim());
+
+    let values: any[][] = [];
+    try {
+      const api = this.makeSheetsClient(creds);
+      const resp = await api.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${quotedTab}!A1:${idxToLetter(maxIdx)}`,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+      });
+      values = resp.data.values || [];
+      // MERGED shartnoma katagi: anchor qiymatini blok bo'sh kataklariga tarqatamiz
+      try {
+        const meta = await api.spreadsheets.get({ spreadsheetId, ranges: [String(cfg.tabName || '').trim()], fields: 'sheets(merges)' });
+        const merges = (meta.data.sheets?.[0] as any)?.merges || [];
+        for (const mg of merges as any[]) {
+          const s = Number(mg.startColumnIndex), e = Number(mg.endColumnIndex);
+          if (!(s <= cIdx && cIdx < e)) continue;
+          const r0 = Number(mg.startRowIndex), r1 = Number(mg.endRowIndex);
+          if (r1 - r0 <= 1) continue;
+          const anchorVal = values[r0]?.[cIdx];
+          if (anchorVal == null || String(anchorVal).trim() === '') continue;
+          for (let ar = r0; ar < r1; ar++) {
+            if (ar >= values.length) break;
+            if (!values[ar]) values[ar] = [];
+            const cur = values[ar][cIdx];
+            if (cur == null || String(cur).trim() === '') values[ar][cIdx] = anchorVal;
+          }
+        }
+      } catch { /* merge o'qilmasa — forward-fill zaxira */ }
+      // FORWARD-FILL: blank-repeat (shartnoma bir marta yozilib, ostidagilari bo'sh)
+      {
+        let last: any = null;
+        for (const row of values) {
+          if (!row) continue;
+          const cur = row[cIdx];
+          if (cur != null && String(cur).trim() !== '') { last = cur; continue; }
+          if (last == null) continue;
+          const hasPay = (fIdx >= 0 && num(row[fIdx])) || (mIdx >= 0 && num(row[mIdx])) || (tIdx >= 0 && num(row[tIdx]));
+          if (hasPay) row[cIdx] = last;
+        }
+      }
+    } catch (e: any) {
+      return fail(this.extractApiError(e), cfg.name);
+    }
+
+    // Nishonlar: normalized → original; natija original bo'yicha
+    const targets = new Map<string, string>();
+    for (const c of contracts) { const n = norm(c); if (n) targets.set(n, c); }
+    const byContract: Record<string, { initial: number; monthly: number; total: number; matchedRows: number; payments: any[] }> = {};
+    for (const c of contracts) byContract[c] = { initial: 0, monthly: 0, total: 0, matchedRows: 0, payments: [] };
+    values.forEach((r, i) => {
+      const orig = targets.get(norm(r[cIdx]));
+      if (!orig) return;
+      const f = fIdx >= 0 ? num(r[fIdx]) : 0;
+      const m = mIdx >= 0 ? num(r[mIdx]) : 0;
+      const t = tIdx >= 0 ? num(r[tIdx]) : (f + m);
+      const a = byContract[orig];
+      a.initial += f; a.monthly += m; a.total += t; a.matchedRows++;
+      if (a.payments.length < 200) a.payments.push({ row: 1 + i, first: f, monthly: m, total: t });
+    });
+    return { ok: true, available: true, sheetName: cfg.name, rowsScanned: values.length, byContract };
+  }
+
   async readContractPayment(sheetId: string, contractNo: string): Promise<{
     ok: boolean; available: boolean; reason?: string; sheetName?: string;
     initial: number; monthly: number; total: number; matchedRows: number; rowsScanned?: number;

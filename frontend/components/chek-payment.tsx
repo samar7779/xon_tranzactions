@@ -75,7 +75,7 @@ export function ChekPayment() {
       `/chek-order/payment-check?contracts=${encodeURIComponent(submitted!.contracts.join(','))}`
       + `&oplata=${submitted!.oplata ? 1 : 0}&crm=${submitted!.crm ? 1 : 0}`
       + (submitted!.sheetIds.length ? `&sheetIds=${encodeURIComponent(submitted!.sheetIds.join(','))}` : ''),
-      { timeout: 90_000 },
+      { timeout: 180_000 },
     ),
     enabled: !!submitted && submitted.contracts.length > 0,
   });
@@ -87,7 +87,7 @@ export function ChekPayment() {
       const seen = new Set(prev.map(normC));
       const next = [...prev];
       for (const p of parts) if (!seen.has(normC(p))) { next.push(p); seen.add(normC(p)); }
-      return next.slice(0, 50);
+      return next.slice(0, 200);
     });
     setInput('');
   };

@@ -304,23 +304,76 @@ export class ChekOrderService {
     const sheetIds = (opts.sheetIds || []).filter(Boolean);
     const sheetMeta = sheetIds.length ? await this.googleExport.listSheetSources().catch(() => [] as any[]) : [];
 
-    const results = await Promise.all(contracts.map(async (cn) => {
-      const [oplata, crm, sheets] = await Promise.all([
-        wantOplata ? this.oplatakvPaymentPart(cn) : Promise.resolve(null),
-        wantCrm ? this.crmPaymentPart(cn) : Promise.resolve(null),
-        Promise.all(sheetIds.map(async (sid) => {
-          const r = await this.googleExport.readContractPayment(sid, cn).catch((e: any) => ({
-            ok: false, available: false, reason: e?.message || "Sheet o'qishda xato",
-            initial: 0, monthly: 0, total: 0, matchedRows: 0, payments: [] as any[],
-          }));
-          const meta = sheetMeta.find((m: any) => m.id === sid);
-          return { id: sid, name: meta?.name || (r as any).sheetName || sid, ...r };
-        })),
-      ]);
-      return { contract: cn, oplata, crm, sheets };
+    // ── ОплатыКв: BITTA batch (groupBy + to'lov ro'yxati) — 180+ shartnoma uchun tez ──
+    const oplataMap = wantOplata ? await this.oplatakvBatch(contracts) : null;
+
+    // ── Sheet: har sheet BIR marta o'qiladi (hamma shartnoma birdan), 262k qatorni N marta emas ──
+    const sheetData: Record<string, any> = {};
+    for (const sid of sheetIds) {
+      sheetData[sid] = await this.googleExport.readContractsPayments(sid, contracts)
+        .catch((e: any) => ({ available: false, reason: e?.message || "Sheet o'qishda xato", rowsScanned: 0, byContract: {} }));
+    }
+
+    // ── CRM: cheklangan parallel (har shartnoma alohida jonli chaqiruv — CRM'ni bosmaslik uchun) ──
+    const crmMap = wantCrm ? await this.crmBatch(contracts) : null;
+
+    const results = contracts.map((cn) => ({
+      contract: cn,
+      oplata: oplataMap ? oplataMap[cn] : null,
+      crm: crmMap ? crmMap[cn] : null,
+      sheets: sheetIds.map((sid) => {
+        const sd = sheetData[sid];
+        const b = sd.byContract?.[cn];
+        const meta = sheetMeta.find((m: any) => m.id === sid);
+        return {
+          id: sid, name: meta?.name || sd.sheetName || sid,
+          ok: !!sd.available, available: !!sd.available, reason: sd.reason,
+          initial: b?.initial || 0, monthly: b?.monthly || 0, total: b?.total || 0,
+          matchedRows: b?.matchedRows || 0, rowsScanned: sd.rowsScanned, payments: b?.payments || [],
+        };
+      }),
     }));
 
     return { ok: true, results };
+  }
+
+  /** ОплатыКв — ko'p shartnoma bo'yicha BITTA groupBy + to'lov ro'yxati (batch). */
+  private async oplatakvBatch(contracts: string[]): Promise<Record<string, any>> {
+    const acc: Record<string, any> = {};
+    for (const c of contracts) acc[c] = { ok: true, initial: 0, monthly: 0, total: 0, count: 0, payments: [] };
+    const grouped = await this.prisma.oplataKv.groupBy({
+      by: ['contractNo'],
+      where: { contractNo: { in: contracts } },
+      _sum: { firstInstallment: true, monthlyAmount: true, paymentAmount: true },
+      _count: true,
+    });
+    for (const g of grouped) {
+      const a = acc[g.contractNo];
+      if (a) { a.initial = Number(g._sum.firstInstallment || 0); a.monthly = Number(g._sum.monthlyAmount || 0); a.total = Number(g._sum.paymentAmount || 0); a.count = g._count; }
+    }
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { contractNo: { in: contracts } },
+      select: { contractNo: true, date: true, firstInstallment: true, monthlyAmount: true, paymentAmount: true },
+      orderBy: { date: 'asc' },
+      take: 10000,
+    });
+    for (const r of rows) {
+      const a = acc[r.contractNo];
+      if (a && a.payments.length < 200) a.payments.push({ date: toDay(r.date), first: Number(r.firstInstallment || 0), monthly: Number(r.monthlyAmount || 0), total: Number(r.paymentAmount || 0) });
+    }
+    return acc;
+  }
+
+  /** CRM — har shartnoma alohida (show + payment-history), cheklangan parallel (6 ta). */
+  private async crmBatch(contracts: string[]): Promise<Record<string, any>> {
+    const acc: Record<string, any> = {};
+    let i = 0;
+    const CONC = 6;
+    const worker = async () => {
+      while (i < contracts.length) { const cn = contracts[i++]; acc[cn] = await this.crmPaymentPart(cn); }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONC, contracts.length) }, () => worker()));
+    return acc;
   }
 
   /** ОплатыКв (bizning baza) — shartnoma bo'yicha boshlang'ich/oylik/jami + to'lovlar. */
