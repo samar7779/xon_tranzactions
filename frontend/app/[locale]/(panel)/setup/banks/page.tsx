@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Building2, Check, KeyRound, Wallet, ExternalLink,
-  Globe, Shield, Timer, Power, ChevronRight,
+  Globe, Shield, Timer, Power, ChevronRight, Pencil, X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -155,6 +155,20 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
     onError: (e: any) => toast.error(e?.message || t('error')),
   });
 
+  // Endpoint (apiBaseUrl) tahrirlash — lab ↔ prod almashtirish uchun
+  const [editUrl, setEditUrl] = useState(false);
+  const [urlVal, setUrlVal] = useState(b.apiBaseUrl || '');
+  useEffect(() => { setUrlVal(b.apiBaseUrl || ''); }, [b.apiBaseUrl]);
+  const urlMut = useMutation({
+    mutationFn: (url: string) => api.patch(`/banks/${b.id}`, { apiBaseUrl: url }),
+    onSuccess: () => {
+      toast.success('Endpoint yangilandi');
+      setEditUrl(false);
+      qc.invalidateQueries({ queryKey: ['banks'] });
+    },
+    onError: (e: any) => toast.error(e?.message || t('error')),
+  });
+
   function saveInterval() {
     const n = Math.min(1440, Math.max(1, Math.round(Number(intervalVal) || 5)));
     setIntervalVal(String(n));
@@ -188,12 +202,29 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
             <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Shield className="h-3 w-3" /> {t('apiType')}</span>
             <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{b.apiKind}</span>
           </div>
-          {b.apiBaseUrl && (
-            <div className="flex items-start justify-between text-[11px] gap-2">
+          {(b.apiBaseUrl || editUrl) && (
+            <div className="flex items-center justify-between text-[11px] gap-2">
               <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 shrink-0"><Globe className="h-3 w-3" /> Endpoint</span>
-              <span className="font-mono truncate text-right text-slate-700 dark:text-slate-300" title={b.apiBaseUrl}>
-                {b.apiBaseUrl.replace(/^https?:\/\//, '')}
-              </span>
+              {editUrl ? (
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                  <Input
+                    value={urlVal}
+                    onChange={(e) => setUrlVal(e.target.value)}
+                    placeholder="https://capi-lab.hamkorbank.uz"
+                    className="h-7 text-[10px] font-mono"
+                    onKeyDown={(e) => { if (e.key === 'Enter') urlMut.mutate(urlVal.trim()); if (e.key === 'Escape') { setEditUrl(false); setUrlVal(b.apiBaseUrl || ''); } }}
+                  />
+                  <button onClick={() => urlMut.mutate(urlVal.trim())} disabled={urlMut.isPending} title="Saqlash" className="shrink-0 inline-grid place-items-center h-7 w-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"><Check className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => { setEditUrl(false); setUrlVal(b.apiBaseUrl || ''); }} title="Bekor" className="shrink-0 inline-grid place-items-center h-7 w-7 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><X className="h-3.5 w-3.5" /></button>
+                </div>
+              ) : (
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-mono truncate text-right text-slate-700 dark:text-slate-300" title={b.apiBaseUrl || ''}>
+                    {(b.apiBaseUrl || '').replace(/^https?:\/\//, '')}
+                  </span>
+                  <button onClick={() => { setUrlVal(b.apiBaseUrl || ''); setEditUrl(true); }} title="Endpoint'ni o'zgartirish (lab ↔ prod)" className="shrink-0 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"><Pencil className="h-3 w-3" /></button>
+                </span>
+              )}
             </div>
           )}
           {/* Sync intervali — bank bo'yicha sozlanadi (istalgan daqiqa yoki o'chirilgan) */}
