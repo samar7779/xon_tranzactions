@@ -139,6 +139,32 @@ export class DeployService {
     };
   }
 
+  /**
+   * Hamkorbank ulanish diagnostikasi (vaqtinchalik): serverning OUTBOUND IP'si +
+   * prod/lab endpointlarga auth'siz probe. 403 = server IP whitelist QILINMAGAN;
+   * 400/-801 (login bo'sh) = server IP WHITELIST QILINGAN (faqat login/parol kerak).
+   */
+  async hamkorDiag() {
+    const out: any = { ok: true, outboundIp: null, prod: null, lab: null };
+    try {
+      const r = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(8000) } as any);
+      const j: any = await r.json();
+      out.outboundIp = j?.ip ?? null;
+    } catch (e: any) { out.outboundIp = `ip-echo xato: ${e?.message || e}`; }
+
+    for (const [label, base] of [['prod', 'https://capi.hamkorbank.uz'], ['lab', 'https://capi-lab.hamkorbank.uz']] as const) {
+      try {
+        const r = await fetch(`${base}/api/v1/ps/get-bank-day`, {
+          headers: { requestId: 'diag', lang: 'RU' },
+          signal: AbortSignal.timeout(12000),
+        } as any);
+        const body = (await r.text()).slice(0, 200);
+        out[label] = { status: r.status, body };
+      } catch (e: any) { out[label] = { error: e?.message || String(e) }; }
+    }
+    return out;
+  }
+
   async tail(lines = 200) {
     try {
       const buf = await fs.readFile(this.logFile, 'utf8');

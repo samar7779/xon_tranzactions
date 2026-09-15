@@ -29,6 +29,12 @@ export class DeployController {
     return this.svc.status();
   }
 
+  @Get('hamkor-diag')
+  @ApiOperation({ summary: 'Hamkorbank ulanish diagnostikasi — outbound IP + prod/lab probe (vaqtinchalik)' })
+  hamkorDiag() {
+    return this.svc.hamkorDiag();
+  }
+
   @Get('log')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.SYSTEM_DEPLOY)
