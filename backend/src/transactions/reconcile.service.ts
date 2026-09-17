@@ -288,7 +288,7 @@ export class ReconcileService {
    */
   private parseDdateFromExternalId(ext: string | null | undefined): Date | null {
     if (!ext) return null;
-    const body = ext.startsWith('IP_') ? ext.slice(3) : ext;
+    const body = ext.replace(/^(IP|HB)_/, '');
     const parts = body.split('_');
     const ddate = parts[2];
     if (!ddate || !/^\d{2}\.\d{2}\.\d{4}$/.test(ddate)) return null;

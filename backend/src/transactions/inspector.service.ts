@@ -7,7 +7,7 @@ import { HamkorbankClient } from '../integrations/hamkorbank/hamkorbank.client';
 import { KbDoc1CItem, KbDoc1CResult } from '../integrations/kapitalbank/types';
 
 interface ParsedId {
-  bankPrefix: 'IP' | null;
+  bankPrefix: 'IP' | 'HB' | null;
   generalId: string;
   num: string;
   ddate: string;
@@ -62,9 +62,10 @@ export class InspectorService {
       throw new BadRequestException("ID bo'sh");
     }
     let id = rawId.trim();
-    let bankPrefix: 'IP' | null = null;
-    if (id.startsWith('IP_')) {
-      bankPrefix = 'IP';
+    let bankPrefix: 'IP' | 'HB' | null = null;
+    const pfxMatch = /^(IP|HB)_/.exec(id);
+    if (pfxMatch) {
+      bankPrefix = pfxMatch[1] as 'IP' | 'HB';
       id = id.slice(3);
     }
     const parts = id.split('_');
@@ -469,7 +470,7 @@ export class InspectorService {
     if (!ws) throw new BadRequestException("Excel bo'sh");
 
     const looksLikeId = (s: string) => {
-      const clean = s.startsWith('IP_') ? s.slice(3) : s;
+      const clean = s.replace(/^(IP|HB)_/, '');
       return clean.split('_').length >= 7;
     };
 

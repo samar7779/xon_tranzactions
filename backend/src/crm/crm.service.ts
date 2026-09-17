@@ -200,7 +200,7 @@ export class CrmService {
   } | null {
     const s = (compositeId || '').trim();
     if (!s) return null;
-    const body = s.startsWith('IP_') ? s.slice(3) : s;
+    const body = s.replace(/^(IP|HB)_/, '');
     const parts = body.split('_');
     if (parts.length < 7) return null;
     const [generalId, num, ddate, accCt, accDt, amountRaw, sign] = parts;
@@ -375,7 +375,7 @@ export class CrmService {
   /** Kompozit ID/external_id yadrosi = general_id_num_ddate (yagona, barqaror match kaliti). */
   private compositeCore(s: string): string {
     const t = (s || '').trim();
-    const body = t.startsWith('IP_') ? t.slice(3) : t;
+    const body = t.replace(/^(IP|HB)_/, '');
     const parts = body.split('_');
     if (parts.length < 3) return '';
     return `${parts[0]}_${parts[1]}_${parts[2]}`;

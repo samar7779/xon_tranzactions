@@ -258,7 +258,10 @@ export class SyncService implements OnModuleInit {
   /** Public — sverka fixMissing flow ham composite id'ni ishlatadi */
   makeCompositeId(item: KbDoc1CItem, ourAccount: string, bankCode?: string): string {
     const sign = item.acc_dt === ourAccount ? '+' : '-';
-    const prefix = bankCode === 'IPAK_YULI' ? 'IP_' : '';
+    // Bank prefiksi — externalId'da bankni ajratish uchun. Ipak=IP_, Hamkor=HB_,
+    // Kapital=prefiksсiz (asl/default). Prefiks o'zgarsa dedup buzilmaydi: upsertOne
+    // bankB2Id (b2_id) bo'yicha topadi va eski externalId'ni yangisiga avtomat ko'chiradi.
+    const prefix = bankCode === 'IPAK_YULI' ? 'IP_' : bankCode === 'HAMKORBANK' ? 'HB_' : '';
     return prefix + [
       item.general_id || 'no_general_id',
       String(item.num || 'no_num'),
@@ -1035,7 +1038,7 @@ export class SyncService implements OnModuleInit {
       const ext = tx.externalId;
       // Composite ID format: {gen_id}_{num}_{ddate}_..._{sign}
       // FIX (B#13): general_id + num bo'yicha ANIQ moslashtiramiz (collision yo'q).
-      const rawExt = ext.replace(/^IP_/, '');
+      const rawExt = ext.replace(/^(IP|HB)_/, '');
       const extParts = rawExt.split('_');
       const genNumKey = !rawExt.startsWith('no_general_id') && extParts[0]
         ? `${extParts[0]}_${extParts[1] ?? 'no_num'}`
@@ -1648,7 +1651,7 @@ export class SyncService implements OnModuleInit {
 
   /** externalId (composite) bankda ±3 kun ichida hali bormi — general_id+num bo'yicha. */
   private async verifyExternalInBank(externalId: string, acc: any): Promise<{ status: 'found' | 'shifted' | 'not_found' | 'no_data'; foundOnDate: string | null }> {
-    const rawExt = String(externalId || '').replace(/^IP_/, '');
+    const rawExt = String(externalId || '').replace(/^(IP|HB)_/, '');
     const parts = rawExt.split('_');
     if (rawExt.startsWith('no_general_id') || !parts[0]) return { status: 'no_data', foundOnDate: null };
     const genNumKey = `${parts[0]}_${parts[1] ?? 'no_num'}`;
