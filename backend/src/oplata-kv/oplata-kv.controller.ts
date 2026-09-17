@@ -182,8 +182,9 @@ export class OplataKvController {
     @Query('crmStatuses') crmStatuses?: string,
     @Query('propertyTypes') propertyTypes?: string,
     @Query('branches') branches?: string,
+    @Query('banks') banks?: string,
   ) {
-    return this.svc.byObject({ dateFrom, dateTo, mode, includeSchotchik: includeSchotchik === '1' || includeSchotchik === 'true', crmStatuses, propertyTypes, branches });
+    return this.svc.byObject({ dateFrom, dateTo, mode, includeSchotchik: includeSchotchik === '1' || includeSchotchik === 'true', crmStatuses, propertyTypes, branches, banks });
   }
 
   @Get('daily-summary')
@@ -251,6 +252,7 @@ export class OplataKvController {
     @Query('crmStatuses') crmStatuses?: string,
     @Query('propertyTypes') propertyTypes?: string,
     @Query('branches') branches?: string,
+    @Query('banks') banks?: string,
   ) {
     return this.svc.byObjectDetail({
       object,
@@ -261,6 +263,7 @@ export class OplataKvController {
       crmStatuses,
       propertyTypes,
       branches,
+      banks,
     });
   }
 
@@ -277,6 +280,7 @@ export class OplataKvController {
     @Query('crmStatuses') crmStatuses?: string,
     @Query('propertyTypes') propertyTypes?: string,
     @Query('branches') branches?: string,
+    @Query('banks') banks?: string,
   ) {
     const { buffer, filename } = await this.svc.byObjectDetailXlsx({
       object,
@@ -287,6 +291,7 @@ export class OplataKvController {
       crmStatuses,
       propertyTypes,
       branches,
+      banks,
     });
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

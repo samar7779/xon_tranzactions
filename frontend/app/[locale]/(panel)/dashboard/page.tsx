@@ -116,8 +116,10 @@ export default function DashboardPage() {
   const objCrmKey = useMemo(() => Array.from(objCrmStatuses).sort().join(','), [objCrmStatuses]);
   const [objTypes, setObjTypes] = useState<Set<string>>(new Set());       // Тип (жил/пар)
   const [objBranches, setObjBranches] = useState<Set<string>>(new Set()); // Сотув бўлими
+  const [objBanks, setObjBanks] = useState<Set<string>>(new Set());       // Bank (tranzaksiya orqali)
   const objTypeKey = useMemo(() => Array.from(objTypes).sort().join(','), [objTypes]);
   const objBranchKey = useMemo(() => Array.from(objBranches).sort().join(','), [objBranches]);
+  const objBankKey = useMemo(() => Array.from(objBanks).sort().join(','), [objBanks]);
   // CRM status opsiyalari (virtual_status distinct + "— (bo'sh)")
   const { data: crmStatusOpts } = useQuery({
     queryKey: ['oplata-distinct-crmStatus'],
@@ -133,6 +135,11 @@ export default function DashboardPage() {
   const { data: crmBranchOpts } = useQuery({
     queryKey: ['oplata-distinct-crmBranch'],
     queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>('/oplata-kv/distinct?column=crmBranch'),
+    enabled: has(PERMS.DASHBOARD_OBJECTS),
+  });
+  const { data: bankOpts } = useQuery({
+    queryKey: ['oplata-distinct-bank'],
+    queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>('/oplata-kv/distinct?column=bank'),
     enabled: has(PERMS.DASHBOARD_OBJECTS),
   });
   const [objRange, setObjRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
@@ -151,7 +158,7 @@ export default function DashboardPage() {
 
   interface ObjRow { object: string; paymentAmount: number; firstInstallment: number; monthlyAmount: number; count: number }
   const { data: objReport, isLoading: objLoading } = useQuery({
-    queryKey: ['oplata-by-object', objFrom, objTo, objMode, objInclSchotchik, objCrmKey, objTypeKey, objBranchKey],
+    queryKey: ['oplata-by-object', objFrom, objTo, objMode, objInclSchotchik, objCrmKey, objTypeKey, objBranchKey, objBankKey],
     queryFn: () => {
       const p = new URLSearchParams();
       if (objFrom) p.set('dateFrom', objFrom);
@@ -161,6 +168,7 @@ export default function DashboardPage() {
       if (objCrmKey) p.set('crmStatuses', objCrmKey);
       if (objTypeKey) p.set('propertyTypes', objTypeKey);
       if (objBranchKey) p.set('branches', objBranchKey);
+      if (objBankKey) p.set('banks', objBankKey);
       return api.get<{ ok: boolean; rows: ObjRow[]; total: ObjRow }>(`/oplata-kv/by-object?${p}`);
     },
     enabled: has(PERMS.DASHBOARD_OBJECTS) && (objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo)),
@@ -479,6 +487,8 @@ export default function DashboardPage() {
                 typeOptions={crmTypeOpts?.values || []}
                 branches={objBranches} setBranches={setObjBranches}
                 branchOptions={crmBranchOpts?.values || []}
+                banks={objBanks} setBanks={setObjBanks}
+                bankOptions={bankOpts?.values || []}
               />
               <span className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
               <RangeBtn active={objRange === 'today'} onClick={() => setObjRange('today')}>{t('rangeToday')}</RangeBtn>
@@ -598,6 +608,7 @@ export default function DashboardPage() {
           crmStatuses={objCrmKey}
           propertyTypes={objTypeKey}
           branches={objBranchKey}
+          banks={objBankKey}
           onClose={() => setObjDetail(null)}
         />
         </>)}
@@ -1559,6 +1570,7 @@ function FilterGroup({
 function ObjToolbarFilter({
   mode, setMode, inclSchotchik, setInclSchotchik, crmStatuses, setCrmStatuses, crmOptions,
   propertyTypes, setPropertyTypes, typeOptions, branches, setBranches, branchOptions,
+  banks, setBanks, bankOptions,
 }: {
   mode: 'normal' | 'refund';
   setMode: (m: 'normal' | 'refund') => void;
@@ -1573,6 +1585,9 @@ function ObjToolbarFilter({
   branches: Set<string>;
   setBranches: (s: Set<string>) => void;
   branchOptions: Array<{ id: string; name: string }>;
+  banks: Set<string>;
+  setBanks: (s: Set<string>) => void;
+  bankOptions: Array<{ id: string; name: string }>;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -1580,7 +1595,7 @@ function ObjToolbarFilter({
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   const activeCount = (mode === 'refund' ? 1 : 0) + (inclSchotchik ? 1 : 0)
-    + crmStatuses.size + propertyTypes.size + branches.size;
+    + crmStatuses.size + propertyTypes.size + branches.size + banks.size;
 
   const openPop = () => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); setOpen(true); };
 
@@ -1612,7 +1627,7 @@ function ObjToolbarFilter({
   };
   const clearAll = () => {
     setMode('normal'); setInclSchotchik(false);
-    setCrmStatuses(new Set()); setPropertyTypes(new Set()); setBranches(new Set());
+    setCrmStatuses(new Set()); setPropertyTypes(new Set()); setBranches(new Set()); setBanks(new Set());
   };
   const toggleIn = (set: Set<string>, apply: (s: Set<string>) => void) => (id: string) => {
     const next = new Set(set);
@@ -1684,6 +1699,15 @@ function ObjToolbarFilter({
               accent="rose"
             />
           </div>
+
+          {/* Bank — Возврат'dan KEYIN, yig'iladigan (to'lov qaysi bankdan kelgani) */}
+          <FilterGroup
+            title="Bank"
+            options={bankOptions}
+            selected={banks}
+            onToggle={toggleIn(banks, setBanks)}
+            onClear={() => setBanks(new Set())}
+          />
 
           {/* Тип (жил/пар) — CRM status'dan OLDIN */}
           <FilterGroup
@@ -1796,7 +1820,7 @@ interface ObjDetailRow {
 }
 
 function ObjectDetailDialog({
-  object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, propertyTypes, branches, onClose,
+  object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, propertyTypes, branches, banks, onClose,
 }: {
   object: string | null;
   dateFrom: string;
@@ -1806,6 +1830,7 @@ function ObjectDetailDialog({
   crmStatuses?: string;
   propertyTypes?: string;
   branches?: string;
+  banks?: string;
   onClose: () => void;
 }) {
   const t = useTranslations('dashboard');
@@ -1813,7 +1838,7 @@ function ObjectDetailDialog({
   const isAll = object === '__ALL__';
 
   const { data, isLoading } = useQuery({
-    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, propertyTypes, branches],
+    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, propertyTypes, branches, banks],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('object', object || '');
@@ -1824,6 +1849,7 @@ function ObjectDetailDialog({
       if (crmStatuses) p.set('crmStatuses', crmStatuses);
       if (propertyTypes) p.set('propertyTypes', propertyTypes);
       if (branches) p.set('branches', branches);
+      if (banks) p.set('banks', banks);
       return api.get<{
         ok: boolean; object: string; count: number; truncated?: boolean;
         rows: ObjDetailRow[];
@@ -1847,6 +1873,7 @@ function ObjectDetailDialog({
       if (crmStatuses) p.set('crmStatuses', crmStatuses);
       if (propertyTypes) p.set('propertyTypes', propertyTypes);
       if (branches) p.set('branches', branches);
+      if (banks) p.set('banks', banks);
       const safe = (object === '—' ? 'obyektsiz' : object).replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
       await apiDownload(`/oplata-kv/by-object-detail/export?${p.toString()}`, `obyekt-${safe}.xlsx`);
     } catch {

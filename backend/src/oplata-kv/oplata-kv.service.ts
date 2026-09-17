@@ -565,6 +565,50 @@ export class OplataKvService {
   }
 
   /**
+   * Bank filtri — ОплатыКв'da bank ustuni YO'Q, bank tranzaksiya orqali aniqlanadi:
+   *   oplata_kv.source_tx_id → Transaction.externalId (yoki Transaction.id) → bankId.
+   *
+   * Berilgan qatorlardan tanlangan bank(lar)ga tegishlilarini qaytaradi.
+   * '__none__' — bankka bog'lanmagan qatorlar (Excel import, qo'lda, tranzaksiyasi o'chgan).
+   *
+   * Katta `IN` ro'yxatlardan qochish uchun (Postgres 32767 parametr chegarasi)
+   * filtr SQL'da emas, shu yerda qo'llanadi: kalitlar bo'laklab tekshiriladi.
+   */
+  private async filterRowsByBank<T extends { sourceTxId: string | null }>(rows: T[], csv: string): Promise<T[]> {
+    const wanted = csv.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!wanted.length) return rows;
+    const wantNone = wanted.includes('__none__');
+    const bankIds = new Set(wanted.filter((w) => w !== '__none__'));
+
+    // source_tx_id → bankId xaritasi
+    const keys = Array.from(new Set(rows.map((r) => r.sourceTxId).filter((k): k is string => !!k)));
+    const bankByKey = new Map<string, string | null>();
+    const CHUNK = 5000;
+    // 1) Ko'pchilik kalit — bank kompozit ID (Transaction.externalId)
+    for (let i = 0; i < keys.length; i += CHUNK) {
+      const txs = await this.prisma.transaction.findMany({
+        where: { externalId: { in: keys.slice(i, i + CHUNK) } },
+        select: { externalId: true, bankId: true },
+      });
+      for (const t of txs) if (t.externalId) bankByKey.set(t.externalId, t.bankId);
+    }
+    // 2) Qolganlari — tranzaksiya cuid'i (externalId'siz import qatorlar)
+    const rest = keys.filter((k) => !bankByKey.has(k));
+    for (let i = 0; i < rest.length; i += CHUNK) {
+      const txs = await this.prisma.transaction.findMany({
+        where: { id: { in: rest.slice(i, i + CHUNK) } },
+        select: { id: true, bankId: true },
+      });
+      for (const t of txs) bankByKey.set(t.id, t.bankId);
+    }
+
+    return rows.filter((r) => {
+      const bank = r.sourceTxId ? bankByKey.get(r.sourceTxId) ?? null : null;
+      return bank ? bankIds.has(bank) : wantNone;
+    });
+  }
+
+  /**
    * Hozir XATO bo'lgan oplata_kv qatorlarining DISTINCT shartnoma raqamlari.
    * "Qayta tekshirish" shu ro'yxatni CRM'ga tekshiradi — butun DB'даги 5000+
    * eski found=false qatorni emas, faqat haqiqiy XATO to'lovlarning shartnomalarini.
@@ -960,7 +1004,7 @@ export class OplataKvService {
    * Obyektlar bo'yicha to'lovlar yig'indisi — Telegram hisobotidagi kabi:
    * har obyekt uchun Сумма оплаты / 1 взнос / Ойлик, + umumiy ЖАМИ.
    */
-  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean; crmStatuses?: string; propertyTypes?: string; branches?: string } = {}) {
+  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean; crmStatuses?: string; propertyTypes?: string; branches?: string; banks?: string } = {}) {
     const where: any = {};
     if (opts.dateFrom || opts.dateTo) {
       const range: any = {};
@@ -1006,16 +1050,38 @@ export class OplataKvService {
       if (bf) where.AND = [...(where.AND || []), bf];
     }
 
-    // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
-    // beradi (ma'lum quirk), shuning uchun cast qilamiz.
-    const grouped = await (this.prisma.oplataKv.groupBy as any)({
-      by: ['object'],
-      where,
-      _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
-      _count: true,
-    });
+    type Grouped = Array<{ object: string | null; _sum: { paymentAmount: any; firstInstallment: any; monthlyAmount: any }; _count: number }>;
+    let grouped: Grouped;
+    if (opts.banks && opts.banks.trim()) {
+      // Bank filtri — qatorlarni olib, bank bo'yicha ajratib, JS'da guruhlaymiz
+      // (bank tranzaksiya orqali aniqlanadi, SQL groupBy'ga qo'shib bo'lmaydi)
+      const all = await this.prisma.oplataKv.findMany({
+        where,
+        select: { object: true, paymentAmount: true, firstInstallment: true, monthlyAmount: true, sourceTxId: true },
+      });
+      const picked = await this.filterRowsByBank(all, opts.banks);
+      const acc = new Map<string | null, Grouped[number]>();
+      for (const r of picked) {
+        const g = acc.get(r.object) ?? { object: r.object, _sum: { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 }, _count: 0 };
+        g._sum.paymentAmount    += Number(r.paymentAmount    ?? 0);
+        g._sum.firstInstallment += Number(r.firstInstallment ?? 0);
+        g._sum.monthlyAmount    += Number(r.monthlyAmount    ?? 0);
+        g._count++;
+        acc.set(r.object, g);
+      }
+      grouped = Array.from(acc.values());
+    } else {
+      // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
+      // beradi (ma'lum quirk), shuning uchun cast qilamiz.
+      grouped = await (this.prisma.oplataKv.groupBy as any)({
+        by: ['object'],
+        where,
+        _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
+        _count: true,
+      });
+    }
 
-    const rows = (grouped as Array<{ object: string | null; _sum: { paymentAmount: any; firstInstallment: any; monthlyAmount: any }; _count: number }>)
+    const rows = grouped
       .map((g) => ({
         object: g.object || '—',
         paymentAmount:    Number(g._sum.paymentAmount    ?? 0),
@@ -1214,6 +1280,7 @@ export class OplataKvService {
     crmStatuses?: string;
     propertyTypes?: string;
     branches?: string;
+    banks?: string;
   }) {
     const where: any = {};
 
@@ -1277,24 +1344,53 @@ export class OplataKvService {
     }
 
     const ROW_CAP = 5000;
+    const rowSelect = {
+      id: true,
+      contractNo: true,
+      date: true,
+      paymentAmount: true,
+      firstInstallment: true,
+      monthlyAmount: true,
+      paymentCategory: true,
+      txType: true,
+      client: true,
+      object: true,
+      purpose: true,
+      paymentMethod: true,
+    } as const;
+
+    // Bank filtri — qatorlar JS'da ajratiladi (byObject bilan bir xil qoida)
+    if (opts.banks && opts.banks.trim()) {
+      const all = await this.prisma.oplataKv.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        select: { ...rowSelect, sourceTxId: true },
+      });
+      const picked = await this.filterRowsByBank(all, opts.banks);
+      const total = picked.reduce(
+        (a, r) => ({
+          paymentAmount:    a.paymentAmount    + Number(r.paymentAmount    ?? 0),
+          firstInstallment: a.firstInstallment + Number(r.firstInstallment ?? 0),
+          monthlyAmount:    a.monthlyAmount    + Number(r.monthlyAmount    ?? 0),
+        }),
+        { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 },
+      );
+      const rows = picked.slice(0, ROW_CAP).map(({ sourceTxId, ...r }) => r);
+      return {
+        ok: true,
+        object: opts.object,
+        count: picked.length,
+        truncated: picked.length > rows.length,
+        rows,
+        total,
+      };
+    }
+
     const [rows, agg] = await Promise.all([
       this.prisma.oplataKv.findMany({
         where,
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-        select: {
-          id: true,
-          contractNo: true,
-          date: true,
-          paymentAmount: true,
-          firstInstallment: true,
-          monthlyAmount: true,
-          paymentCategory: true,
-          txType: true,
-          client: true,
-          object: true,
-          purpose: true,
-          paymentMethod: true,
-        },
+        select: rowSelect,
         take: ROW_CAP,
       }),
       // Jami — aggregate bilan (qatorlar cheklansa ham JAMI to'g'ri bo'ladi)
@@ -1331,6 +1427,7 @@ export class OplataKvService {
     crmStatuses?: string;
     propertyTypes?: string;
     branches?: string;
+    banks?: string;
   }): Promise<{ buffer: Buffer; filename: string }> {
     const { rows, total } = await this.byObjectDetail(opts);
     const isAll = opts.object === '__ALL__';
@@ -3910,6 +4007,18 @@ export class OplataKvService {
         .filter((v): v is string => !!v && !!v.trim())
         .map((v) => ({ id: v, name: v }));
       values.push({ id: '__none__', name: "— (bo'sh)" });
+      if (search) { const s = search.toLowerCase(); values = values.filter((v) => v.name.toLowerCase().includes(s)); }
+      return { ok: true, values };
+    }
+
+    // Bank — to'lov qaysi bankdan kelgani (tranzaksiya orqali). Faollari birinchi.
+    if (column === 'bank') {
+      const banks = await this.prisma.bank.findMany({
+        select: { id: true, name: true, isActive: true },
+        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      });
+      let values: Array<{ id: string; name: string }> = banks.map((b) => ({ id: b.id, name: b.name }));
+      values.push({ id: '__none__', name: "— (bank yo'q)" });
       if (search) { const s = search.toLowerCase(); values = values.filter((v) => v.name.toLowerCase().includes(s)); }
       return { ok: true, values };
     }
