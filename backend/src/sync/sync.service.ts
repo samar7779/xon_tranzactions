@@ -504,6 +504,26 @@ export class SyncService implements OnModuleInit {
       throw new Error("Hozircha faqat Kapitalbank va Ipak Yo'li qo'llab-quvvatlanadi");
     }
 
+    // YETIM tranzaksiyalarni tiklash: hisob avval o'chirilib qayta qo'shilgan bo'lsa,
+    // eski tranzaksiyalar accountId=null bo'lib "yetim" qoladi (onDelete SetNull) — ro'yxatda
+    // hisob nomi/raqami ko'rinmaydi va keyingi sync dublikat yaratardi (dedup accountId doirasida).
+    // bankId + hisob raqami (from/to) bo'yicha shu hisobga qayta bog'laymiz. Faqat UPDATE — xavfsiz.
+    try {
+      const relinked = await this.prisma.transaction.updateMany({
+        where: {
+          accountId: null,
+          bankId: acc.bankId,
+          OR: [{ fromAccount: acc.accountNo }, { toAccount: acc.accountNo }],
+        },
+        data: { accountId: acc.id },
+      });
+      if (relinked.count > 0) {
+        this.logger.log(`Relink: ${relinked.count} ta yetim tranzaksiya ${acc.accountNo} hisobiga qayta bog'landi`);
+      }
+    } catch (e: any) {
+      this.logger.warn(`Relink xato (${acc.accountNo}): ${e?.message?.slice(0, 150)}`);
+    }
+
     const isBackfill = !!opts?.dates?.length;
     // Sana ro'yxati — backfill bo'lsa berilgan sanalar, aks holda oxirgi daysBack kun
     const rawDates: string[] = isBackfill

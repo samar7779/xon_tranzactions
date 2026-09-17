@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   Plus, Search, RefreshCw, Trash2, Building2, Wallet, MoreVertical,
   Eye, X, Power, PowerOff, ArrowUpRight, FileSpreadsheet, Download, Loader2,
-  Calendar, CheckCircle2, Clock, Save, ChevronDown,
+  Calendar, CheckCircle2, Clock, Save, ChevronDown, Pencil, Check,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -75,6 +75,12 @@ export default function AccountsPage() {
   const toggleSyncMut = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       api.patch(`/bank-accounts/${id}`, { syncEnabled: enabled }),
+    onSuccess: () => { toast.success(tc('success')); qc.invalidateQueries({ queryKey: ['bank-accounts'] }); },
+    onError: (e: any) => toast.error(e?.message),
+  });
+  const renameMut = useMutation({
+    mutationFn: ({ id, ownerName }: { id: string; ownerName: string }) =>
+      api.patch(`/bank-accounts/${id}`, { ownerName }),
     onSuccess: () => { toast.success(tc('success')); qc.invalidateQueries({ queryKey: ['bank-accounts'] }); },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -316,6 +322,7 @@ export default function AccountsPage() {
                 onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(a.id)}
                 onToggleSync={() => toggleSyncMut.mutate({ id: a.id, enabled: !a.syncEnabled })}
                 onBackfill={() => setBackfillAccount(a)}
+                onRename={(ownerName: string) => renameMut.mutate({ id: a.id, ownerName })}
                 busy={syncMut.isPending}
               />
             ))}
@@ -461,7 +468,7 @@ function BigStat({
 }
 
 function AccountCard({
-  account: a, canManage, onSync, onDelete, onToggleSync, onBackfill, busy,
+  account: a, canManage, onSync, onDelete, onToggleSync, onBackfill, onRename, busy,
 }: {
   account: any;
   canManage: boolean;
@@ -469,12 +476,15 @@ function AccountCard({
   onDelete: () => void;
   onToggleSync: () => void;
   onBackfill: () => void;
+  onRename: (name: string) => void;
   busy: boolean;
 }) {
   const t = useTranslations('accounts');
   const tc = useTranslations('common');
   const balance = Number(a.balance || 0);
   const hasBalance = balance > 0;
+  const [editName, setEditName] = useState(false);
+  const [nameVal, setNameVal] = useState(a.ownerName || '');
   return (
     <Card className="group relative border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all overflow-hidden bg-white dark:bg-slate-900">
       <CardContent className="p-0">
@@ -512,9 +522,32 @@ function AccountCard({
           )}
         </div>
 
-        {/* Owner name */}
+        {/* Owner name — inline tahrirlanadi (o'chirib qayta qo'shishga hojat yo'q) */}
         <div className="px-4 pb-2">
-          <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 truncate">{a.ownerName || '—'}</div>
+          {editName ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                value={nameVal}
+                onChange={(e) => setNameVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { onRename(nameVal.trim()); setEditName(false); }
+                  if (e.key === 'Escape') { setEditName(false); setNameVal(a.ownerName || ''); }
+                }}
+                autoFocus
+                placeholder={t('ownerPlaceholder')}
+                className="flex-1 min-w-0 text-[13px] px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <button onClick={() => { onRename(nameVal.trim()); setEditName(false); }} title={tc('save')} className="shrink-0 inline-grid place-items-center h-6 w-6 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white"><Check className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { setEditName(false); setNameVal(a.ownerName || ''); }} title={tc('cancel')} className="shrink-0 inline-grid place-items-center h-6 w-6 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group/name">
+              <span className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 truncate">{a.ownerName || '—'}</span>
+              {canManage && (
+                <button onClick={() => { setNameVal(a.ownerName || ''); setEditName(true); }} title="Nomni tahrirlash" className="shrink-0 text-slate-300 dark:text-slate-600 hover:text-indigo-600 dark:hover:text-indigo-400 opacity-0 group-hover/name:opacity-100 transition-opacity"><Pencil className="h-3 w-3" /></button>
+              )}
+            </div>
+          )}
           <div className="font-mono text-[11px] text-slate-400 dark:text-slate-500 tracking-tight">{formatAccount(a.accountNo)}</div>
         </div>
 
