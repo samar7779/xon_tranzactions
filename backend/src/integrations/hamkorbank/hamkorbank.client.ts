@@ -28,8 +28,11 @@ export class HamkorbankClient {
   private forwarderCache: { url?: string; secret?: string; at: number } | null = null;
   private static readonly FORWARDER_TTL_MS = 30_000;
 
-  // Kunlik tranzaksiyalarni olishda sahifa hajmi
-  private static readonly PAGE_SIZE = 200;
+  // Kunlik tranzaksiyalarni olishda sahifa hajmi.
+  // MUHIM: bank pageSize'ni cheklaydi — >20 bo'lsa -802 «pageSize длина массива большая»
+  // qaytaradi (lab test: 50 va 45 rad etildi, 20 qabul qilindi). Qolgan yozuvlar
+  // MAX_PAGES sahifalash bilan olinadi.
+  private static readonly PAGE_SIZE = 20;
   private static readonly MAX_PAGES = 200; // xavfsizlik chegarasi
 
   constructor(
@@ -37,7 +40,10 @@ export class HamkorbankClient {
     config: ConfigService,
     private prisma: PrismaService,
   ) {
-    this.timeoutMs = Number(config.get<string>('HAMKORBANK_TIMEOUT_MS', config.get<string>('KAPITALBANK_TIMEOUT_MS', '20000')));
+    // MUHIM: prod statement (get-doc-details-byacc) so'rovlari SEKIN — prod testida
+    // bir kun (docType=0, ~38 operatsiya) ~41 soniya oldi. Shuning uchun Hamkor timeout'i
+    // katta (120s). Kapital/Ipak'ga tegmaydi (ular alohida KAPITALBANK_TIMEOUT_MS).
+    this.timeoutMs = Number(config.get<string>('HAMKORBANK_TIMEOUT_MS', '120000'));
     // Kapital bilan bir xil forwarder/proxy sozlamalarini ishlatadi (bank IP whitelist).
     this.envForwarderUrl = config.get<string>('BANK_FORWARDER_URL');
     this.envForwarderSecret = config.get<string>('BANK_FORWARDER_SECRET');
@@ -93,6 +99,10 @@ export class HamkorbankClient {
     const raw = await this.request('GET', url, headers, undefined, auth.useProxy);
     // Konvert: { code, msg, responseBody } | { code, error }
     const code = raw?.code;
+    // -5 «данный не найден» — bu XATO EMAS: so'rovga mos yozuv topilmadi (masalan,
+    // o'sha kunda operatsiya bo'lmagan hisob). Bo'sh natija qaytaramiz — sync bo'sh
+    // kunda yiqilmasin. (Lab testida tasdiqlangan: operatsiyasiz kun har doim -5.)
+    if (code === -5 || code === '-5') return raw?.responseBody ?? [];
     if (code !== 0 && code !== '0') {
       const msg = raw?.msg || raw?.error || `code=${code}`;
       throw new Error(`Hamkorbank #${code}: ${String(msg).slice(0, 200)}`);
@@ -155,6 +165,21 @@ export class HamkorbankClient {
     const body = await this.get(auth, 'get-bank-day', {});
     const row = Array.isArray(body) ? body[0] : body;
     return { bankDate: row?.bankDate ?? null, bankCalDate: row?.bankCalDate ?? null };
+  }
+
+  /**
+   * get-account-list — login'ga tegishli hisoblar + balans. Ulanishni test qilishning
+   * ISHONCHLI usuli: toza o'qish, auth + hisob ro'yxatini bir vaqtda tasdiqlaydi.
+   * (get-bank-day lab bazasida -899 ORA constraint beradi; get-account-list esa
+   * lab testida `code:0` bilan ishladi.)
+   */
+  async getAccountList(auth: { baseUrl: string; login: string; password: string; useProxy?: boolean }): Promise<Array<{ account: string; balance: number | null }>> {
+    const body = await this.get(auth, 'get-account-list', { param: '' });
+    const arr: any[] = Array.isArray(body) ? body : [];
+    return arr.map((a) => ({
+      account: String(a?.account ?? a?.id ?? ''),
+      balance: a?.balance != null ? Number(a.balance) : null,
+    }));
   }
 
   /**

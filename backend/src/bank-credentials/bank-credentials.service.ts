@@ -106,13 +106,15 @@ export class BankCredentialsService {
     const password = this.crypto.decrypt(c.passwordEnc);
     const login = (c.loginPrefix || '') + c.loginName;
 
-    // HAMKORBANK_V1 — apiLogin/sid yo'q; ulanishni get-bank-day bilan tekshiramiz.
-    // Hisoblar Hamkorda avtomat kelmaydi — qo'lda qo'shiladi (Kapital'dagi clients ro'yxati emas).
+    // HAMKORBANK_V1 — apiLogin/sid yo'q; ulanishni get-account-list bilan tekshiramiz.
+    // (get-bank-day lab bazasida -899 ORA constraint beradi; get-account-list esa toza
+    // o'qish — auth + hisoblar ro'yxatini bir vaqtda tasdiqlaydi.) Hisoblar Hamkorda
+    // avtomat sync'ga kelmaydi — qo'lda qo'shiladi (Kapital'dagi clients ro'yxati emas).
     if (c.bank.apiKind === 'HAMKORBANK_V1') {
       try {
-        const bd = await this.hamkor.getBankDay({ baseUrl: c.bank.apiBaseUrl!, login, password, useProxy: c.useProxy === true });
+        const accounts = await this.hamkor.getAccountList({ baseUrl: c.bank.apiBaseUrl!, login, password, useProxy: c.useProxy === true });
         await this.prisma.bankCredential.update({ where: { id }, data: { lastVerifiedAt: new Date(), lastError: null } });
-        return { ok: true, clients: [], bankDay: bd } as any;
+        return { ok: true, clients: [], accounts } as any;
       } catch (e: any) {
         const msg = e?.message?.slice(0, 500) || 'Noma\'lum xato';
         await this.prisma.bankCredential.update({ where: { id }, data: { lastError: msg, lastVerifiedAt: new Date() } });
