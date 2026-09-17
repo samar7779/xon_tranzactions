@@ -4011,14 +4011,17 @@ export class OplataKvService {
       return { ok: true, values };
     }
 
-    // Bank — to'lov qaysi bankdan kelgani (tranzaksiya orqali). Faollari birinchi.
+    // Bank — to'lov qaysi bankdan kelgani (tranzaksiya orqali). Faqat FAOL banklar;
+    // code — frontend'da bank logosini chiqarish uchun.
     if (column === 'bank') {
       const banks = await this.prisma.bank.findMany({
-        select: { id: true, name: true, isActive: true },
-        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+        where: { isActive: true },
+        select: { id: true, name: true, code: true },
+        orderBy: { name: 'asc' },
       });
-      let values: Array<{ id: string; name: string }> = banks.map((b) => ({ id: b.id, name: b.name }));
-      values.push({ id: '__none__', name: "— (bank yo'q)" });
+      let values: Array<{ id: string; name: string; code?: string }> =
+        banks.map((b) => ({ id: b.id, name: b.name, code: b.code }));
+      values.push({ id: '__none__', name: "Bank yo'q (import / qo'lda)" });
       if (search) { const s = search.toLowerCase(); values = values.filter((v) => v.name.toLowerCase().includes(s)); }
       return { ok: true, values };
     }

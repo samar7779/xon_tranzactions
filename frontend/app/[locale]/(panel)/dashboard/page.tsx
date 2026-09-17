@@ -12,9 +12,10 @@ import {
   Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
   Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
   Search, Download, ChevronDown, Settings2, Database,
-  Coins, RotateCcw, EyeOff, Pin, Gauge, Check, X, SlidersHorizontal,
+  Coins, RotateCcw, EyeOff, Pin, Gauge, Check, X, SlidersHorizontal, Minus,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
+import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/skeleton';
 import { Input } from '@/components/ui/input';
@@ -139,7 +140,7 @@ export default function DashboardPage() {
   });
   const { data: bankOpts } = useQuery({
     queryKey: ['oplata-distinct-bank'],
-    queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>('/oplata-kv/distinct?column=bank'),
+    queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string; code?: string }> }>('/oplata-kv/distinct?column=bank'),
     enabled: has(PERMS.DASHBOARD_OBJECTS),
   });
   const [objRange, setObjRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
@@ -1478,15 +1479,19 @@ function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () 
  * Sarlavhada tanlanganlar soni ko'rinadi, shuning uchun yopiq holatda ham
  * nima tanlanganini bilib turadi.
  */
+type FilterOption = { id: string; name: string; code?: string };
+
 function FilterGroup({
-  title, options, selected, onToggle, onClear, searchable,
+  title, options, selected, onToggle, onClear, searchable, renderLeading,
 }: {
   title: string;
-  options: Array<{ id: string; name: string }>;
+  options: FilterOption[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onClear: () => void;
   searchable?: boolean;
+  /** Nomdan oldin ixtiyoriy ikonka (masalan bank logosi) */
+  renderLeading?: (o: FilterOption) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -1555,7 +1560,8 @@ function FilterGroup({
                   )}>
                     {checked && <Check className="h-3 w-3" />}
                   </span>
-                  <span className="text-[12px] truncate">{o.name}</span>
+                  {renderLeading?.(o)}
+                  <span className={cn('text-[12px] truncate', renderLeading && 'font-medium')}>{o.name}</span>
                 </button>
               );
             })}
@@ -1587,7 +1593,7 @@ function ObjToolbarFilter({
   branchOptions: Array<{ id: string; name: string }>;
   banks: Set<string>;
   setBanks: (s: Set<string>) => void;
-  bankOptions: Array<{ id: string; name: string }>;
+  bankOptions: FilterOption[];
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -1707,6 +1713,16 @@ function ObjToolbarFilter({
             selected={banks}
             onToggle={toggleIn(banks, setBanks)}
             onClear={() => setBanks(new Set())}
+            renderLeading={(o) =>
+              o.code ? (
+                <BankLogo code={o.code} name={o.name} size={22} rounded="rounded-md" />
+              ) : (
+                // "Bank yo'q" — logo o'rnida shtrixli bo'sh belgi
+                <span className="w-[22px] h-[22px] rounded-md ring-1 ring-dashed ring-slate-300 dark:ring-slate-600 grid place-items-center text-slate-400 shrink-0">
+                  <Minus className="h-3 w-3" />
+                </span>
+              )
+            }
           />
 
           {/* Тип (жил/пар) — CRM status'dan OLDIN */}
