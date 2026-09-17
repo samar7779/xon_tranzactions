@@ -72,6 +72,54 @@ export class TransactionsService {
     return arr.length > 0 ? arr : null;
   }
 
+  // Ustun filtridagi "(Bo'sh)" bandi — jadvalda "—" ko'rinadigan qatorlar
+  static readonly EMPTY_FILTER = '__EMPTY__';
+
+  /**
+   * Jadvalda Kontragent / Kategoriya ustuni "—" bo'lib ko'rinadigan qatorlar sharti.
+   * Frontend ko'rsatish mantig'i bilan bir xil:
+   *   Kontragent: kategoriya yo'q + qo'lda kontragent yo'q + import matni yo'q
+   *   Kategoriya: kategoriya ham, subkategoriya ham yo'q + import kategoriya matni yo'q
+   */
+  private emptyColumnWhere(column: 'kontragent' | 'kategoriya'): any {
+    if (column === 'kontragent') {
+      return {
+        AND: [
+          { categoryId: null },
+          { manualCounterpartyId: null },
+          { OR: [{ source: { not: 'IMPORT' } }, { importCounterpartyText: null }, { importCounterpartyText: '' }] },
+        ],
+      };
+    }
+    return {
+      AND: [
+        { categoryId: null },
+        { subcategoryId: null },
+        { OR: [{ source: { not: 'IMPORT' } }, { importCategoryText: null }, { importCategoryText: '' }] },
+      ],
+    };
+  }
+
+  /**
+   * id ro'yxati + ixtiyoriy "(Bo'sh)" → bitta shart.
+   * Faqat id'lar bo'lsa null qaytaradi (oddiy `in` filtri ishlatiladi).
+   */
+  private idsOrEmptyWhere(field: 'categoryId' | 'subcategoryId', list: string[], column: 'kontragent' | 'kategoriya'): any | null {
+    if (!list.includes(TransactionsService.EMPTY_FILTER)) return null;
+    const ids = list.filter((x) => x !== TransactionsService.EMPTY_FILTER);
+    const empty = this.emptyColumnWhere(column);
+    return ids.length > 0 ? { OR: [{ [field]: { in: ids } }, empty] } : empty;
+  }
+
+  /** Aktiv filtrlar ostida "—" qatorlar bor bo'lsa — ro'yxat boshiga "(Bo'sh)" bandi. */
+  private async emptyFilterItem(where: any, column: 'kontragent' | 'kategoriya'): Promise<Array<{ id: string; name: string }>> {
+    const hit = await this.prisma.transaction.findFirst({
+      where: { AND: [where, this.emptyColumnWhere(column)] },
+      select: { id: true },
+    });
+    return hit ? [{ id: TransactionsService.EMPTY_FILTER, name: "(Bo'sh)" }] : [];
+  }
+
   /** ListTransactionsDto'dan Prisma WhereInput yasaydi — list va distinct ham ishlatadi. */
   private buildWhere(query: ListTransactionsDto): any {
     const {
@@ -119,11 +167,23 @@ export class TransactionsService {
     const accountIdsList = this.parseList(accountIds);
     if (accountIdsList) where.accountId = { in: accountIdsList };
 
+    // "(Bo'sh)" tanlangan bo'lsa shart OR bo'ladi — uni oxirida AND'ga qo'shamiz
+    // (quyidagi hisobNomi/contractStatuses bloklari where.AND'ni qayta yozishi mumkin)
+    const lateConds: any[] = [];
+
     const categoryIdsList = this.parseList(categoryIds);
-    if (categoryIdsList) where.categoryId = { in: categoryIdsList };
+    if (categoryIdsList) {
+      const c = this.idsOrEmptyWhere('categoryId', categoryIdsList, 'kontragent');
+      if (c) lateConds.push(c);
+      else where.categoryId = { in: categoryIdsList };
+    }
 
     const subcategoryIdsList = this.parseList(subcategoryIds);
-    if (subcategoryIdsList) where.subcategoryId = { in: subcategoryIdsList };
+    if (subcategoryIdsList) {
+      const c = this.idsOrEmptyWhere('subcategoryId', subcategoryIdsList, 'kategoriya');
+      if (c) lateConds.push(c);
+      else where.subcategoryId = { in: subcategoryIdsList };
+    }
 
     const directionsList = this.parseList(directions);
     if (directionsList) where.direction = { in: directionsList as any };
@@ -199,6 +259,14 @@ export class TransactionsService {
         if (where.OR) where.AND = [{ OR: where.OR }, { OR: conds }];
         else where.OR = conds;
       }
+    }
+
+    // "(Bo'sh)" shartlari — mavjud AND/OR'ni buzmasdan qo'shiladi
+    if (lateConds.length > 0) {
+      where.AND = [
+        ...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []),
+        ...lateConds,
+      ];
     }
 
     return where;
@@ -553,34 +621,38 @@ export class TransactionsService {
       }
       case 'kontragent': {
         // Aktiv filter'lar ostida tranzaksiyalarda mavjud top kategoriyalar
-        const txs = await this.prisma.transaction.findMany({
-          where: { ...where, categoryId: { not: null } },
-          distinct: ['categoryId'], select: { categoryId: true }, take: 100,
-        });
+        const [txs, emptyItem] = await Promise.all([
+          this.prisma.transaction.findMany({
+            where: { ...where, categoryId: { not: null } },
+            distinct: ['categoryId'], select: { categoryId: true }, take: 100,
+          }),
+          this.emptyFilterItem(where, 'kontragent'),
+        ]);
         const ids = txs.map((t) => t.categoryId!).filter(Boolean);
-        if (ids.length === 0) return { ok: true, values: [] };
-        const cats = await this.prisma.category.findMany({
+        const cats = ids.length === 0 ? [] : await this.prisma.category.findMany({
           where: { id: { in: ids } },
           select: { id: true, name: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' },
         });
-        return { ok: true, values: cats.map((c) => ({ id: c.id, name: c.name })) };
+        return { ok: true, values: [...emptyItem, ...cats.map((c) => ({ id: c.id, name: c.name }))] };
       }
       case 'kategoriya': {
-        const txs = await this.prisma.transaction.findMany({
-          where: { ...where, subcategoryId: { not: null } },
-          distinct: ['subcategoryId'], select: { subcategoryId: true }, take: 200,
-        });
+        const [txs, emptyItem] = await Promise.all([
+          this.prisma.transaction.findMany({
+            where: { ...where, subcategoryId: { not: null } },
+            distinct: ['subcategoryId'], select: { subcategoryId: true }, take: 200,
+          }),
+          this.emptyFilterItem(where, 'kategoriya'),
+        ]);
         const ids = txs.map((t) => t.subcategoryId!).filter(Boolean);
-        if (ids.length === 0) return { ok: true, values: [] };
-        const subs = await this.prisma.category.findMany({
+        const subs = ids.length === 0 ? [] : await this.prisma.category.findMany({
           where: { id: { in: ids } },
           select: { id: true, name: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' },
         });
         return {
           ok: true,
-          values: subs.map((s) => ({ id: s.id, name: s.name })),
+          values: [...emptyItem, ...subs.map((s) => ({ id: s.id, name: s.name }))],
         };
       }
       case 'direction': {

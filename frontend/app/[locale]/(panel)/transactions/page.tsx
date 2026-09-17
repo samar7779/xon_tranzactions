@@ -5001,15 +5001,30 @@ function ColumnFilterPopover({
                 const xatoMatch = v.name.match(/^(.+?)\s*\(xato\)\s*$/i);
                 const display = xatoMatch ? xatoMatch[1] : v.name;
                 const isXato = !!xatoMatch;
+                // "(Bo'sh)" — jadvalda "—" ko'rinadigan qatorlar (backend: __EMPTY__)
+                const isEmpty = v.id === '__EMPTY__';
                 return (
-                  <label key={v.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+                  <label
+                    key={v.id}
+                    className={cn(
+                      'flex items-center gap-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer',
+                      isEmpty && 'bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700',
+                    )}
+                  >
                     <input
                       type="checkbox"
                       checked={localSelected.has(v.id)}
                       onChange={() => toggleOne(v.id)}
                       className="w-3.5 h-3.5 rounded"
                     />
-                    <span className="text-[11px] text-slate-700 dark:text-slate-300 truncate flex-1" title={v.name}>{display}</span>
+                    {isEmpty ? (
+                      <span className="text-[11px] italic font-semibold text-slate-500 dark:text-slate-400 truncate flex-1 flex items-center gap-1.5">
+                        <span className="inline-block w-3 border-t-2 border-slate-400 dark:border-slate-500" />
+                        Bo&apos;sh (to&apos;ldirilmagan)
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-slate-700 dark:text-slate-300 truncate flex-1" title={v.name}>{display}</span>
+                    )}
                     {isXato && (
                       <span className="text-[9px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-1 py-0.5 rounded ring-1 ring-rose-200 dark:ring-rose-900 uppercase shrink-0">
                         {tt('badgeError')}
