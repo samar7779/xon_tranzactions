@@ -160,6 +160,17 @@ model Transaction {
   manualCounterpartyId String?       @map("manual_counterparty_id")
   manualCounterparty   Counterparty? @relation("ManualCounterparty", fields: [manualCounterpartyId], references: [id])
 
+  // ─── TA'MINOT ERP (xontaminot.tulovlar) dan moslangan ma'lumot ───
+  // Manba: "Взаиморасчеты" Sheet → ta'minot ERP. Faqat KO'RSATISH uchun saqlanadi:
+  // mavjud contractNumber/categoryId ga yozilmaydi (CRM tekshiruvi buziladi).
+  // Jadvalda o'sha eski ustunlarda (Kontragent / Kategoriya / Shartnoma) chiqadi.
+  erpPaymentId String?   @map("erp_payment_id") @db.VarChar(32) // tulovlar.id
+  erpSupplier  String?   @map("erp_supplier") @db.VarChar(255) // taminotchi nomi
+  erpArticle   String?   @map("erp_article") @db.VarChar(255) // xarajat moddasi (kategoriya)
+  erpContract  String?   @map("erp_contract") @db.VarChar(255) // Дог№ (yetkazib beruvchi shartnomasi)
+  erpObject    String?   @map("erp_object") @db.VarChar(255) // obyekt nomi
+  erpMatchedAt DateTime? @map("erp_matched_at")
+
   // Biriktirilgan fayllar (ariza, hujjat va h.k.)
   attachments   TransactionAttachment[]
   xonpayMatches XonpayTransaction[]
@@ -185,6 +196,7 @@ model Transaction {
   @@index([matchStatus])
   @@index([fromInn])
   @@index([bankB2Id])
+  @@index([erpPaymentId]) // ta'minot moslashuvi — takroriy bog'lanishni tekshirish
   @@index([bankGeneralId])
   @@index([valueDate])
   @@index([categoryId])
@@ -1104,11 +1116,11 @@ model VznosContract {
 /// Chek order tekshiruvi — memorial orderni (rasm/PDF/qo'lda) yuklab, order № bo'yicha
 /// tranzaksiyada bor-yo'qligini va shartlarni (hisob/sana/summa/shartnoma) tekshiradi.
 model ChekOrder {
-  id        String @id @default(cuid())
+  id String @id @default(cuid())
 
   // Kirish: bitta yuklash (surat) bir necha order berishi mumkin — batchId bilan bog'lanadi
-  batchId  String  @map("batch_id")
-  source   String  @db.VarChar(16) // 'photo' | 'pdf' | 'manual'
+  batchId String @map("batch_id")
+  source  String @db.VarChar(16) // 'photo' | 'pdf' | 'manual'
 
   // Yuklangan fayl (photo/pdf — batch bo'yicha bir marta saqlanadi)
   fileName String? @map("file_name")
@@ -1129,15 +1141,15 @@ model ChekOrder {
   extracted        Json? // agent ajratgan to'liq raw
 
   // Natija
-  result        String   @db.VarChar(16) // 'found' | 'mismatch' | 'not_found'
-  matchedTxId   String?  @map("matched_tx_id")
-  matchedTxExtId String? @map("matched_tx_ext_id")
-  condOrder     Boolean? @map("cond_order")    // order № docNumber bilan mos? (kvitansiya ≠ bank hujjati bo'lishi mumkin)
-  condAccount   Boolean? @map("cond_account")  // hisob raqami mos?
-  condDate      Boolean? @map("cond_date")     // sana mos?
-  condAmount    Boolean? @map("cond_amount")   // summa mos?
-  condContract  Boolean? @map("cond_contract") // shartnoma mos?
-  matchedTx     Json?    @map("matched_tx")    // topilgan tranzaksiya snapshot (ko'rsatish uchun)
+  result         String   @db.VarChar(16) // 'found' | 'mismatch' | 'not_found'
+  matchedTxId    String?  @map("matched_tx_id")
+  matchedTxExtId String?  @map("matched_tx_ext_id")
+  condOrder      Boolean? @map("cond_order") // order № docNumber bilan mos? (kvitansiya ≠ bank hujjati bo'lishi mumkin)
+  condAccount    Boolean? @map("cond_account") // hisob raqami mos?
+  condDate       Boolean? @map("cond_date") // sana mos?
+  condAmount     Boolean? @map("cond_amount") // summa mos?
+  condContract   Boolean? @map("cond_contract") // shartnoma mos?
+  matchedTx      Json?    @map("matched_tx") // topilgan tranzaksiya snapshot (ko'rsatish uchun)
 
   createdById   String?  @map("created_by_id") @db.VarChar(50)
   createdByName String?  @map("created_by_name") @db.VarChar(190)
@@ -1162,18 +1174,18 @@ model ChekTicket {
   matchedTxExtId String?  @map("matched_tx_ext_id")
 
   // Agent aniqlagan muammo
-  category String? @db.VarChar(80) // agent tasnifi (erkin)
-  summary  String  @db.Text // muammo xulosasi (bir-ikki jumla)
-  details  String? @db.Text // batafsil
-  transcript Json?          // suhbat tarixi (audit)
+  category   String? @db.VarChar(80) // agent tasnifi (erkin)
+  summary    String  @db.Text // muammo xulosasi (bir-ikki jumla)
+  details    String? @db.Text // batafsil
+  transcript Json? // suhbat tarixi (audit)
 
   // Holat + mas'ul
-  status         String  @default("new") @db.VarChar(16) // new | in_progress | resolved | rejected
-  priority       String? @db.VarChar(16) // low | normal | high
-  assignedToId   String? @map("assigned_to_id") @db.VarChar(50)
-  assignedToName String? @map("assigned_to_name") @db.VarChar(190)
-  resolution     String? @db.Text // 2-bosqich: hal qilish izohi
-  resolvedByName String? @map("resolved_by_name") @db.VarChar(190)
+  status         String    @default("new") @db.VarChar(16) // new | in_progress | resolved | rejected
+  priority       String?   @db.VarChar(16) // low | normal | high
+  assignedToId   String?   @map("assigned_to_id") @db.VarChar(50)
+  assignedToName String?   @map("assigned_to_name") @db.VarChar(190)
+  resolution     String?   @db.Text // 2-bosqich: hal qilish izohi
+  resolvedByName String?   @map("resolved_by_name") @db.VarChar(190)
   resolvedAt     DateTime? @map("resolved_at")
 
   createdById   String?  @map("created_by_id") @db.VarChar(50)

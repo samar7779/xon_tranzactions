@@ -39,6 +39,7 @@ import { CorrectionModule } from './correction/correction.module';
 import { AuditModule } from './audit/audit.module';
 import { CorrectionBotModule } from './correction-bot/correction-bot.module';
 import { ShmitdModule } from './shmitd/shmitd.module';
+import { TaminotModule } from './taminot/taminot.module';
 import { BankPwdModule } from './bank-pwd/bank-pwd.module';
 import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
 
@@ -87,6 +88,7 @@ import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
     AgentModule,
     CorrectionBotModule,
     ShmitdModule,
+    TaminotModule,
     BankPwdModule,
     DeveloperApiModule,
     ChekModule,

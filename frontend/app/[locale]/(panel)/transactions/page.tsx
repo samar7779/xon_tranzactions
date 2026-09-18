@@ -314,6 +314,7 @@ export default function TransactionsPage() {
   const [addFromTxOpen, setAddFromTxOpen] = useState(false);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [fixMinfinOpen, setFixMinfinOpen] = useState(false);
+  const [taminotOpen, setTaminotOpen] = useState(false);
   // Qo'shimcha amallar — parol (7779) bilan himoyalangan UI gate (server amallar baribir permission/parol talab qiladi)
   const [extraUnlocked, setExtraUnlocked] = useState(false);
   const [extraPwPrompt, setExtraPwPrompt] = useState(false);
@@ -887,6 +888,15 @@ export default function TransactionsPage() {
                         <span className="flex-1">Молия Вазирлиги — xatolarni tozalash</span>
                       </DropdownMenuItem>
                     )}
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setTaminotOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <Link2 className="h-4 w-4 mr-2 text-teal-600 dark:text-teal-400" />
+                        <span className="flex-1">Ta&apos;minotdan to&apos;ldirish</span>
+                      </DropdownMenuItem>
+                    )}
                   </div>
                 )}
               </div>
@@ -1386,6 +1396,9 @@ export default function TransactionsPage() {
                           <td className="px-4 py-3 max-w-[160px]">
                             <KontragentChip
                               display={(() => {
+                                // Ta'minot ERP dan moslangan yetkazib beruvchi — kategoriya
+                                // nomidan aniqroq (masalan "NIHOL QURILISH"), shuning uchun ustun
+                                if (it.erpSupplier) return it.erpSupplier;
                                 if (it.counterpartyDisplay) return it.counterpartyDisplay;
                                 if (it.source === 'IMPORT' && it.importCounterpartyText) {
                                   const t = it.importCounterpartyText.trim();
@@ -1403,9 +1416,16 @@ export default function TransactionsPage() {
                               canEdit={false}
                             />
                           </td>
-                          {/* Kategoriya — import bo'lsa importCategoryText fallback */}
+                          {/* Kategoriya — ta'minot moddasi > sub/kategoriya > import matni */}
                           <td className="px-4 py-3 max-w-[160px]">
-                            {(it.subcategory || it.category) ? (
+                            {it.erpArticle ? (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 ring-teal-200 dark:ring-teal-900 max-w-full"
+                                title={`Ta'minot: ${it.erpArticle}${it.erpObject ? ' · ' + it.erpObject : ''}`}
+                              >
+                                <span className="truncate max-w-[140px]">{it.erpArticle}</span>
+                              </span>
+                            ) : (it.subcategory || it.category) ? (
                               <CategoryChip
                                 category={it.subcategory || it.category}
                                 parentColor={it.category?.color}
@@ -1421,9 +1441,17 @@ export default function TransactionsPage() {
                               <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
-                          {/* Shartnoma */}
+                          {/* Shartnoma — mijoz shartnomasi (CRM tekshiruvi bilan) yoki
+                              ta'minot shartnomasi (CRM'ga tegishli emas, alohida rangda) */}
                           <td className="px-4 py-3">
-                            {it.contractNumber ? (
+                            {!it.contractNumber && it.erpContract ? (
+                              <code
+                                className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 ring-teal-200 dark:ring-teal-900 max-w-[190px] truncate"
+                                title={`Ta'minot shartnomasi: ${it.erpContract}`}
+                              >
+                                {it.erpContract}
+                              </code>
+                            ) : it.contractNumber ? (
                               it.contractStatus === 'manual' ? (
                                 // QO'LDA yoki ARIZA — ariza bo'lsa violet, aks holda amber
                                 it.hasAttachment ? (
@@ -1572,6 +1600,7 @@ export default function TransactionsPage() {
       <AddFromTxDialog open={addFromTxOpen} onOpenChange={setAddFromTxOpen} />
       <CategorizeDiagnoseDialog open={diagnoseOpen} onOpenChange={setDiagnoseOpen} />
       <FixMinfinDialog open={fixMinfinOpen} onOpenChange={setFixMinfinOpen} />
+      <TaminotMatchDialog open={taminotOpen} onOpenChange={setTaminotOpen} />
 
       {/* ═══ KATEGORIYANI O'ZGARTIRISH ═══ */}
       <CategoryEditDialog
@@ -8249,6 +8278,192 @@ function FixMinfinDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             >
               {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Tasdiqlab yozish ({res!.changed}{clearUnmatched && res!.noRule ? ` + ${res!.noRule}` : ''})
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TA'MINOTDAN TO'LDIRISH — bank tranzaksiyasini ta'minot ERP to'loviga bog'lash
+//   Kalit: summa aniq + sana ±2 kun + (shartnoma raqami yoki yetkazib beruvchi nomi).
+//   Topilsa — Kontragent / Kategoriya / Shartnoma ustunlari ta'minotdan to'ladi.
+//   Mijoz (Клиент/Физ.Л/Юр.Л) to'lovlariga tegilmaydi.
+// ═══════════════════════════════════════════════════════════════════
+interface TaminotMatchResult {
+  ok: boolean;
+  dryRun: boolean;
+  dateFrom: string;
+  scanned: number;
+  erpRows: number;
+  matched: number;
+  ambiguous: number;
+  notFound: number;
+  byArticle: Array<{ article: string; count: number }>;
+  samples: Array<{
+    date: string; amount: string; bankName: string;
+    supplier: string; article: string; contract: string; dayDiff: number; how: string;
+  }>;
+}
+
+function TaminotMatchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const qc = useQueryClient();
+  const [dateFrom, setDateFrom] = useState('2026-05-01');
+  const [rematch, setRematch] = useState(false);
+  const [res, setRes] = useState<TaminotMatchResult | null>(null);
+
+  const ping = useQuery({
+    queryKey: ['taminot-ping'],
+    queryFn: () => api.get<{ ok: boolean; message: string; rows?: number; oxirgiSana?: string | null }>('/taminot/ping'),
+    enabled: open,
+    retry: false,
+  });
+
+  const run = useMutation({
+    mutationFn: (dryRun: boolean) =>
+      api.post<TaminotMatchResult>('/taminot/match', { dateFrom, dryRun, rematch }, { timeout: 900_000 }),
+    onSuccess: (r) => {
+      setRes(r);
+      if (r.dryRun) toast.info(`Tahlil tayyor: ${r.matched} ta moslik topildi`);
+      else {
+        toast.success(`Bajarildi: ${r.matched} ta to'lov to'ldirildi`);
+        qc.invalidateQueries({ queryKey: ['transactions'] });
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xatolik'),
+  });
+
+  const close = () => { setRes(null); run.reset(); onOpenChange(false); };
+  const yozilsinmi = !!res?.dryRun && res.matched > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent className="sm:max-w-[820px] max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 grid place-items-center">
+              <Link2 className="h-4 w-4" />
+            </span>
+            Ta&apos;minotdan to&apos;ldirish
+          </DialogTitle>
+          <DialogDescription>
+            Bank to&apos;lovi ta&apos;minot ERP dagi to&apos;lovga bog&apos;lanadi va Kontragent, Kategoriya,
+            Shartnoma ustunlari o&apos;sha yerdan to&apos;ladi. Kalit: summa aniq teng + sana ±2 kun +
+            (shartnoma raqami yoki yetkazib beruvchi nomi). Ta&apos;minot bazasiga faqat o&apos;qish so&apos;rovi yuboriladi.
+          </DialogDescription>
+        </DialogHeader>
+
+        {ping.data && (
+          <div className={cn(
+            'rounded-xl px-3 py-2 text-[12px] ring-1',
+            ping.data.ok
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900 text-emerald-800 dark:text-emerald-200'
+              : 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900 text-rose-800 dark:text-rose-200',
+          )}>
+            {ping.data.ok
+              ? `Ta'minot bazasi ulandi · ${(ping.data.rows || 0).toLocaleString('ru-RU')} ta to'lov · oxirgi sana ${ping.data.oxirgiSana || '—'}`
+              : `Ulanib bo'lmadi: ${ping.data.message}`}
+          </div>
+        )}
+
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Sanadan boshlab</div>
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 w-[170px]" />
+          </div>
+          <label className="flex items-center gap-2 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 cursor-pointer">
+            <input type="checkbox" checked={rematch} onChange={(e) => setRematch(e.target.checked)} className="w-4 h-4 rounded" />
+            <span className="text-[12px]">Bog&apos;langanlarni ham qayta ko&apos;rish</span>
+          </label>
+          <Button
+            variant="outline"
+            onClick={() => run.mutate(true)}
+            disabled={run.isPending || ping.data?.ok === false}
+            className="h-9 gap-1.5"
+          >
+            {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            Tahlil (yozmaydi)
+          </Button>
+        </div>
+
+        {run.isPending && (
+          <div className="flex items-center gap-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 px-3 py-3 text-[12.5px] text-indigo-800 dark:text-indigo-200">
+            <Loader2 className="h-4 w-4 animate-spin shrink-0" /> Moslashtirilmoqda, bu bir necha daqiqa olishi mumkin…
+          </div>
+        )}
+
+        {res && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { l: 'Ko‘rildi', v: res.scanned, c: 'text-slate-700 dark:text-slate-200' },
+                { l: 'Mos topildi', v: res.matched, c: 'text-emerald-700 dark:text-emerald-300' },
+                { l: 'Noaniq (tegilmadi)', v: res.ambiguous, c: 'text-amber-700 dark:text-amber-300' },
+                { l: 'Topilmadi', v: res.notFound, c: 'text-slate-500' },
+              ].map((k) => (
+                <div key={k.l} className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
+                  <div className="text-[9.5px] uppercase tracking-wider text-slate-400">{k.l}</div>
+                  <div className={cn('text-[19px] font-black tabular-nums', k.c)}>{k.v ?? 0}</div>
+                </div>
+              ))}
+            </div>
+
+            {res.byArticle.length > 0 && (
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Xarajat moddalari</div>
+                <div className="flex flex-wrap gap-2">
+                  {res.byArticle.map((b) => (
+                    <span key={b.article} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-200 text-[12px]">
+                      <b>{b.article}</b>
+                      <span className="tabular-nums opacity-70">{b.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {res.samples.length > 0 && (
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 dark:bg-slate-800">
+                  Namunalar — bank to&apos;lovi → ta&apos;minot
+                </div>
+                <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {res.samples.map((s, i) => (
+                    <div key={i} className="px-3 py-1.5 text-[11.5px] flex items-center gap-2">
+                      <span className="tabular-nums text-slate-500 w-[74px] shrink-0">{s.date}</span>
+                      <span className="tabular-nums font-semibold w-[104px] text-right shrink-0">{Number(s.amount).toLocaleString('ru-RU')}</span>
+                      <span className="truncate w-[150px] shrink-0 text-slate-500">{s.bankName}</span>
+                      <span className="text-slate-300 shrink-0">→</span>
+                      <span className="truncate w-[130px] shrink-0 font-semibold text-slate-700 dark:text-slate-200">{s.supplier}</span>
+                      <span className="truncate flex-1 text-teal-700 dark:text-teal-300">{s.article}</span>
+                      <span className="shrink-0 text-[10px] text-slate-400">{s.how} · {s.dayDiff}k</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {yozilsinmi && (
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-3 py-2.5 text-[12.5px] text-emerald-900 dark:text-emerald-200">
+                Namunalar to&apos;g&apos;ri bo&apos;lsa, pastdagi tugma bilan yozing. Kategoriya va shartnoma
+                maydonlariga tegilmaydi — ta&apos;minot ma&apos;lumoti alohida saqlanadi.
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={close}>Yopish</Button>
+          {yozilsinmi && (
+            <Button
+              onClick={() => run.mutate(false)}
+              disabled={run.isPending}
+              className="gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Tasdiqlab yozish ({res!.matched})
             </Button>
           )}
         </DialogFooter>
