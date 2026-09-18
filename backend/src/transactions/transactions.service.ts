@@ -129,7 +129,7 @@ export class TransactionsService {
    * ular kategoriyalar ro'yxatida yo'q, shuning uchun alohida qo'shiladi.
    * id sifatida `erp:<nom>` beriladi (buildWhere shu prefiksni tushunadi).
    */
-  private async erpFilterItems(where: any, field: 'erpSupplier' | 'erpArticle'): Promise<Array<{ id: string; name: string; erp: true }>> {
+  private async erpFilterItems(where: any, field: 'erpSupplier' | 'erpArticle' | 'erpContract'): Promise<Array<{ id: string; name: string; erp: true }>> {
     const rows = await this.prisma.transaction.findMany({
       where: { AND: [where, { [field]: { not: null } }] },
       distinct: [field],
@@ -274,10 +274,15 @@ export class TransactionsService {
       const includeNone = csList.includes('__NONE__');
       const includeXato = csList.includes('__XATO__');
       const includeBekor = csList.includes('__BEKOR__');
-      const nums = csList.filter((s) => s !== '__NONE__' && s !== '__XATO__' && s !== '__BEKOR__');
+      const P = TransactionsService.ERP_PREFIX;
+      // Ta'minot shartnomalari — erpContract maydonida (CRM'ga tegishli emas)
+      const erpNums = csList.filter((s) => s.startsWith(P)).map((s) => s.slice(P.length)).filter(Boolean);
+      const nums = csList.filter((s) => s !== '__NONE__' && s !== '__XATO__' && s !== '__BEKOR__' && !s.startsWith(P));
       const conds: any[] = [];
       if (nums.length > 0) conds.push({ contractNumber: { in: nums } });
-      if (includeNone) conds.push({ contractNumber: null });
+      if (erpNums.length > 0) conds.push({ erpContract: { in: erpNums } });
+      // "Shartnoma yo'q" — ta'minot shartnomasi ham bo'lmasligi kerak (jadvalda u ko'rinadi)
+      if (includeNone) conds.push({ AND: [{ contractNumber: null }, { erpContract: null }] });
       // __BEKOR__ — CRM'da cancelled status'li shartnomalar (JOIN yo'q, keyin qayta ishlanadi)
       if (includeBekor) (where as any).__bekor_requested = true;
       // __XATO__ — Prisma'da to'g'ridan-to'g'ri JOIN yo'q, shuning uchun Set yondashuvi:
@@ -752,16 +757,22 @@ export class TransactionsService {
           }
         }
 
-        // 4) Bo'sh (shartnomasi yo'q)
+        // 4) Bo'sh (shartnomasi yo'q) — ta'minot shartnomasi bo'lganlar bo'sh emas
         if (!search) {
           const anyEmpty = await this.prisma.transaction.findFirst({
-            where: { ...where, contractNumber: null },
+            where: { ...where, contractNumber: null, erpContract: null },
             select: { id: true },
           });
           if (anyEmpty) values.unshift({ id: '__NONE__', name: "— Shartnoma yo'q" });
         }
 
-        return { ok: true, values };
+        // 5) Ta'minot shartnomalari (CRM'ga tegishli emas) — alohida
+        const erpContracts = await this.erpFilterItems(where, 'erpContract');
+        const erpShown = search
+          ? erpContracts.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()))
+          : erpContracts;
+
+        return { ok: true, values: [...values, ...erpShown] };
       }
       case 'hisobNomi': {
         // Yuboruvchi va Qabul qiluvchi nomlari — distinct (limit 500)
