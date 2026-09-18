@@ -30,6 +30,8 @@ interface CategorizationInput {
   categoryId: string | null;
   subcategoryId: string | null;
   contractNumber: string | null;
+  // Bank maqsad kodi — byudjet/bank xizmati to'lovini matnsiz aniqlash uchun
+  purposeCode: string | null;
 }
 
 interface CategoryRefs {
@@ -75,11 +77,29 @@ const KEYWORDS_LOAN = ['(ЗАЙМ)', '(ЗАЕМ)'];
 const KEYWORDS_SCHETCHIK = ['HISOBLAG', 'ХИСОБЛАГ', 'ХИСЛОБЛАГ', 'СЧЕТЧИК'];
 const KEYWORD_PEREOFORM = 'ПЕРЕОФОРМЛЕНИЕ';
 
-// Молия Вазирлиги — E ustun (fromName) aniq matn bilan
-const MINFIN_FROM_NAMES = [
-  'МОЛИЯ ВАЗИРЛИГИ ЯГОНА ГАЗНА ХИСОБВАРАГИ',
-  'ЎЗБЕКИСТОН РЕСПУБЛИКАСИ МОЛИЯ ВАЗИРЛИГИ',
+// Byudjet tashkiloti nomlari — soliq/byudjet to'lovini aniqlash uchun (ikkala tomon
+// ham tekshiriladi: byudjetdan qaytgan pul ham bor). 2026-09 tahlili: bank nomni
+// turlicha yozadi — Kirill "МОЛИЯ ВАЗИРЛИГИ", ruscha "Казначейство", tuman soliq
+// inspeksiyasi "Юнус Обод тумани ДСИ" / "TOSHKENT TUMANI DSI", jarima "МУНИС".
+const BUDGET_NAME_PARTS = [
+  'МОЛИЯ ВАЗИРЛИГИ',
+  'ЯГОНА ГАЗНА',
+  'КАЗНАЧЕЙСТВО',
+  'ТУМАНИ ДСИ',
+  'ТУМАН ДСИ',
+  'TUMANI DSI',
+  'МУНИС',
 ];
+
+// Byudjet to'lovlarining bank maqsad kodlari — matndan ko'ra ancha ishonchli belgi.
+// (2026-05..09 ma'lumoti: shu kodlar bilan kelgan to'lovlarning hammasi byudjetga
+//  ketgan; tijorat kodlari 00111/00667/00098... esa hech qachon byudjet emas.)
+const BUDGET_PURPOSE_CODES = new Set(['08101', '08102', '08108', '08201', '09510', '00602']);
+
+// Bank xizmati kodi — komissiya, spravka, SMS xabar, hisoblangan foizlar.
+// Izohda "ТАРИФ" so'zi bo'lmasligi mumkin ("За SMS информирование...", "Начисленные %%"),
+// shuning uchun kod bo'yicha aniqlaymiz.
+const BANK_PURPOSE_CODES = new Set(['00667']);
 
 // Soliq turi → MINFIN subkategoriya keyi (legacy 8 finance_tools.py)
 // Bank izohlarida Uzbek Kirill (Қ,Ў,Ғ,Ҳ) va sodda Kirill (К,У,Г,Х) aralash uchraydi
@@ -1424,7 +1444,7 @@ export class CategorizationService {
 
   private async runRules(
     tx: CategorizationInput,
-    opts?: { force?: boolean; forceRefresh?: boolean; actor?: 'auto' | 'manual' | 'cron' | 'sync'; actorId?: string },
+    opts?: { force?: boolean; forceRefresh?: boolean; actor?: 'auto' | 'manual' | 'cron' | 'sync'; actorId?: string; dryRun?: boolean },
   ): Promise<CategorizeResult> {
     // Skip — agar allaqachon kategoriyalangan va force=false
     // LEKIN: agar shartnoma raqami bor lekin CRM tekshirilmagan bo'lsa — CRM lookup qilamiz
@@ -1465,6 +1485,8 @@ export class CategorizationService {
     const normalizeYo = (s: string) => s.replace(/Ё/g, 'Е').replace(/ё/g, 'е');
     const desc = normalizeYo((tx.description || '').toUpperCase());
     const fromName = normalizeYo((tx.fromName || '').toUpperCase().trim());
+    const toName = normalizeYo((tx.toName || '').toUpperCase().trim());
+    const purposeCode = (tx.purposeCode || '').trim();
     const direction = (tx.direction || 'IN') as Direction;
 
     let categoryId: string | null = null;
@@ -1523,20 +1545,33 @@ export class CategorizationService {
       }
     }
 
-    // ── 3) Молия Вазирлиги — fromName aniq matn YOKI desc'da soliq kalit so'zi
+    // ── 3) Молия Вазирлиги — BYUDJET to'lovi bo'lishi SHART.
+    //
+    // ⚠️ 2026-09-18 TUZATISH: avval shart `isMolia || taxSubKey` edi — ya'ni izohda
+    // "НДС" harflari uchrasa yetarli bo'lgan. Bank izohlarida esa "с учетом ндс",
+    // "в т.ч. НДС", "без НДС" deyarli har joyda yoziladi, natijada 01.05.2026 dan
+    // beri 21 863 ta oddiy to'lov (armatura, qurilish, bank komissiyasi, zarplata)
+    // soliq deb belgilangan. Endi kategoriya FAQAT byudjet belgisi bo'yicha
+    // qo'yiladi, soliq kalit so'zi esa faqat subkategoriyani (qaysi soliq) tanlaydi.
     if (!categoryId) {
-      const isMolia = MINFIN_FROM_NAMES.some((m) => fromName.includes(m));
-      const taxSubKey = this.pickMinfinSubcategory(desc, refs);
-      if (isMolia || taxSubKey) {
+      const bothNames = `${fromName} ${toName}`;
+      const isBudgetName = BUDGET_NAME_PARTS.some((m) => bothNames.includes(m));
+      const isBudgetCode = !!purposeCode && BUDGET_PURPOSE_CODES.has(purposeCode);
+      if (isBudgetName || isBudgetCode) {
         categoryId = refs.MINFIN;
-        subcategoryId = taxSubKey;
-        reason = isMolia
-          ? `fromName Molia Vazirligi${taxSubKey ? ' + soliq turi' : ''}`
-          : 'desc soliq kalit soz';
+        subcategoryId = this.pickMinfinSubcategory(desc, refs);
+        reason = isBudgetName
+          ? `byudjet kontragenti${isBudgetCode ? ' + maqsad kodi' : ''}`
+          : `byudjet maqsad kodi (${purposeCode})`;
       }
     }
 
-    // ── 4) Bank xizmati — CORPORATE/TARIF
+    // ── 4) Bank xizmati — maqsad kodi (00667) YOKI CORPORATE/TARIF
+    if (!categoryId && purposeCode && BANK_PURPOSE_CODES.has(purposeCode)) {
+      categoryId = refs.BANK;
+      subcategoryId = refs.BANK_USLUGI;
+      reason = `bank xizmati maqsad kodi (${purposeCode})`;
+    }
     if (!categoryId && KEYWORDS_BANK.some((k) => desc.includes(k))) {
       categoryId = refs.BANK;
       subcategoryId = refs.BANK_USLUGI;
@@ -1574,6 +1609,18 @@ export class CategorizationService {
         subcategoryCode: null,
         contractNumber,
         reason: 'qoida topilmadi',
+      };
+    }
+
+    // dryRun — natijani hisoblaymiz, lekin bazaga YOZMAYMIZ (ommaviy tozalashda
+    // avval raqamlarni ko'rsatish uchun)
+    if (opts?.dryRun) {
+      return {
+        ok: true,
+        categoryCode: this.reverseCode(categoryId, refs),
+        subcategoryCode: subcategoryId ? this.reverseCode(subcategoryId, refs) : null,
+        contractNumber,
+        reason,
       };
     }
 
@@ -1736,6 +1783,177 @@ export class CategorizationService {
 
   // ────────────────────────── HELPERS ──────────────────────────
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * XATO "Молия Вазирлиги" YOZUVLARINI TOZALASH
+   * ═══════════════════════════════════════════════════════════════════════
+   * Izohdagi "НДС" harflari tufayli soliq deb belgilangan oddiy to'lovlarni
+   * yangi qoida bo'yicha qayta hisoblaydi.
+   *
+   * QAT'IY CHEGARALAR (foydalanuvchi bilan kelishilgan):
+   *   — faqat HOZIR Молия Вазирлиги bo'lgan qatorlar (boshqa kategoriyalarga tegilmaydi);
+   *   — faqat dateFrom dan keyingilar (standart 2026-05-01, undan oldingilarga TEGILMAYDI);
+   *   — qo'lda tuzatilganlar (categorizedBy='manual') chetlab o'tiladi;
+   *   — natija CLIENT chiqsa YOZILMAYDI (u ОплатыКв ga pul qatori qo'shardi) —
+   *     faqat ro'yxatga olinadi, qarorni foydalanuvchi qabul qiladi.
+   *
+   * dryRun (standart true) — hech narsa yozilmaydi, faqat hisob-kitob qaytadi.
+   */
+  async fixMinfinCategory(opts?: {
+    dateFrom?: string;
+    dryRun?: boolean;
+    limit?: number;
+    actorId?: string;
+    /** Qoida topilmagan qatorlarni kategoriyasiz qoldirish (aks holda tegilmaydi) */
+    clearUnmatched?: boolean;
+  }): Promise<{
+    ok: true;
+    dryRun: boolean;
+    dateFrom: string;
+    scanned: number;
+    changed: number;
+    unchanged: number;
+    noRule: number;
+    skippedManual: number;
+    clientSkipped: number;
+    byCategory: Array<{ category: string; count: number }>;
+    clientSamples: Array<{ id: string; date: string; amount: string; contract: string | null; purpose: string }>;
+    samples: Array<{ id: string; date: string; amount: string; from: string; to: string; newCategory: string; reason: string }>;
+  }> {
+    const dryRun = opts?.dryRun !== false;
+    const dateFrom = opts?.dateFrom || '2026-05-01';
+    const take = Math.min(50_000, Math.max(1, opts?.limit ?? 50_000));
+
+    const refs = await this.getRefs();
+    const minfin = await this.prisma.category.findFirst({ where: { code: 'MINFIN' }, select: { id: true } });
+    if (!minfin) throw new Error('MINFIN kategoriyasi topilmadi');
+
+    const txs = await this.prisma.transaction.findMany({
+      where: {
+        categoryId: minfin.id,
+        txnDate: { gte: new Date(`${dateFrom}T00:00:00+05:00`) },
+        NOT: { categorizedBy: 'manual' },
+      },
+      select: { ...this.txSelectFields(), txnDate: true, categorizedBy: true },
+      orderBy: { txnDate: 'asc' },
+      take,
+    });
+
+    const skippedManual = await this.prisma.transaction.count({
+      where: {
+        categoryId: minfin.id,
+        txnDate: { gte: new Date(`${dateFrom}T00:00:00+05:00`) },
+        categorizedBy: 'manual',
+      },
+    });
+
+    const nameById = new Map<string, string>();
+    for (const c of await this.prisma.category.findMany({ select: { id: true, name: true } })) {
+      nameById.set(c.id, c.name);
+    }
+
+    const tally = new Map<string, number>();
+    const samples: any[] = [];
+    const clientSamples: any[] = [];
+    let changed = 0, unchanged = 0, clientSkipped = 0, noRule = 0;
+
+    for (const tx of txs) {
+      // force: true — mavjud kategoriya ustidan qayta hisoblansin
+      const r = await this.runRules(tx as any, { force: true, actor: 'auto', actorId: opts?.actorId, dryRun: true })
+        .catch(() => null);
+      if (!r) { unchanged++; continue; }
+
+      // CLIENT — TEGMAYMIZ (ОплатыКв ga tushib ketmasin)
+      if (r.categoryCode === 'CLIENT') {
+        clientSkipped++;
+        if (clientSamples.length < 30) {
+          clientSamples.push({
+            id: tx.id,
+            date: (tx as any).txnDate?.toISOString().slice(0, 10) || '',
+            amount: String(tx.amount),
+            contract: r.contractNumber,
+            purpose: (tx.description || '').slice(0, 120),
+          });
+        }
+        continue;
+      }
+
+      // Hech bir qoida mos kelmadi — kategoriya bo'sh qolishi kerak.
+      // Diqqat: runRules bunday holda bazaga YOZMAYDI, ya'ni eski (xato) Молия
+      // Вазирлиги joyida qolardi. Shuning uchun kerak bo'lsa o'zimiz tozalaymiz.
+      if (!r.categoryCode) {
+        noRule++;
+        if (samples.length < 25) {
+          samples.push({
+            id: tx.id,
+            date: (tx as any).txnDate?.toISOString().slice(0, 10) || '',
+            amount: String(tx.amount),
+            from: (tx.fromName || '').slice(0, 30),
+            to: (tx.toName || '').slice(0, 30),
+            newCategory: '(kategoriyasiz)',
+            reason: r.reason || 'qoida topilmadi',
+          });
+        }
+        if (!dryRun && opts?.clearUnmatched) {
+          await this.prisma.transaction.update({
+            where: { id: tx.id },
+            data: {
+              categoryId: null, subcategoryId: null,
+              categorizedAt: new Date(), categorizedBy: 'auto', categorizedById: opts?.actorId || null,
+            },
+          }).catch((e) => this.log.warn(`fixMinfinCategory tozalash xato (${tx.id}): ${e?.message}`));
+          await this.logHistory(tx.id, {
+            action: 'auto', actorId: opts?.actorId,
+            oldCategoryId: tx.categoryId, oldSubcategoryId: tx.subcategoryId,
+            newCategoryId: null, newSubcategoryId: null,
+            contractNumber: r.contractNumber,
+            reason: 'Молия Вазирлиги tozalash — yangi qoidaga mos kelmadi',
+          });
+        }
+        continue;
+      }
+
+      const newCatId = (refs as any)[r.categoryCode] as string | undefined;
+      if (!newCatId || newCatId === minfin.id) { unchanged++; continue; }
+
+      const label = nameById.get(newCatId) || r.categoryCode || '(noma\'lum)';
+      tally.set(label, (tally.get(label) || 0) + 1);
+      changed++;
+      if (samples.length < 25) {
+        samples.push({
+          id: tx.id,
+          date: (tx as any).txnDate?.toISOString().slice(0, 10) || '',
+          amount: String(tx.amount),
+          from: (tx.fromName || '').slice(0, 30),
+          to: (tx.toName || '').slice(0, 30),
+          newCategory: label,
+          reason: r.reason || '',
+        });
+      }
+
+      if (!dryRun) {
+        await this.runRules(tx as any, { force: true, actor: 'auto', actorId: opts?.actorId }).catch((e) => {
+          this.log.warn(`fixMinfinCategory yozish xato (${tx.id}): ${e?.message}`);
+        });
+      }
+    }
+
+    const byCategory = Array.from(tally.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+
+    this.log.log(
+      `fixMinfinCategory: skan ${txs.length}, o'zgaradi ${changed}, qoidasiz ${noRule}, o'zgarmaydi ${unchanged}, ` +
+      `CLIENT chetlandi ${clientSkipped}, qo'lda ${skippedManual}${dryRun ? ' [DRY-RUN]' : ' [YOZILDI]'}`,
+    );
+
+    return {
+      ok: true, dryRun, dateFrom,
+      scanned: txs.length, changed, unchanged, noRule, skippedManual, clientSkipped,
+      byCategory, clientSamples, samples,
+    };
+  }
+
   private txSelectFields() {
     return {
       id: true,
@@ -1751,6 +1969,7 @@ export class CategorizationService {
       categoryId: true,
       subcategoryId: true,
       contractNumber: true,
+      purposeCode: true,
     };
   }
 

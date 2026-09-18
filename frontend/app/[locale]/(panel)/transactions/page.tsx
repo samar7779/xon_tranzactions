@@ -313,6 +313,7 @@ export default function TransactionsPage() {
   const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
   const [addFromTxOpen, setAddFromTxOpen] = useState(false);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
+  const [fixMinfinOpen, setFixMinfinOpen] = useState(false);
   // Qo'shimcha amallar — parol (7779) bilan himoyalangan UI gate (server amallar baribir permission/parol talab qiladi)
   const [extraUnlocked, setExtraUnlocked] = useState(false);
   const [extraPwPrompt, setExtraPwPrompt] = useState(false);
@@ -875,6 +876,15 @@ export default function TransactionsPage() {
                       >
                         <Stethoscope className="h-4 w-4 mr-2 text-rose-600 dark:text-rose-400" />
                         <span className="flex-1">Diagnostik kategoriyalash</span>
+                      </DropdownMenuItem>
+                    )}
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setFixMinfinOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />
+                        <span className="flex-1">Молия Вазирлиги — xatolarni tozalash</span>
                       </DropdownMenuItem>
                     )}
                   </div>
@@ -1561,6 +1571,7 @@ export default function TransactionsPage() {
       <SchotchikBackfillDialog open={schotchikBackfillOpen} onOpenChange={setSchotchikBackfillOpen} />
       <AddFromTxDialog open={addFromTxOpen} onOpenChange={setAddFromTxOpen} />
       <CategorizeDiagnoseDialog open={diagnoseOpen} onOpenChange={setDiagnoseOpen} />
+      <FixMinfinDialog open={fixMinfinOpen} onOpenChange={setFixMinfinOpen} />
 
       {/* ═══ KATEGORIYANI O'ZGARTIRISH ═══ */}
       <CategoryEditDialog
@@ -8073,5 +8084,175 @@ function BackfillStatCard({ label, value, color, highlight }: { label: string; v
       <div className="text-[9px] uppercase tracking-wider font-bold opacity-70 mb-0.5">{label}</div>
       <div className="text-[18px] font-black tabular-nums">{value.toLocaleString('ru-RU')}</div>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// МОЛИЯ ВАЗИРЛИГИ — xato kategoriyalarni tozalash
+//   Izohdagi "НДС" harflari tufayli soliq deb belgilangan oddiy to'lovlarni
+//   yangi qoida bo'yicha qayta hisoblaydi. Avval dryRun — raqamlar ko'rinadi,
+//   foydalanuvchi tasdiqlagandan keyingina yoziladi.
+// ═══════════════════════════════════════════════════════════════════
+interface FixMinfinResult {
+  ok: boolean;
+  dryRun: boolean;
+  dateFrom: string;
+  scanned: number;
+  changed: number;
+  unchanged: number;
+  noRule: number;
+  skippedManual: number;
+  clientSkipped: number;
+  byCategory: Array<{ category: string; count: number }>;
+  clientSamples: Array<{ id: string; date: string; amount: string; contract: string | null; purpose: string }>;
+  samples: Array<{ id: string; date: string; amount: string; from: string; to: string; newCategory: string; reason: string }>;
+}
+
+function FixMinfinDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const qc = useQueryClient();
+  const [dateFrom, setDateFrom] = useState('2026-05-01');
+  const [clearUnmatched, setClearUnmatched] = useState(false);
+  const [res, setRes] = useState<FixMinfinResult | null>(null);
+
+  const run = useMutation({
+    mutationFn: (dryRun: boolean) =>
+      api.post<FixMinfinResult>('/categorization/fix-minfin', { dateFrom, dryRun, clearUnmatched }, { timeout: 900_000 }),
+    onSuccess: (r) => {
+      setRes(r);
+      if (r.dryRun) toast.info(`Tahlil tayyor: ${r.changed} ta o'zgaradi`);
+      else {
+        toast.success(`Bajarildi: ${r.changed} ta yozuv tuzatildi`);
+        qc.invalidateQueries({ queryKey: ['transactions'] });
+        qc.invalidateQueries({ queryKey: ['tx-stats'] });
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xatolik'),
+  });
+
+  const close = () => { setRes(null); run.reset(); onOpenChange(false); };
+  const bajarilsinmi = !!res?.dryRun && (res.changed > 0 || (clearUnmatched && res.noRule > 0));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent className="sm:max-w-[760px] max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 grid place-items-center">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            Молия Вазирлиги — xato kategoriyalarni tozalash
+          </DialogTitle>
+          <DialogDescription>
+            Izohdagi &quot;НДС&quot; so&apos;zi tufayli soliq deb belgilangan oddiy to&apos;lovlar qayta hisoblanadi.
+            Faqat hozir Молия Вазирлиги bo&apos;lgan qatorlar ko&apos;riladi. Qo&apos;lda tuzatilganlarga va
+            Клиент/Физ.Л/Юр.Л to&apos;lovlariga tegilmaydi.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Sanadan boshlab</div>
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 w-[170px]" />
+          </div>
+          <label className="flex items-center gap-2 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 cursor-pointer">
+            <input type="checkbox" checked={clearUnmatched} onChange={(e) => setClearUnmatched(e.target.checked)} className="w-4 h-4 rounded" />
+            <span className="text-[12px]">Qoidasizlarni bo&apos;shatish</span>
+          </label>
+          <Button variant="outline" onClick={() => run.mutate(true)} disabled={run.isPending} className="h-9 gap-1.5">
+            {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Stethoscope className="h-4 w-4" />}
+            Tahlil (yozmaydi)
+          </Button>
+        </div>
+
+        {run.isPending && (
+          <div className="flex items-center gap-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 px-3 py-3 text-[12.5px] text-indigo-800 dark:text-indigo-200">
+            <Loader2 className="h-4 w-4 animate-spin shrink-0" /> Hisoblanmoqda, bu bir necha daqiqa olishi mumkin…
+          </div>
+        )}
+
+        {res && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {[
+                { l: 'Ko‘rildi', v: res.scanned, c: 'text-slate-700 dark:text-slate-200' },
+                { l: 'O‘zgaradi', v: res.changed, c: 'text-emerald-700 dark:text-emerald-300' },
+                { l: 'Qoidasiz', v: res.noRule, c: 'text-amber-700 dark:text-amber-300' },
+                { l: 'Минфин qoladi', v: res.unchanged, c: 'text-slate-600 dark:text-slate-300' },
+                { l: 'Qo‘lda (tegilmadi)', v: res.skippedManual, c: 'text-violet-700 dark:text-violet-300' },
+              ].map((k) => (
+                <div key={k.l} className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
+                  <div className="text-[9.5px] uppercase tracking-wider text-slate-400">{k.l}</div>
+                  <div className={cn('text-[19px] font-black tabular-nums', k.c)}>{k.v ?? 0}</div>
+                </div>
+              ))}
+            </div>
+
+            {res.byCategory.length > 0 && (
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Qaysi kategoriyaga o&apos;tadi</div>
+                <div className="flex flex-wrap gap-2">
+                  {res.byCategory.map((b) => (
+                    <span key={b.category} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-[12px]">
+                      <b>{b.category}</b>
+                      <span className="tabular-nums text-slate-500">{b.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {res.clientSkipped > 0 && (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 p-3 text-[12px] text-amber-900 dark:text-amber-200">
+                <b>{res.clientSkipped} ta</b> to&apos;lov mijoz to&apos;loviga o&apos;xshaydi — ularga TEGILMADI
+                (aks holda ОплатыКв ga tushib ketardi). Namunalar:
+                <div className="mt-2 space-y-1 max-h-28 overflow-y-auto font-mono text-[10.5px]">
+                  {res.clientSamples.map((s) => (
+                    <div key={s.id}>{s.date} · {Number(s.amount).toLocaleString('ru-RU')} · {s.contract || '—'} · {s.purpose.slice(0, 70)}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {res.samples.length > 0 && (
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 dark:bg-slate-800">
+                  Namunalar
+                </div>
+                <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {res.samples.map((s) => (
+                    <div key={s.id} className="px-3 py-1.5 text-[11.5px] flex items-center gap-2">
+                      <span className="tabular-nums text-slate-500 w-[78px] shrink-0">{s.date}</span>
+                      <span className="tabular-nums font-semibold w-[110px] text-right shrink-0">{Number(s.amount).toLocaleString('ru-RU')}</span>
+                      <span className="truncate flex-1 text-slate-600 dark:text-slate-300">{s.to || s.from}</span>
+                      <span className="shrink-0 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold">{s.newCategory}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {bajarilsinmi && (
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-3 py-2.5 text-[12.5px] text-emerald-900 dark:text-emerald-200">
+                Raqamlar to&apos;g&apos;ri bo&apos;lsa, pastdagi tugma bilan yozing. Har bir o&apos;zgarish tarixga yoziladi.
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={close}>Yopish</Button>
+          {bajarilsinmi && (
+            <Button
+              onClick={() => run.mutate(false)}
+              disabled={run.isPending}
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Tasdiqlab yozish ({res!.changed}{clearUnmatched && res!.noRule ? ` + ${res!.noRule}` : ''})
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

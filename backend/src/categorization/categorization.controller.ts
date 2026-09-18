@@ -66,6 +66,29 @@ export class CategorizationController {
     return this.svc.categorizeOne(id, { force: force === 'true', actor: 'manual', actorId: userId });
   }
 
+  // ─── Xato "Молия Вазирлиги" yozuvlarini tozalash ───────────────
+  @Post('fix-minfin')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({
+    summary: 'Izohdagi "НДС" tufayli soliq deb belgilangan to\'lovlarni qayta kategoriyalash',
+    description:
+      'Faqat hozir Молия Вазирлиги bo\'lgan, dateFrom (standart 2026-05-01) dan keyingi, ' +
+      'qo\'lda tuzatilmagan qatorlar. Natija CLIENT chiqsa YOZILMAYDI — faqat ro\'yxatga olinadi. ' +
+      'dryRun standart true — hech narsa yozilmaydi.',
+  })
+  fixMinfin(
+    @Body() body: { dateFrom?: string; dryRun?: boolean; limit?: number; clearUnmatched?: boolean },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.svc.fixMinfinCategory({
+      dateFrom: body?.dateFrom,
+      dryRun: body?.dryRun !== false,
+      limit: body?.limit,
+      clearUnmatched: body?.clearUnmatched === true,
+      actorId: userId,
+    });
+  }
+
   // ─── Qo'lda kategoriya qo'yish ─────────────────────────────────
   @Post('transactions/:id/set')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
