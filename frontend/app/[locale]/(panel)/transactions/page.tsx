@@ -4254,6 +4254,7 @@ function TransactionDetailDialog({
               // CRM mijoz nomi (contractCustomer) bu yerga TUSHMAYDI — SHARTNOMA qatorida bor
               value={
                 liveRow.manualCounterparty?.name
+                  || liveRow.erpSupplier
                   || (liveRow.source === 'IMPORT' ? liveRow.importCounterpartyText : null)
                   || liveRow.category?.name
                   || null
@@ -4261,6 +4262,8 @@ function TransactionDetailDialog({
               subValue={
                 liveRow.manualCounterparty?.inn
                   ? `${t('detailFieldInn')} ${liveRow.manualCounterparty.inn}`
+                  : liveRow.erpSupplier && !liveRow.manualCounterparty
+                  ? "Ta'minot ERP"
                   : null
               }
               docNumber={row.docNumber}
@@ -4283,10 +4286,16 @@ function TransactionDetailDialog({
                 liveRow.category ? {
                   text: liveRow.subcategory?.name || liveRow.category.name,
                   color: liveRow.category.color || '#6366f1',
+                } : liveRow.erpArticle ? {
+                  // Ta'minot ERP xarajat moddasi — o'z kategoriyamiz yo'q bo'lsa
+                  text: liveRow.erpArticle,
+                  color: '#0d9488',
                 } : null
               }
               subValue={
-                liveRow.category && liveRow.subcategory
+                liveRow.erpArticle && !liveRow.category
+                  ? `Ta'minot ERP${liveRow.erpObject ? ' · ' + liveRow.erpObject : ''}`
+                  : liveRow.category && liveRow.subcategory
                   ? `${liveRow.category.name}${liveRow.categorizedBy ? ` · ${liveRow.categorizedBy === 'manual' ? t('badgeManual') : liveRow.categorizedBy} ${liveRow.categorizedAt ? '· ' + formatDateTime(liveRow.categorizedAt) : ''}` : ''}`
                   : liveRow.categorizedBy ? `${liveRow.categorizedBy === 'manual' ? t('badgeManual') : liveRow.categorizedBy}${liveRow.categorizedAt ? ' · ' + formatDateTime(liveRow.categorizedAt) : ''}` : null
               }
@@ -4300,7 +4309,17 @@ function TransactionDetailDialog({
               icon={<FileSignature className="h-3.5 w-3.5" />}
               label={t('detailContractLabel')}
               customValue={
-                liveRow.contractNumber ? (
+                !liveRow.contractNumber && liveRow.erpContract ? (
+                  // Ta'minot shartnomasi — CRM tekshiruviga tegishli emas
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <code className="inline-block font-mono text-[12px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded ring-1 ring-teal-200 dark:ring-teal-900">
+                      {liveRow.erpContract}
+                    </code>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/30 ring-1 ring-teal-200 dark:ring-teal-900">
+                      Ta&apos;minot
+                    </span>
+                  </div>
+                ) : liveRow.contractNumber ? (
                   liveRow.contractStatus === 'manual' ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {liveRow.hasAttachment ? (
