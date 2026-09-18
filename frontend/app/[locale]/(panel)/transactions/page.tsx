@@ -5062,6 +5062,8 @@ function ColumnFilterPopover({
                 const isXato = !!xatoMatch;
                 // "(Bo'sh)" — jadvalda "—" ko'rinadigan qatorlar (backend: __EMPTY__)
                 const isEmpty = v.id === '__EMPTY__';
+                // Ta'minot ERP dan kelgan qiymat (yetkazib beruvchi / xarajat moddasi)
+                const isErp = v.id.startsWith('erp:');
                 return (
                   <label
                     key={v.id}
@@ -5083,6 +5085,11 @@ function ColumnFilterPopover({
                       </span>
                     ) : (
                       <span className="text-[11px] text-slate-700 dark:text-slate-300 truncate flex-1" title={v.name}>{display}</span>
+                    )}
+                    {isErp && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-1 py-0.5 rounded ring-1 ring-teal-200 dark:ring-teal-900 shrink-0">
+                        ta&apos;minot
+                      </span>
                     )}
                     {isXato && (
                       <span className="text-[9px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-1 py-0.5 rounded ring-1 ring-rose-200 dark:ring-rose-900 uppercase shrink-0">

@@ -74,6 +74,8 @@ export class TransactionsService {
 
   // Ustun filtridagi "(Bo'sh)" bandi — jadvalda "—" ko'rinadigan qatorlar
   static readonly EMPTY_FILTER = '__EMPTY__';
+  // Ta'minot ERP qiymatlari filtrda shu prefiks bilan keladi (id o'rniga nom)
+  static readonly ERP_PREFIX = 'erp:';
 
   /**
    * Jadvalda Kontragent / Kategoriya ustuni "—" bo'lib ko'rinadigan qatorlar sharti.
@@ -87,6 +89,7 @@ export class TransactionsService {
         AND: [
           { categoryId: null },
           { manualCounterpartyId: null },
+          { erpSupplier: null }, // ta'minotdan kelgan nom ham "bo'sh emas"
           { OR: [{ source: { not: 'IMPORT' } }, { importCounterpartyText: null }, { importCounterpartyText: '' }] },
         ],
       };
@@ -95,6 +98,7 @@ export class TransactionsService {
       AND: [
         { categoryId: null },
         { subcategoryId: null },
+        { erpArticle: null },
         { OR: [{ source: { not: 'IMPORT' } }, { importCategoryText: null }, { importCategoryText: '' }] },
       ],
     };
@@ -105,10 +109,38 @@ export class TransactionsService {
    * Faqat id'lar bo'lsa null qaytaradi (oddiy `in` filtri ishlatiladi).
    */
   private idsOrEmptyWhere(field: 'categoryId' | 'subcategoryId', list: string[], column: 'kontragent' | 'kategoriya'): any | null {
-    if (!list.includes(TransactionsService.EMPTY_FILTER)) return null;
-    const ids = list.filter((x) => x !== TransactionsService.EMPTY_FILTER);
-    const empty = this.emptyColumnWhere(column);
-    return ids.length > 0 ? { OR: [{ [field]: { in: ids } }, empty] } : empty;
+    const EMPTY = TransactionsService.EMPTY_FILTER;
+    const P = TransactionsService.ERP_PREFIX;
+    const erpField = column === 'kontragent' ? 'erpSupplier' : 'erpArticle';
+    const wantEmpty = list.includes(EMPTY);
+    const erpNames = list.filter((x) => x.startsWith(P)).map((x) => x.slice(P.length)).filter(Boolean);
+    const ids = list.filter((x) => x !== EMPTY && !x.startsWith(P));
+    // Maxsus qiymat yo'q — oddiy `in` yo'li ishlatilsin
+    if (!wantEmpty && erpNames.length === 0) return null;
+    const conds: any[] = [];
+    if (ids.length > 0) conds.push({ [field]: { in: ids } });
+    if (erpNames.length > 0) conds.push({ [erpField]: { in: erpNames } });
+    if (wantEmpty) conds.push(this.emptyColumnWhere(column));
+    return conds.length === 1 ? conds[0] : { OR: conds };
+  }
+
+  /**
+   * Ta'minot ERP dan kelgan qiymatlar (yetkazib beruvchi / xarajat moddasi) —
+   * ular kategoriyalar ro'yxatida yo'q, shuning uchun alohida qo'shiladi.
+   * id sifatida `erp:<nom>` beriladi (buildWhere shu prefiksni tushunadi).
+   */
+  private async erpFilterItems(where: any, field: 'erpSupplier' | 'erpArticle'): Promise<Array<{ id: string; name: string; erp: true }>> {
+    const rows = await this.prisma.transaction.findMany({
+      where: { AND: [where, { [field]: { not: null } }] },
+      distinct: [field],
+      select: { [field]: true } as any,
+      take: 400,
+    }).catch(() => [] as any[]);
+    return (rows as any[])
+      .map((r) => String(r[field] || '').trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'ru'))
+      .map((name) => ({ id: `${TransactionsService.ERP_PREFIX}${name}`, name, erp: true as const }));
   }
 
   /** Aktiv filtrlar ostida "—" qatorlar bor bo'lsa — ro'yxat boshiga "(Bo'sh)" bandi. */
@@ -621,12 +653,13 @@ export class TransactionsService {
       }
       case 'kontragent': {
         // Aktiv filter'lar ostida tranzaksiyalarda mavjud top kategoriyalar
-        const [txs, emptyItem] = await Promise.all([
+        const [txs, emptyItem, erp] = await Promise.all([
           this.prisma.transaction.findMany({
             where: { ...where, categoryId: { not: null } },
             distinct: ['categoryId'], select: { categoryId: true }, take: 100,
           }),
           this.emptyFilterItem(where, 'kontragent'),
+          this.erpFilterItems(where, 'erpSupplier'),
         ]);
         const ids = txs.map((t) => t.categoryId!).filter(Boolean);
         const cats = ids.length === 0 ? [] : await this.prisma.category.findMany({
@@ -634,15 +667,16 @@ export class TransactionsService {
           select: { id: true, name: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' },
         });
-        return { ok: true, values: [...emptyItem, ...cats.map((c) => ({ id: c.id, name: c.name }))] };
+        return { ok: true, values: [...emptyItem, ...cats.map((c) => ({ id: c.id, name: c.name })), ...erp] };
       }
       case 'kategoriya': {
-        const [txs, emptyItem] = await Promise.all([
+        const [txs, emptyItem, erp] = await Promise.all([
           this.prisma.transaction.findMany({
             where: { ...where, subcategoryId: { not: null } },
             distinct: ['subcategoryId'], select: { subcategoryId: true }, take: 200,
           }),
           this.emptyFilterItem(where, 'kategoriya'),
+          this.erpFilterItems(where, 'erpArticle'),
         ]);
         const ids = txs.map((t) => t.subcategoryId!).filter(Boolean);
         const subs = ids.length === 0 ? [] : await this.prisma.category.findMany({
@@ -652,7 +686,7 @@ export class TransactionsService {
         });
         return {
           ok: true,
-          values: [...emptyItem, ...subs.map((s) => ({ id: s.id, name: s.name }))],
+          values: [...emptyItem, ...subs.map((s) => ({ id: s.id, name: s.name })), ...erp],
         };
       }
       case 'direction': {
