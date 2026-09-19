@@ -8328,6 +8328,12 @@ interface TaminotMatchResult {
   ambiguous: number;
   notFound: number;
   byArticle: Array<{ article: string; count: number }>;
+  reasons?: Array<{ reason: string; count: number }>;
+  nearMiss?: Array<{
+    date: string; amount: string; bankName: string;
+    erpDate: string; erpAmount: string; erpSupplier: string;
+    erpArticle: string; erpContract: string; sabab: string;
+  }>;
   samples: Array<{
     date: string; amount: string; bankName: string;
     supplier: string; article: string; contract: string; dayDiff: number; how: string;
@@ -8445,6 +8451,49 @@ function TaminotMatchDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                       <b>{b.article}</b>
                       <span className="tabular-nums opacity-70">{b.count}</span>
                     </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(res.reasons?.length ?? 0) > 0 && (
+              <div className="rounded-xl ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/60 dark:bg-amber-950/30 p-3">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-2">
+                  Nega topilmadi
+                </div>
+                <div className="space-y-1">
+                  {res.reasons!.map((r) => (
+                    <div key={r.reason} className="flex items-center justify-between gap-3 text-[12px] text-amber-900 dark:text-amber-200">
+                      <span>{r.reason}</span>
+                      <b className="tabular-nums">{r.count}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(res.nearMiss?.length ?? 0) > 0 && (
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 dark:bg-slate-800">
+                  Yaqin nomzodlar — nega mos kelmagani ko&apos;rinadi
+                </div>
+                <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {res.nearMiss!.map((s, i) => (
+                    <div key={i} className="px-3 py-1.5 text-[11px] space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 w-[46px] shrink-0">bank</span>
+                        <span className="tabular-nums text-slate-500 w-[74px] shrink-0">{s.date}</span>
+                        <span className="tabular-nums font-semibold w-[104px] text-right shrink-0">{Number(s.amount).toLocaleString('ru-RU')}</span>
+                        <span className="truncate flex-1 text-slate-600 dark:text-slate-300">{s.bankName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-teal-600 w-[46px] shrink-0">erp</span>
+                        <span className="tabular-nums text-slate-500 w-[74px] shrink-0">{s.erpDate}</span>
+                        <span className="tabular-nums font-semibold w-[104px] text-right shrink-0">{Number(s.erpAmount).toLocaleString('ru-RU')}</span>
+                        <span className="truncate flex-1 text-teal-700 dark:text-teal-300">{s.erpSupplier} · {s.erpContract}</span>
+                      </div>
+                      <div className="text-[10px] text-amber-700 dark:text-amber-300 pl-[46px]">{s.sabab}</div>
+                    </div>
                   ))}
                 </div>
               </div>

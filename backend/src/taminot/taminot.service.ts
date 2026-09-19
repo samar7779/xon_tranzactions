@@ -126,6 +126,12 @@ export class TaminotService {
     ambiguous: number;
     notFound: number;
     byArticle: Array<{ article: string; count: number }>;
+    reasons: Array<{ reason: string; count: number }>;
+    nearMiss: Array<{
+      date: string; amount: string; bankName: string;
+      erpDate: string; erpAmount: string; erpSupplier: string;
+      erpArticle: string; erpContract: string; sabab: string;
+    }>;
     samples: Array<{
       date: string; amount: string; bankName: string;
       supplier: string; article: string; contract: string; dayDiff: number; how: string;
@@ -156,7 +162,7 @@ export class TaminotService {
     });
 
     if (txs.length === 0) {
-      return { ok: true, dryRun, dateFrom, scanned: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, byArticle: [], samples: [] };
+      return { ok: true, dryRun, dateFrom, scanned: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, byArticle: [], reasons: [], nearMiss: [], samples: [] };
     }
 
     // ── 2) Ta'minot to'lovlari (±3 kun kengaytirilgan oyna bilan) ──
@@ -181,13 +187,15 @@ export class TaminotService {
       [erpFrom.toISOString().slice(0, 10)],
     );
 
-    // summa bo'yicha indeks
+    // summa va shartnoma tokeni bo'yicha indekslar
     const byAmount = new Map<number, any[]>();
+    const byDog = new Map<string, any[]>();
     for (const r of res.rows) {
       const amt = Number(r.summa);
       if (!Number.isFinite(amt)) continue;
       const item = {
         id: String(r.id),
+        summa: amt,
         sana: new Date(`${String(r.sana).slice(0, 10)}T12:00:00Z`),
         taminotchi: String(r.taminotchi || ''),
         taminotchiC: this.coarse(r.taminotchi),
@@ -198,22 +206,66 @@ export class TaminotService {
       };
       const arr = byAmount.get(amt);
       if (arr) arr.push(item); else byAmount.set(amt, [item]);
+      // Shartnoma tokeni bo'yicha indeks — moslik topilmaganda SABABINI aytish uchun
+      if (item.dogTok) {
+        const d = byDog.get(item.dogTok);
+        if (d) d.push(item); else byDog.set(item.dogTok, [item]);
+      }
     }
 
     // ── 3) Moslash ──
     const MAX_DAY = 2;
     const tally = new Map<string, number>();
+    const reasons = new Map<string, number>();
     const samples: any[] = [];
+    const nearMiss: any[] = [];
     let matched = 0, ambiguous = 0, notFound = 0;
 
     for (const tx of txs) {
       const amt = Math.round(Math.abs(Number(tx.amount)));
-      const cands = byAmount.get(amt);
-      if (!cands || cands.length === 0) { notFound++; continue; }
-
       const txDay = new Date(tx.txnDate);
       const toks = this.descTokens(tx.description);
       const names = `${this.coarse(tx.toName)}|${this.coarse(tx.fromName)}`;
+
+      // Moslik topilmasa SABABINI aniqlaydi — shartnoma tokeni bo'yicha eng yaqin nomzod
+      const sababniYoz = () => {
+        notFound++;
+        let eng: any = null;
+        for (const t of toks) {
+          for (const c of byDog.get(t) || []) {
+            const dd = Math.round(Math.abs(c.sana.getTime() - txDay.getTime()) / 86_400_000);
+            const score = (c.summa === amt ? 0 : 1_000_000) + dd;
+            if (!eng || score < eng.score) eng = { c, dd, score };
+          }
+        }
+        let sabab: string;
+        if (eng) {
+          sabab = eng.c.summa === amt
+            ? `shartnoma mos, lekin sana ${eng.dd} kun farq qiladi`
+            : 'shartnoma mos, lekin summa boshqa';
+        } else if (byAmount.has(amt)) {
+          sabab = 'summa bor, lekin shartnoma/nom mos emas';
+        } else {
+          sabab = "ta'minotda bunday summa yo'q";
+        }
+        reasons.set(sabab, (reasons.get(sabab) || 0) + 1);
+        if (eng && nearMiss.length < 15) {
+          nearMiss.push({
+            date: tx.txnDate.toISOString().slice(0, 10),
+            amount: String(amt),
+            bankName: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 26) || '',
+            erpDate: eng.c.sana.toISOString().slice(0, 10),
+            erpAmount: String(eng.c.summa),
+            erpSupplier: eng.c.taminotchi.slice(0, 24),
+            erpArticle: eng.c.kategoriya.slice(0, 26),
+            erpContract: eng.c.dogno.slice(0, 22),
+            sabab,
+          });
+        }
+      };
+
+      const cands = byAmount.get(amt);
+      if (!cands || cands.length === 0) { sababniYoz(); continue; }
 
       const hits: Array<{ c: any; diff: number; byDog: boolean; byName: boolean }> = [];
       for (const c of cands) {
@@ -223,7 +275,7 @@ export class TaminotService {
         const byName = !!c.taminotchiC && c.taminotchiC.length >= 5 && names.includes(c.taminotchiC);
         if (byDog || byName) hits.push({ c, diff, byDog, byName });
       }
-      if (hits.length === 0) { notFound++; continue; }
+      if (hits.length === 0) { sababniYoz(); continue; }
 
       hits.sort((a, b) => (a.diff - b.diff) || ((b.byDog ? 1 : 0) - (a.byDog ? 1 : 0)));
       // Turli yetkazib beruvchiga teng nomzodlar — noaniq, tegmaymiz
@@ -276,6 +328,10 @@ export class TaminotService {
       ok: true, dryRun, dateFrom,
       scanned: txs.length, erpRows: res.rows.length,
       matched, ambiguous, notFound, byArticle, samples,
+      reasons: Array.from(reasons.entries())
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count),
+      nearMiss,
     };
   }
 }
