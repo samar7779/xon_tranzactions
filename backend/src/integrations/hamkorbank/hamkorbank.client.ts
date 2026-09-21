@@ -224,11 +224,43 @@ export class HamkorbankClient {
    * get-doc-details-byacc maydonlari: accountCr, accountDt, docDate, docNum, docType, id,
    *   innCr, innDt, mfoCr, mfoDt, nameCr, nameDt, nazpla, status, summa, vDate.
    */
+  /**
+   * Yozuvdan VAQTni topadi. Hamkor hujjatlangan maydonlar ro'yxatida vaqt yo'q,
+   * lekin javobda boshqa nom bilan kelishi mumkin (docTime, operTime, createdAt...).
+   * Shuning uchun nomiga emas, QIYMAT SHAKLIGA qaraymiz: "HH:mm" yoki "HH:mm:ss",
+   * shuningdek ISO sana-vaqt ichidagi vaqt qismi.
+   * Topilmasa undefined — o'zimizdan vaqt TO'QIMAYMIZ.
+   */
+  private pickTime(it: any): string | undefined {
+    if (!it || typeof it !== 'object') return undefined;
+    const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/;
+    const ISO = /\d{4}-\d{2}-\d{2}[T ](\d{2}:\d{2}(:\d{2})?)/;
+    for (const [k, v] of Object.entries(it)) {
+      if (v == null) continue;
+      const s = String(v).trim();
+      if (!s) continue;
+      const m1 = HHMM.exec(s);
+      if (m1) return s.length === 5 ? `${s}:00` : s;
+      const m2 = ISO.exec(s);
+      // 00:00:00 — vaqt yo'qligining belgisi, qabul qilmaymiz
+      if (m2 && m2[1] !== '00:00' && m2[1] !== '00:00:00') {
+        return m2[1].length === 5 ? `${m2[1]}:00` : m2[1];
+      }
+      void k;
+    }
+    return undefined;
+  }
+
   private normalizeItem(it: any, ourAcc: string): KbDoc1CItem {
     const acc_ct = it?.accountCr != null ? String(it.accountCr) : undefined;
     const acc_dt = it?.accountDt != null ? String(it.accountDt) : undefined;
     const isIn = acc_ct === ourAcc; // pul BIZGA kirdi (biz kreditormiz)
     return {
+      // Vaqt — bank yuborgan bo'lsa olamiz (maydon nomi noma'lum), aks holda bo'sh
+      time: this.pickTime(it),
+      // Xom javob — tashxis uchun (metadata'ga tushadi). Bank qaysi maydonlarni
+      // yuborayotganini ko'rish uchun kerak: normalizeItem qolganini tashlab yuboradi.
+      _raw: it,
       general_id: it?.id != null ? String(it.id) : undefined,
       b2_id: it?.id != null ? String(it.id) : undefined, // Hamkor'da alohida b2_id yo'q — id noyob
       num: it?.docNum != null ? String(it.docNum) : undefined,

@@ -21,6 +21,7 @@ const KNOWN_FIELDS = new Set([
   'mfo_ct', 'acc_ct', 'name_ct', 'inn_ct',
   'purpose', 'purp_code', 'amount', 'dtype', 'state', 'dir',
   'err', 'err_msg', 'anor',
+  '_raw', // bank javobining xom nusxasi — metadata'da bor, rawExtra'ga takrorlanmasin
 ]);
 
 @Injectable()
@@ -823,6 +824,25 @@ export class SyncService implements OnModuleInit {
           }
         } catch (e: any) {
           this.logger.warn(`Date-shift update xato (${existing.id}): ${e?.message}`);
+        }
+      } else if (item.time && !existing.operationTime) {
+        // ── VAQTNI TO'LDIRISH ──
+        // Hamkorbank yozuvlarida vaqt yo'q edi (mapper uni olmagan). Endi bank
+        // vaqt bersa, eski yozuvlarga ham qo'yamiz — sana oralig'ini qayta sync
+        // qilish yetarli. Faqat BO'SH bo'lganda to'ldiriladi, mavjud vaqtga tegilmaydi.
+        try {
+          await this.prisma.transaction.update({
+            where: { id: existing.id },
+            data: {
+              operationTime: item.time,
+              settlementTime: item.stime ?? undefined,
+              txnDate, // vaqt qismi bilan — ro'yxat "eng oxirgi" bo'yicha to'g'ri saralansin
+              syncedAt: new Date(),
+            },
+          });
+          this.logger.log(`Vaqt to'ldirildi: tx ${existing.id} → ${item.time}`);
+        } catch (e: any) {
+          this.logger.warn(`Vaqt to'ldirish xato (${existing.id}): ${e?.message}`);
         }
       }
       return false; // yangi yozuv yaratilmaydi

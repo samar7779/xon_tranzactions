@@ -75,6 +75,12 @@ export interface KbDoc1CItem {
   err?: string;
   err_msg?: string;
   anor?: number;
+  /**
+   * Bank javobining XOM nusxasi (Hamkorbank kabi boshqa formatli banklar uchun).
+   * normalizeItem faqat ma'lum maydonlarni oladi, qolgani yo'qolib ketardi —
+   * shu sabab tashxis uchun butun javob shu yerda saqlanadi (metadata'ga tushadi).
+   */
+  _raw?: unknown;
 }
 
 export interface KbDoc1CResult {
