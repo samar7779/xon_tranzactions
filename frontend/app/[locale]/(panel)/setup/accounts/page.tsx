@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Plus, Search, RefreshCw, Trash2, Building2, Wallet, MoreVertical,
   Eye, X, Power, PowerOff, ArrowUpRight, FileSpreadsheet, Download, Loader2,
-  Calendar, CheckCircle2, Clock, Save, ChevronDown, Pencil, Check,
+  Calendar, CheckCircle2, Clock, Save, ChevronDown, ChevronRight, Pencil, Check,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -624,14 +624,11 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>{t('credential')}</Label>
-            <Select value={form.credentialId} onValueChange={(v) => setForm({ ...form, credentialId: v })}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {creds.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.label} · {c.bank?.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CredentialPicker
+              creds={creds}
+              value={form.credentialId}
+              onChange={(v) => setForm({ ...form, credentialId: v })}
+            />
             {creds.length === 0 && (
               <p className="text-xs text-slate-500 dark:text-slate-400">{t('noCredsHint')}</p>
             )}
@@ -752,14 +749,12 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-3 space-y-1.5">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('credential')}</Label>
-              <Select value={credentialId} onValueChange={setCredentialId}>
-                <SelectTrigger><SelectValue placeholder={t('selectPlaceholder')} /></SelectTrigger>
-                <SelectContent>
-                  {creds.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.label} · {c.bank?.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CredentialPicker
+                creds={creds}
+                value={credentialId}
+                onChange={setCredentialId}
+                placeholder={t('selectPlaceholder')}
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('branch')}</Label>
@@ -1718,5 +1713,141 @@ function BulkBackfillDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ULANISH TANLAGICH — banklar bo'yicha yig'iladigan ro'yxat
+//   Har bank alohida guruh: logo + nom + ulanishlar soni.
+//   Guruh YOPIQ turadi, sarlavhasiga bosilganda ochiladi.
+//   Tanlangan ulanishning banki esa o'z-o'zidan ochiq keladi.
+// ═══════════════════════════════════════════════════════════════════
+function CredentialPicker({
+  creds, value, onChange, placeholder = '—',
+}: {
+  creds: any[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [openBanks, setOpenBanks] = useState<Set<string>>(new Set());
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const selected = useMemo(() => creds.find((c) => c.id === value) || null, [creds, value]);
+
+  // Banklar bo'yicha guruhlash — nomi bo'yicha alifbo tartibida
+  const groups = useMemo(() => {
+    const m = new Map<string, { code: string; name: string; items: any[] }>();
+    for (const c of creds) {
+      const code = c.bank?.code || '—';
+      const name = c.bank?.name || 'Bank belgilanmagan';
+      const g = m.get(code);
+      if (g) g.items.push(c);
+      else m.set(code, { code, name, items: [c] });
+    }
+    return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [creds]);
+
+  // Tanlangan ulanishning banki ochiq bo'lsin
+  useEffect(() => {
+    if (open && selected?.bank?.code) setOpenBanks(new Set([selected.bank.code]));
+  }, [open, selected]);
+
+  // Tashqariga bosilganda yopiladi
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const t = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const toggleBank = (code: string) => {
+    setOpenBanks((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  };
+
+  return (
+    <div className="relative" ref={boxRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full h-10 px-3 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 text-left hover:ring-slate-300 dark:hover:ring-slate-600 transition-colors"
+      >
+        {selected ? (
+          <>
+            <BankLogo code={selected.bank?.code || ''} name={selected.bank?.name} size={20} rounded="rounded-md" />
+            <span className="flex-1 truncate text-[13px]">{selected.label}</span>
+            <span className="text-[11px] text-slate-400 shrink-0">{selected.bank?.name}</span>
+          </>
+        ) : (
+          <span className="flex-1 text-[13px] text-slate-400">{placeholder}</span>
+        )}
+        <ChevronDown className={cn('h-4 w-4 text-slate-400 shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-xl p-1">
+          {groups.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[12px] text-slate-400">Ulanish yo&apos;q</div>
+          ) : groups.map((g) => {
+            const isOpen = openBanks.has(g.code);
+            return (
+              <div key={g.code}>
+                <button
+                  type="button"
+                  onClick={() => toggleBank(g.code)}
+                  className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <ChevronRight className={cn('h-3.5 w-3.5 text-slate-400 transition-transform', isOpen && 'rotate-90')} />
+                  <BankLogo code={g.code} name={g.name} size={22} rounded="rounded-md" />
+                  <span className="flex-1 text-left text-[12.5px] font-semibold text-slate-700 dark:text-slate-200">{g.name}</span>
+                  <span className="text-[11px] tabular-nums text-slate-400">{g.items.length}</span>
+                </button>
+                {isOpen && (
+                  <div className="pb-1">
+                    {g.items.map((c) => {
+                      const active = c.id === value;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => { onChange(c.id); setOpen(false); }}
+                          className={cn(
+                            'w-full flex items-center gap-2 pl-9 pr-2 py-1.5 rounded-lg text-left transition-colors',
+                            active
+                              ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800',
+                          )}
+                        >
+                          <span className="flex-1 truncate text-[12.5px]">{c.label}</span>
+                          {typeof c._count?.accounts === 'number' && (
+                            <span className="text-[10.5px] tabular-nums text-slate-400 shrink-0">
+                              {c._count.accounts} hisob
+                            </span>
+                          )}
+                          {active && <Check className="h-3.5 w-3.5 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
