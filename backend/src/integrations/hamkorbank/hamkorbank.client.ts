@@ -99,6 +99,13 @@ export class HamkorbankClient {
     const raw = await this.request('GET', url, headers, undefined, auth.useProxy);
     // Konvert: { code, msg, responseBody } | { code, error }
     const code = raw?.code;
+    // [HB-DIAG — VAQTINCHALIK] bankка berish uchun: aynan qanday so'rov ketdi
+    // (URL + requestId) va qanday javob keldi (code + msg + yozuvlar soni).
+    this.logger.log(
+      `[HB-DIAG] ${path} requestId=${headers.requestId} url=${url} -> code=${code}` +
+      ` msg=${JSON.stringify(raw?.msg ?? raw?.error ?? '')}` +
+      ` items=${Array.isArray(raw?.responseBody) ? raw.responseBody.length : '-'}`,
+    );
     // -5 «данный не найден» — bu XATO EMAS: so'rovga mos yozuv topilmadi (masalan,
     // o'sha kunda operatsiya bo'lmagan hisob). Bo'sh natija qaytaramiz — sync bo'sh
     // kunda yiqilmasin. (Lab testida tasdiqlangan: operatsiyasiz kun har doim -5.)
