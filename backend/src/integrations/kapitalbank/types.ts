@@ -58,6 +58,14 @@ export interface KbDoc1CItem {
   ddate?: string;          // dd.MM.yyyy
   vdate?: string;
   stime?: string;
+  /**
+   * HAQIQIY to'langan kun+vaqt (masalan Hamkor karta to'lovlari uchun purpos ichidagi
+   * "Время транзакции dd.mm.yyyy HH:mm:ss"). MAVJUD bo'lsa — FAQAT txnDate (ko'rsatiladigan
+   * sana) uchun ishlatiladi; externalId/composite AVVALGIDEK `ddate` (bank docDate/
+   * settlement kuni) bo'yicha quriladi (ОплатыКв bog'lanishi uzilmasin). Bo'sh bo'lsa
+   * eski xatti-harakat. Faqat Hamkor to'ldiradi.
+   */
+  txnDate1C?: string;      // dd.mm.yyyy HH:mm:ss (ixtiyoriy)
   mfo_dt?: string;
   acc_dt?: string;
   name_dt?: string;

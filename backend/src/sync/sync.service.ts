@@ -739,8 +739,15 @@ export class SyncService implements OnModuleInit {
     // shu sababli kun ichida saralash bank vaqti bo'yicha emas, yozuv qo'shilish
     // tartibi (id) bo'yicha ketardi. Endi vaqt ham saqlanadi va +05:00 (Toshkent)
     // mintaqasida quriladi — ro'yxat filtri ham shu chegaralar bilan ishlaydi.
-    const txnDate = this.buildTxnDateTime(item.ddate, item.time, item.stime, item.input_time)
-      || this.parseKbDate(item.ddate)
+    // Hamkor karta to'lovlari uchun `txnDate1C` (HAQIQIY to'langan kun+vaqt, purposdagi
+    // "Время транзакции") bo'lsa — txnDate SHU'ndan (bank docDate = settlement kuni bo'lib,
+    // to'lovlar bitta kunga tiqilib qolmasin; vipiska/CRM bilan mos). Bo'lmasa (Kapital/Ipak/
+    // oddiy o'tkazma) — AVVALGIDEK item.ddate'dan. ⚠️ externalId/composite DOIM ddate bo'yicha
+    // (makeCompositeId item.ddate ishlatadi) — ОплатыКв bog'lanishi buzilmaydi.
+    const txnDate = (item.txnDate1C
+      ? this.buildTxnDateTime(item.txnDate1C)        // o'z vaqti bilan
+      : this.buildTxnDateTime(item.ddate, item.time, item.stime, item.input_time))
+      || this.parseKbDate(item.txnDate1C || item.ddate)
       || new Date();
     // valueDate — @db.Date ustuni: UTC peshin bilan (TZ siljishi kun almashtirib yubormasin)
     const valueDate = this.parseKbDateOnly(item.vdate);
@@ -800,8 +807,20 @@ export class SyncService implements OnModuleInit {
             `sana ${existing.txnDate.toISOString().slice(0, 10)} → ${txnDate.toISOString().slice(0, 10)}, ` +
             `composite ID yangi`,
           );
-          // Sana o'zgarishi — "O'zgargan to'lovlar"ga (BANK O'ZGARTIRGAN) yozamiz
-          if (dateChanged) {
+          // Hamkor karta to'lovi sanasi settlement→haqiqiy kunga ko'chdi — bog'langan
+          // ОплатыКв qatori sanasini ham darrov yangilaymiz (applyMovedChange kabi), aks
+          // holda ОплатыКв eski (settlement) kunni ko'rsatib turardi. Faqat txnDate1C uchun.
+          if (item.txnDate1C) {
+            await this.prisma.oplataKv.updateMany({
+              where: { sourceTxId: { in: [externalId, existing.id].filter(Boolean) } },
+              data: { date: txnDate },
+            }).catch(() => { /* asosiy tuzatish (transaction) bajarildi */ });
+          }
+          // Sana o'zgarishi — "O'zgargan to'lovlar"ga (BANK O'ZGARTIRGAN) yozamiz.
+          // ⚠️ Hamkor karta to'lovi (txnDate1C bor): sana docDate(settlement kuni)dan
+          // HAQIQIY to'langan kunga ko'chishi — BIZNING tuzatish (bank o'zgarishi EMAS),
+          // shu bois changelog'ga YOZILMAYDI (spam bo'lmasin).
+          if (dateChanged && !item.txnDate1C) {
             try {
               await this.prisma.transactionChangeLog.create({
                 data: {

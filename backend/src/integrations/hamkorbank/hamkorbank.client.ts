@@ -265,6 +265,19 @@ export class HamkorbankClient {
     return m[1].length === 5 ? `${m[1]}:00` : m[1];
   }
 
+  /**
+   * Purpos (nazpla) ichidan mijoz HAQIQIY to'lagan kun+vaqtini ajratadi:
+   * "...Время транзакции 20.09.2026 09:51:56 шартнома..." → "20.09.2026 09:51:56".
+   * Karta/xonpay to'lovlarida bor; oddiy o'tkazmalarda yo'q (undefined qaytadi →
+   * txnDate ddate'dan olinadi, eski xatti-harakat). Bank docDate = settlement kuni
+   * bo'lgani uchun bu haqiqiy kun ko'rsatiladigan sana (txnDate) uchun ishlatiladi.
+   */
+  private actualTxnDateFromPurpose(nazpla: any): string | undefined {
+    const s = String(nazpla ?? '');
+    const m = /Время\s+транзакции\s+(\d{2}\.\d{2}\.\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)/.exec(s);
+    return m ? m[1].replace(/\s+/g, ' ').trim() : undefined;
+  }
+
   private normalizeItem(it: any, ourAcc: string): KbDoc1CItem {
     const acc_ct = it?.accountCr != null ? String(it.accountCr) : undefined;
     const acc_dt = it?.accountDt != null ? String(it.accountDt) : undefined;
@@ -283,7 +296,10 @@ export class HamkorbankClient {
       general_id: it?.id != null ? String(it.id) : undefined,
       b2_id: it?.id != null ? String(it.id) : undefined, // Hamkor'da alohida b2_id yo'q — id noyob
       num: it?.docNum != null ? String(it.docNum) : undefined,
-      ddate: it?.docDate ? String(it.docDate) : undefined, // dd.mm.yyyy (Kapital dd.MM.yyyy bilan mos)
+      ddate: it?.docDate ? String(it.docDate) : undefined, // dd.mm.yyyy (Kapital dd.MM.yyyy bilan mos) — externalId shu bo'yicha
+      // HAQIQIY to'langan kun (purposdagi "Время транзакции") — FAQAT txnDate uchun.
+      // ddate (settlement kuni) o'zgarmaydi → externalId/ОплатыКв bog'lanishi buzilmaydi.
+      txnDate1C: this.actualTxnDateFromPurpose(it?.nazpla),
       vdate: it?.vDate ? String(it.vDate) : undefined,
       acc_ct,
       acc_dt,
