@@ -234,21 +234,28 @@ export class HamkorbankClient {
   private pickTime(it: any): string | undefined {
     if (!it || typeof it !== 'object') return undefined;
     const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/;
-    const ISO = /\d{4}-\d{2}-\d{2}[T ](\d{2}:\d{2}(:\d{2})?)/;
-    for (const [k, v] of Object.entries(it)) {
+    // Sana+vaqt bitta qatorda: "22.09.2026 09:00:05" yoki "2026-09-22T09:00:05"
+    const DT = /(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4}|\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2}(?::\d{2})?)/;
+    for (const v of Object.values(it)) {
       if (v == null) continue;
       const s = String(v).trim();
       if (!s) continue;
-      const m1 = HHMM.exec(s);
-      if (m1) return s.length === 5 ? `${s}:00` : s;
-      const m2 = ISO.exec(s);
-      // 00:00:00 — vaqt yo'qligining belgisi, qabul qilmaymiz
-      if (m2 && m2[1] !== '00:00' && m2[1] !== '00:00:00') {
-        return m2[1].length === 5 ? `${m2[1]}:00` : m2[1];
+      if (HHMM.test(s)) return s.length === 5 ? `${s}:00` : s;
+      const m = DT.exec(s);
+      // 00:00 — vaqt yo'qligining belgisi, qabul qilmaymiz
+      if (m && m[1] !== '00:00' && m[1] !== '00:00:00') {
+        return m[1].length === 5 ? `${m[1]}:00` : m[1];
       }
-      void k;
     }
     return undefined;
+  }
+
+  /** "22.09.2026 09:00:05" → "09:00:05" (vaqt bo'lmasa undefined) */
+  private timeFromDateTime(s: any): string | undefined {
+    const m = String(s ?? '').trim().match(/^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4}[ T](\d{1,2}:\d{2}(?::\d{2})?)$/);
+    if (!m) return undefined;
+    if (m[1] === '00:00' || m[1] === '00:00:00') return undefined;
+    return m[1].length === 5 ? `${m[1]}:00` : m[1];
   }
 
   private normalizeItem(it: any, ourAcc: string): KbDoc1CItem {
@@ -256,8 +263,13 @@ export class HamkorbankClient {
     const acc_dt = it?.accountDt != null ? String(it.accountDt) : undefined;
     const isIn = acc_ct === ourAcc; // pul BIZGA kirdi (biz kreditormiz)
     return {
-      // Vaqt — bank yuborgan bo'lsa olamiz (maydon nomi noma'lum), aks holda bo'sh
-      time: this.pickTime(it),
+      // Vaqt — Hamkor uni SANA bilan birga yuboradi: docDate = "22.09.2026 09:00:05".
+      // Avval o'sha yerdan olamiz, topilmasa boshqa maydonlarni shaklga qarab qidiramiz.
+      // ⚠️ ddate/vdate O'ZGARTIRILMAYDI: ddate externalId (composite) tarkibiga kiradi,
+      //    uni qisqartirsak barcha Hamkor to'lovlarining ID'si o'zgarib, ОплатыКв
+      //    bilan bog'lanish (source_tx_id) uzilib qolardi. Sync tomonidagi sana
+      //    o'qigichlari vaqtli shaklni ham tushunadi.
+      time: this.timeFromDateTime(it?.docDate) || this.pickTime(it),
       // Xom javob — tashxis uchun (metadata'ga tushadi). Bank qaysi maydonlarni
       // yuborayotganini ko'rish uchun kerak: normalizeItem qolganini tashlab yuboradi.
       _raw: it,

@@ -790,6 +790,9 @@ export class SyncService implements OnModuleInit {
               valueDate,
               syncedAt: new Date(),
               ...(item.b2_id ? { bankB2Id: item.b2_id } : {}),
+              // Vaqt bo'sh bo'lsa — shu yerda ham to'ldiramiz (Hamkor yozuvlari)
+              ...(item.time && !existing.operationTime ? { operationTime: item.time } : {}),
+              ...(item.stime && !existing.settlementTime ? { settlementTime: item.stime } : {}),
             },
           });
           this.logger.log(
@@ -971,7 +974,9 @@ export class SyncService implements OnModuleInit {
    */
   private parseKbDateOnly(s?: string): Date | null {
     if (!s) return null;
-    const m = String(s).trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    // Hamkorbank "22.09.2026 09:00:05" yuboradi — vaqt qismi bo'lsa ham qabul qilamiz
+    // (aks holda valueDate jimgina bo'sh qolardi)
+    const m = String(s).trim().match(/^(\d{2})\.(\d{2})\.(\d{4})/);
     if (!m) return null;
     const dt = new Date(`${m[3]}-${m[2]}-${m[1]}T12:00:00Z`);
     return isNaN(dt.getTime()) ? null : dt;
@@ -984,11 +989,15 @@ export class SyncService implements OnModuleInit {
    */
   private tashkentDate(d?: string, t?: string): Date | null {
     if (!d) return null;
-    const m = String(d).trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    // Hamkorbank sanani vaqti bilan bitta qatorda yuboradi: "22.09.2026 09:00:05".
+    // Kapital/Ipak esa faqat "22.09.2026". Ikkalasini ham qabul qilamiz; alohida
+    // vaqt (t) berilmagan bo'lsa, sana ichidagi vaqt ishlatiladi.
+    const m = String(d).trim().match(/^(\d{2})\.(\d{2})\.(\d{4})(?:[ T](\d{1,2}:\d{2}(?::\d{2})?))?/);
     if (!m) return null;
-    const [, dd, mm, yyyy] = m;
+    const [, dd, mm, yyyy, inlineTime] = m;
     let time = '00:00:00';
-    const tm = String(t ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    const tm = String(t ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+      || String(inlineTime ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
     if (tm) {
       const hh = String(Math.min(23, Number(tm[1]))).padStart(2, '0');
       time = `${hh}:${tm[2]}:${tm[3] ?? '00'}`;
