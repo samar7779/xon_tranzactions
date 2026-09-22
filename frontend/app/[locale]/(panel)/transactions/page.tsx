@@ -7791,7 +7791,7 @@ function SchotchikBackfillDialog({
               </div>
 
               {/* Stats grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                 <BackfillStatCard label="Topildi" value={data.stats.matched} color="indigo" />
                 <BackfillStatCard label="Allaqachon to'g'ri" value={data.stats.alreadyCorrect} color="emerald" />
                 <BackfillStatCard
@@ -8327,6 +8327,7 @@ interface TaminotMatchResult {
   matched: number;
   ambiguous: number;
   notFound: number;
+  cleared?: number;
   byArticle: Array<{ article: string; count: number }>;
   reasons?: Array<{ reason: string; count: number }>;
   nearMiss?: Array<{
@@ -8434,6 +8435,7 @@ function TaminotMatchDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 { l: 'Mos topildi', v: res.matched, c: 'text-emerald-700 dark:text-emerald-300' },
                 { l: 'Noaniq (tegilmadi)', v: res.ambiguous, c: 'text-amber-700 dark:text-amber-300' },
                 { l: 'Topilmadi', v: res.notFound, c: 'text-slate-500' },
+                { l: 'Bekor qilindi', v: res.cleared ?? 0, c: 'text-rose-600 dark:text-rose-300' },
               ].map((k) => (
                 <div key={k.l} className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
                   <div className="text-[9.5px] uppercase tracking-wider text-slate-400">{k.l}</div>

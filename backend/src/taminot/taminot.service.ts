@@ -125,6 +125,8 @@ export class TaminotService {
     matched: number;
     ambiguous: number;
     notFound: number;
+    /** Eski bog'lanish bekor qilindi (qayta ko'rishda mos kelmay qolgan) */
+    cleared: number;
     byArticle: Array<{ article: string; count: number }>;
     reasons: Array<{ reason: string; count: number }>;
     nearMiss: Array<{
@@ -155,14 +157,14 @@ export class TaminotService {
       },
       select: {
         id: true, txnDate: true, amount: true, direction: true,
-        fromName: true, toName: true, description: true,
+        fromName: true, toName: true, description: true, erpPaymentId: true,
       },
       orderBy: { txnDate: 'asc' },
       take,
     });
 
     if (txs.length === 0) {
-      return { ok: true, dryRun, dateFrom, scanned: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, byArticle: [], reasons: [], nearMiss: [], samples: [] };
+      return { ok: true, dryRun, dateFrom, scanned: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, cleared: 0, byArticle: [], reasons: [], nearMiss: [], samples: [] };
     }
 
     // ── 2) Ta'minot to'lovlari (±3 kun kengaytirilgan oyna bilan) ──
@@ -171,8 +173,11 @@ export class TaminotService {
     const res = await this.getPool().query(
       // Master jadval ustun nomlari turlicha bo'lishi mumkin (nomi/name/title) —
       // to_jsonb bilan olamiz, shunda sxema o'zgarsa ham so'rov yiqilmaydi.
+      // ⚠️ sana MATN qilib olinadi: pg drayveri `date` ustunini Date obyektiga
+      // aylantiradi, uni matn deb o'qisak "Tue Sep 22" kabi buzuq qiymat chiqadi
+      // va sana farqi NaN bo'lib, ±2 kun cheklovi jimgina ishlamay qoladi.
       `select p.id::text                                          as id,
-              p.tulov_sanasi::date                                as sana,
+              to_char(p.tulov_sanasi, 'YYYY-MM-DD')               as sana,
               round(coalesce(p.executed_amount, p.summa))::bigint as summa,
               coalesce(t.j->>'nomi', t.j->>'name', t.j->>'title',
                        p.legacy_meta->>'rawPayee', '')            as taminotchi,
@@ -193,10 +198,12 @@ export class TaminotService {
     for (const r of res.rows) {
       const amt = Number(r.summa);
       if (!Number.isFinite(amt)) continue;
+      const sana = new Date(`${String(r.sana).slice(0, 10)}T12:00:00Z`);
+      if (isNaN(sana.getTime())) continue; // sanasi o'qilmagan qator moslashda qatnashmasin
       const item = {
         id: String(r.id),
         summa: amt,
-        sana: new Date(`${String(r.sana).slice(0, 10)}T12:00:00Z`),
+        sana,
         taminotchi: String(r.taminotchi || ''),
         taminotchiC: this.coarse(r.taminotchi),
         kategoriya: String(r.kategoriya || ''),
@@ -219,7 +226,24 @@ export class TaminotService {
     const reasons = new Map<string, number>();
     const samples: any[] = [];
     const nearMiss: any[] = [];
-    let matched = 0, ambiguous = 0, notFound = 0;
+    let matched = 0, ambiguous = 0, notFound = 0, cleared = 0;
+
+    /**
+     * Qayta ko'rish (rematch) paytida moslik topilmasa — eski bog'lanish bekor
+     * qilinadi. Aks holda ilgari NOTO'G'RI yozilgan ma'lumot joyida qolib ketardi
+     * (±2 kun cheklovi buzuq sana tufayli ishlamay turgan edi).
+     */
+    const eskiniTozala = async (tx: any) => {
+      if (dryRun || !opts?.rematch || !tx.erpPaymentId) return;
+      cleared++;
+      await this.prisma.transaction.update({
+        where: { id: tx.id },
+        data: {
+          erpPaymentId: null, erpSupplier: null, erpArticle: null,
+          erpContract: null, erpObject: null, erpMatchedAt: null,
+        },
+      }).catch((e) => this.log.warn(`erp tozalash xato (${tx.id}): ${e?.message}`));
+    };
 
     for (const tx of txs) {
       const amt = Math.round(Math.abs(Number(tx.amount)));
@@ -265,7 +289,7 @@ export class TaminotService {
       };
 
       const cands = byAmount.get(amt);
-      if (!cands || cands.length === 0) { sababniYoz(); continue; }
+      if (!cands || cands.length === 0) { sababniYoz(); await eskiniTozala(tx); continue; }
 
       const hits: Array<{ c: any; diff: number; byDog: boolean; byName: boolean }> = [];
       for (const c of cands) {
@@ -275,13 +299,13 @@ export class TaminotService {
         const byName = !!c.taminotchiC && c.taminotchiC.length >= 5 && names.includes(c.taminotchiC);
         if (byDog || byName) hits.push({ c, diff, byDog, byName });
       }
-      if (hits.length === 0) { sababniYoz(); continue; }
+      if (hits.length === 0) { sababniYoz(); await eskiniTozala(tx); continue; }
 
       hits.sort((a, b) => (a.diff - b.diff) || ((b.byDog ? 1 : 0) - (a.byDog ? 1 : 0)));
       // Turli yetkazib beruvchiga teng nomzodlar — noaniq, tegmaymiz
       const best = hits[0];
       const rivals = hits.filter((h) => h.diff === best.diff && h.c.taminotchi !== best.c.taminotchi);
-      if (rivals.length > 0) { ambiguous++; continue; }
+      if (rivals.length > 0) { ambiguous++; await eskiniTozala(tx); continue; }
 
       matched++;
       const label = best.c.kategoriya || '(moddasiz)';
@@ -327,7 +351,7 @@ export class TaminotService {
     return {
       ok: true, dryRun, dateFrom,
       scanned: txs.length, erpRows: res.rows.length,
-      matched, ambiguous, notFound, byArticle, samples,
+      matched, ambiguous, notFound, cleared, byArticle, samples,
       reasons: Array.from(reasons.entries())
         .map(([reason, count]) => ({ reason, count }))
         .sort((a, b) => b.count - a.count),
