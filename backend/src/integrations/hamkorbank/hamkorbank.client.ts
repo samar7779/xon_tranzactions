@@ -22,6 +22,11 @@ import { KbDoc1CItem, KbDoc1CResult } from '../kapitalbank/types';
 export class HamkorbankClient {
   private readonly logger = new Logger(HamkorbankClient.name);
   private readonly timeoutMs: number;
+  // Statement (get-doc-details-byacc) — o'tgan davrlar uchun bank javobi JUDA sekin.
+  // Bank xodimi: ularda arxiv so'rovi ~20 daqiqagacha oladi (bizniki 2 daq bo'lib uzib
+  // qo'yardik). Shuning uchun statement uchun ALOHIDA uzun timeout (default 25 daq).
+  // Ulanish-testi/get-bank-day esa qisqa `timeoutMs` bilan qoladi (foydalanuvchi kutib qolmasin).
+  private readonly statementTimeoutMs: number;
   private readonly proxyAgent?: HttpsProxyAgent<string>;
   private readonly envForwarderUrl?: string;
   private readonly envForwarderSecret?: string;
@@ -44,6 +49,8 @@ export class HamkorbankClient {
     // bir kun (docType=0, ~38 operatsiya) ~41 soniya oldi. Shuning uchun Hamkor timeout'i
     // katta (120s). Kapital/Ipak'ga tegmaydi (ular alohida KAPITALBANK_TIMEOUT_MS).
     this.timeoutMs = Number(config.get<string>('HAMKORBANK_TIMEOUT_MS', '120000'));
+    // Statement/backfill timeout — bankning ~20 daq arxiv javobini ushlash uchun default 25 daq.
+    this.statementTimeoutMs = Number(config.get<string>('HAMKORBANK_STATEMENT_TIMEOUT_MS', '1500000'));
     // Kapital bilan bir xil forwarder/proxy sozlamalarini ishlatadi (bank IP whitelist).
     this.envForwarderUrl = config.get<string>('BANK_FORWARDER_URL');
     this.envForwarderSecret = config.get<string>('BANK_FORWARDER_SECRET');
@@ -86,6 +93,7 @@ export class HamkorbankClient {
     path: string,
     query: Record<string, any>,
     extraHeaders?: Record<string, string>,
+    timeoutMs?: number,
   ): Promise<any> {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) if (v != null) qs.set(k, String(v));
@@ -96,7 +104,7 @@ export class HamkorbankClient {
       Authorization: this.basicHeader(auth.login, auth.password),
       ...(extraHeaders || {}),
     };
-    const raw = await this.request('GET', url, headers, undefined, auth.useProxy);
+    const raw = await this.request('GET', url, headers, undefined, auth.useProxy, timeoutMs);
     // Konvert: { code, msg, responseBody } | { code, error }
     const code = raw?.code;
     // [HB-DIAG — VAQTINCHALIK] bankка berish uchun: aynan qanday so'rov ketdi
@@ -117,7 +125,8 @@ export class HamkorbankClient {
     return raw?.responseBody ?? [];
   }
 
-  private async request(method: string, url: string, headers: Record<string, string>, body: any, useProxy?: boolean): Promise<any> {
+  private async request(method: string, url: string, headers: Record<string, string>, body: any, useProxy?: boolean, timeoutMs?: number): Promise<any> {
+    const to = timeoutMs ?? this.timeoutMs; // so'rovga xos timeout (statement uchun uzunroq)
     const fw = await this.getForwarder();
     // Forwarder (xt-forwarder.php) — Kapital bilan bir xil format: {url, method, headers, body, timeout}
     if (useProxy && fw.url && fw.secret) {
@@ -125,8 +134,8 @@ export class HamkorbankClient {
         const resp = await firstValueFrom(
           this.http.post(
             fw.url,
-            { url, method, headers, body: body != null ? JSON.stringify(body) : undefined, timeout: Math.floor(this.timeoutMs / 1000) },
-            { headers: { 'Content-Type': 'application/json', 'X-Proxy-Secret': fw.secret }, timeout: this.timeoutMs + 5000 },
+            { url, method, headers, body: body != null ? JSON.stringify(body) : undefined, timeout: Math.floor(to / 1000) },
+            { headers: { 'Content-Type': 'application/json', 'X-Proxy-Secret': fw.secret }, timeout: to + 5000 },
           ),
         );
         return resp.data;
@@ -149,7 +158,7 @@ export class HamkorbankClient {
           url,
           headers,
           data: body,
-          timeout: this.timeoutMs,
+          timeout: to,
           httpsAgent: useProxy ? this.proxyAgent : undefined,
           proxy: useProxy && this.proxyAgent ? false : undefined,
         }),
@@ -209,7 +218,7 @@ export class HamkorbankClient {
         acc,
         pageNumber: page,
         pageSize: HamkorbankClient.PAGE_SIZE,
-      });
+      }, undefined, this.statementTimeoutMs); // o'tgan davr arxivi sekin — uzun timeout
       const arr: any[] = Array.isArray(rows) ? rows : [];
       for (const it of arr) content.push(this.normalizeItem(it, acc));
       if (arr.length < HamkorbankClient.PAGE_SIZE) break; // oxirgi sahifa
