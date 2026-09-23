@@ -1,7 +1,7 @@
 'use client';
 // rebuild trigger — oplata-kv import kartasi ko'rinishini ta'minlash uchun
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -49,8 +49,65 @@ const KINDS: KindDef[] = [
   { key: 'oplata-kv',      label: 'ОплатыКв',        icon: Home,           description: 'Kvartira to\'lovlari (ID bo\'yicha dublikat skip)', available: true },
 ];
 
+/**
+ * IMPORT QULFI — bu sahifadagi har bir amal bazaga ma'lumot yozadi, shuning
+ * uchun kod so'raladi. Kod sahifa har yangilanganda qaytadan so'raladi
+ * (xotirada saqlanadi, brauzerga yozilmaydi).
+ */
+const IMPORT_KOD = '7779';
+
+function ImportQulfi({ onOpen }: { onOpen: () => void }) {
+  const [kod, setKod] = useState('');
+  const [xato, setXato] = useState(false);
+
+  const tekshir = () => {
+    if (kod.trim() === IMPORT_KOD) { onOpen(); return; }
+    setXato(true);
+    setKod('');
+    setTimeout(() => setXato(false), 1500);
+  };
+
+  return (
+    <div className="flex-1 grid place-items-center p-6">
+      <div className={cn(
+        'w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm p-6 text-center transition-transform',
+        xato && 'animate-pulse ring-rose-300 dark:ring-rose-800',
+      )}>
+        <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 grid place-items-center mx-auto mb-3">
+          <Lock className="h-5 w-5" />
+        </div>
+        <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200">Import yopiq</div>
+        <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-1 mb-4">
+          Bu bo&apos;limda bazaga ma&apos;lumot yoziladi. Davom etish uchun kodni kiriting.
+        </div>
+        <input
+          type="password"
+          value={kod}
+          autoFocus
+          onChange={(e) => setKod(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') tekshir(); }}
+          placeholder="••••"
+          className={cn(
+            'w-full h-11 rounded-xl text-center text-[18px] tracking-[0.5em] font-bold ring-1 bg-slate-50 dark:bg-slate-800 outline-none transition-colors',
+            xato
+              ? 'ring-rose-400 dark:ring-rose-700 text-rose-600'
+              : 'ring-slate-200 dark:ring-slate-700 focus:ring-indigo-400',
+          )}
+        />
+        {xato && <div className="text-[11.5px] text-rose-600 dark:text-rose-400 mt-2">Kod noto&apos;g&apos;ri</div>}
+        <Button onClick={tekshir} className="w-full mt-3 h-10 bg-indigo-600 hover:bg-indigo-700 text-white">
+          Ochish
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function ImportPage() {
   const [activeKind, setActiveKind] = useState<ImportKind>('transactions');
+  const [ochiq, setOchiq] = useState(false);
+
+  if (!ochiq) return <ImportQulfi onOpen={() => setOchiq(true)} />;
 
   return (
     <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
@@ -872,10 +929,128 @@ interface ExclusionRange {
   createdAt: string;
 }
 
+/**
+ * HISOB TANLAGICH — Hamkorbank hisoblari ro'yxatidan BELGILAB tanlanadi
+ * (raqamni qo'lda yozish shart emas). Bir nechta hisobni birdan tanlash mumkin:
+ * har biri uchun alohida oraliq yoziladi.
+ */
+function HisobTanlagich({
+  selected, onChange,
+}: { selected: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [qidiruv, setQidiruv] = useState('');
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['bank-accounts-hamkor'],
+    queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
+  });
+
+  // Faqat Hamkorbank hisoblari
+  const hisoblar = (data?.items || []).filter((a: any) => {
+    const code = a.bank?.code || a.credential?.bank?.code || '';
+    const name = a.bank?.name || a.credential?.bank?.name || '';
+    return code === 'HAMKORBANK' || /hamkor/i.test(name);
+  });
+  const korinadi = qidiruv.trim()
+    ? hisoblar.filter((a: any) =>
+        String(a.accountNo || '').includes(qidiruv.trim()) ||
+        String(a.ownerName || '').toLowerCase().includes(qidiruv.trim().toLowerCase()))
+    : hisoblar;
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const t = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', onClick); };
+  }, [open]);
+
+  const toggle = (no: string) => {
+    onChange(selected.includes(no) ? selected.filter((x) => x !== no) : [...selected, no]);
+  };
+  const hammasi = () => onChange(selected.length === korinadi.length ? [] : korinadi.map((a: any) => a.accountNo));
+
+  return (
+    <div className="relative w-64" ref={boxRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="h-9 w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 px-3 text-[12px] flex items-center gap-2 text-left"
+      >
+        <span className={cn('flex-1 truncate', selected.length === 0 && 'text-slate-400')}>
+          {selected.length === 0
+            ? 'Hisobni tanlang'
+            : selected.length === 1
+              ? <span className="font-mono">{selected[0]}</span>
+              : `${selected.length} ta hisob tanlandi`}
+        </span>
+        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-[320px] max-h-72 overflow-y-auto rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-xl p-1.5">
+          <input
+            value={qidiruv}
+            onChange={(e) => setQidiruv(e.target.value)}
+            placeholder="Qidirish — raqam yoki egasi"
+            className="w-full h-8 mb-1 rounded-lg bg-slate-50 dark:bg-slate-800 px-2.5 text-[11.5px] outline-none"
+          />
+          {isLoading ? (
+            <div className="px-2 py-3 text-[11.5px] text-slate-400 flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Yuklanmoqda...
+            </div>
+          ) : korinadi.length === 0 ? (
+            <div className="px-2 py-3 text-[11.5px] text-slate-400">Hamkorbank hisobi topilmadi</div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={hammasi}
+                className="w-full text-left px-2 py-1.5 rounded-lg text-[11.5px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                {selected.length === korinadi.length ? 'Belgilashni bekor qilish' : `Hammasini tanlash (${korinadi.length})`}
+              </button>
+              {korinadi.map((a: any) => {
+                const checked = selected.includes(a.accountNo);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => toggle(a.accountNo)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
+                      checked ? 'bg-indigo-50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800',
+                    )}
+                  >
+                    <span className={cn(
+                      'w-4 h-4 rounded grid place-items-center ring-1 shrink-0',
+                      checked ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600',
+                    )}>
+                      {checked && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-mono text-[11.5px] truncate">{a.accountNo}</span>
+                      {a.ownerName && (
+                        <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate">{a.ownerName}</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HamkorExclusionSection({ refreshKey }: { refreshKey: number }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(true);
-  const [accountNo, setAccountNo] = useState('');
+  const [tanlangan, setTanlangan] = useState<string[]>([]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
@@ -887,10 +1062,19 @@ function HamkorExclusionSection({ refreshKey }: { refreshKey: number }) {
   const items = data?.items || [];
 
   const addMut = useMutation({
-    mutationFn: () => api.post('/import/hamkor-vipiska/exclusions', { accountNo: accountNo.trim(), from, to }),
+    // Bir nechta hisob tanlansa — har biriga alohida oraliq yoziladi
+    mutationFn: async () => {
+      for (const no of tanlangan) {
+        await api.post('/import/hamkor-vipiska/exclusions', { accountNo: no, from, to });
+      }
+    },
     onSuccess: () => {
-      toast.success('Oraliq qo\'shildi — byacc bu davrni olmaydi');
-      setAccountNo(''); setFrom(''); setTo('');
+      toast.success(
+        tanlangan.length > 1
+          ? `${tanlangan.length} ta hisob uchun oraliq qo'shildi — byacc bu davrni olmaydi`
+          : "Oraliq qo'shildi — byacc bu davrni olmaydi",
+      );
+      setTanlangan([]); setFrom(''); setTo('');
       qc.invalidateQueries({ queryKey: ['hamkor-exclusions'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
@@ -923,7 +1107,7 @@ function HamkorExclusionSection({ refreshKey }: { refreshKey: number }) {
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Hisob raqami</label>
-              <input value={accountNo} onChange={(e) => setAccountNo(e.target.value)} placeholder="20208..." className="h-9 w-52 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 px-3 text-[12px] font-mono" />
+              <HisobTanlagich selected={tanlangan} onChange={setTanlangan} />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Boshlanish</label>
@@ -935,10 +1119,11 @@ function HamkorExclusionSection({ refreshKey }: { refreshKey: number }) {
             </div>
             <Button
               onClick={() => addMut.mutate()}
-              disabled={addMut.isPending || !accountNo.trim() || !from || !to}
+              disabled={addMut.isPending || tanlangan.length === 0 || !from || !to}
               className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold"
             >
-              {addMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Qo'shish
+              {addMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Qo&apos;shish{tanlangan.length > 1 ? ` (${tanlangan.length})` : ''}
             </Button>
           </div>
 
