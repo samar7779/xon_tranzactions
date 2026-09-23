@@ -2,6 +2,7 @@
 // rebuild trigger — oplata-kv import kartasi ko'rinishini ta'minlash uchun
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -940,6 +941,9 @@ function HisobTanlagich({
   const [open, setOpen] = useState(false);
   const [qidiruv, setQidiruv] = useState('');
   const boxRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // Ro'yxat portal orqali chiqadi — aks holda karta chegarasida kesilib qolardi
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['bank-accounts-hamkor'],
@@ -960,11 +964,37 @@ function HisobTanlagich({
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    const joyla = () => {
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const kenglik = Math.max(320, r.width);
+      const balandlik = 300;
+      // Pastda joy yetmasa — tepaga ochamiz
+      const pastda = window.innerHeight - r.bottom;
+      const top = pastda < balandlik + 12 ? Math.max(8, r.top - balandlik - 6) : r.bottom + 4;
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - kenglik - 8);
+      setPos({ top, left, width: kenglik });
     };
+    joyla();
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t)) return;
+      if ((t as HTMLElement)?.closest?.('[data-hisob-royxat]')) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
     const t = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
-    return () => { clearTimeout(t); document.removeEventListener('mousedown', onClick); };
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', joyla);
+    window.addEventListener('scroll', joyla, true);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', joyla);
+      window.removeEventListener('scroll', joyla, true);
+    };
   }, [open]);
 
   const toggle = (no: string) => {
@@ -975,6 +1005,7 @@ function HisobTanlagich({
   return (
     <div className="relative w-64" ref={boxRef}>
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="h-9 w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 px-3 text-[12px] flex items-center gap-2 text-left"
@@ -989,8 +1020,12 @@ function HisobTanlagich({
         <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
 
-      {open && (
-        <div className="absolute z-50 mt-1 w-[320px] max-h-72 overflow-y-auto rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-xl p-1.5">
+      {open && pos && createPortal(
+        <div
+          data-hisob-royxat
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}
+          className="z-[9999] max-h-[300px] overflow-y-auto rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl p-1.5"
+        >
           <input
             value={qidiruv}
             onChange={(e) => setQidiruv(e.target.value)}
@@ -1041,7 +1076,8 @@ function HisobTanlagich({
               })}
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
