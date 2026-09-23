@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { Prisma, TxnDirection, TxnStatus, TxnType, TxnSource } from '@prisma/client';
+import { CategorizationService } from '../categorization/categorization.service';
 import {
   hamkorDedupKey,
   hamkorDedupKeyFromExisting,
@@ -79,7 +80,10 @@ export class ImportService {
   private hamkorPreviewCache = new Map<string, HamkorPreviewState>();
   private static readonly HAMKOR_PREVIEW_TTL_MS = 30 * 60 * 1000;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private categorization: CategorizationService,
+  ) {}
 
   /** Muddati o'tgan preview'larni tozalaydi (har chaqiruvda). */
   private sweepHamkorPreviews() {
@@ -866,7 +870,11 @@ export class ImportService {
       const accDt = direction === 'IN' ? cpAcc : own;
 
       const key = hamkorDedupKey({ purpose, num: doc, ddate: dat, accCt, accDt, amountTiyin, ownAccount: own });
-      const externalId = ('HB_IMP_' + key.replace(':', '_')).slice(0, 190);
+      // externalId — byacc bilan bir xil KOMPOZIT tuzilish, faqat general_id o'rnida "IMP"
+      // (general_id vipiskada yo'q). Kompozit har hisobda noyob (tekshirilgan) → to'qnashmaydi.
+      const sign = accDt && accDt === own ? '+' : '-';
+      const composite = [doc || 'no_num', dat, accCt || 'no_acc_ct', accDt || 'no_acc_dt', amountTiyin, sign].join('_');
+      const externalId = ('HB_IMP_' + composite).slice(0, 190);
 
       // in-file dublikat
       if (seen.has(key)) {
@@ -1063,6 +1071,30 @@ export class ImportService {
 
     const duration = Math.round((Date.now() - started) / 1000);
     this.log.log(`Hamkor vipiska commit ${previewId.slice(0, 8)}: +${result.added}, skip ${result.skipped}, xato ${result.errors}, acc ${state.accountNo}`);
+
+    // ── AVTO-KATEGORIYALASH (fon) ──
+    // byacc sync kabi: import qilingan yozuvlarga shartnoma raqamini izohdan ajratib,
+    // CRM bilan tekshirib kategoriya qo'yamiz. Commit javobini KUTKAZMAYDI (fire-and-forget),
+    // ketma-ket ishlaydi (CRM'ni bosim ostiga qo'ymaslik uchun).
+    if (result.added > 0) {
+      this.prisma.transaction
+        .findMany({ where: { importBatchId: batch.id, source: 'HAMKOR_IMPORT' }, select: { id: true } })
+        .then((inserted) => {
+          const ids = inserted.map((t) => t.id);
+          (async () => {
+            let done = 0;
+            for (const id of ids) {
+              try {
+                await this.categorization.categorizeOne(id, { actor: 'auto' });
+                done++;
+              } catch { /* bittasi yiqilsa qolganini davom ettiramiz */ }
+            }
+            this.log.log(`Hamkor import ${batch.id.slice(0, 8)}: ${done}/${ids.length} yozuv kategoriyalandi (fon)`);
+          })().catch((e) => this.log.warn(`Hamkor import kategoriyalash xato: ${e?.message}`));
+        })
+        .catch((e) => this.log.warn(`Hamkor import kategoriyalash boshlashda xato: ${e?.message}`));
+    }
+
     return { ...result, batchId: batch.id, duration };
   }
 

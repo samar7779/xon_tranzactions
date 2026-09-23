@@ -77,18 +77,13 @@ export function hamkorDedupKeyFromExisting(row: {
   if (row.hbDedupKey) return row.hbDedupKey;
   const xp = extractXonpay(row.description);
   if (xp) return 'xp:' + xp;
+  // externalId ikkala manbada bir xil TUZILISH: birinchi segment (byacc=general_id,
+  // import="IMP") tashlanadi, qolgani kompozit bo'ladi.
+  //   byacc:  "HB_{general_id}_{num}_{ddate}_{accCt}_{accDt}_{amount}_{sign}"
+  //   import: "HB_IMP_{num}_{ddate}_{accCt}_{accDt}_{amount}_{sign}"
   const id = row.externalId || '';
-  // IMPORT formati: externalId = "HB_IMP_" + kalit(":" → "_"), ya'ni "HB_IMP_xp_<uuid>"
-  // yoki "HB_IMP_cx_<num>_<ddate>_...". Tegini qaytadan ":" ga tiklaymiz.
-  if (id.startsWith('HB_IMP_')) {
-    const rest = id.slice('HB_IMP_'.length);
-    if (rest.startsWith('xp_')) return 'xp:' + rest.slice(3);
-    if (rest.startsWith('cx_')) return 'cx:' + rest.slice(3);
-    return null;
-  }
-  // byacc formati: "HB_{general_id}_{num}_{ddate}_{accCt}_{accDt}_{amount}_{sign}" (7 segment)
   if (!id.startsWith('HB_')) return null;
   const parts = id.slice(3).split('_'); // "HB_" ni olib tashlaymiz
   if (parts.length < 7) return null;
-  return 'cx:' + parts.slice(1).join('_'); // birinchi segment (general_id) tashlanadi
+  return 'cx:' + parts.slice(1).join('_'); // birinchi segment (general_id/IMP) tashlanadi
 }
