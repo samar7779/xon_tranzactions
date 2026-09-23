@@ -31,7 +31,7 @@ interface ImportResult {
   batchId?: string;
 }
 
-type ImportKind = 'transactions' | 'counterparties' | 'oplata-kv' | 'aloqa-bank' | 'customers' | 'contracts';
+type ImportKind = 'transactions' | 'counterparties' | 'oplata-kv' | 'aloqa-bank' | 'hamkor-vipiska' | 'customers' | 'contracts';
 
 interface KindDef {
   key: ImportKind;
@@ -44,6 +44,7 @@ interface KindDef {
 const KINDS: KindDef[] = [
   { key: 'transactions',   label: 'Tranzaksiyalar',  icon: Wallet,         description: "Bank vipiskasi formatiga moslangan Excel", available: true },
   { key: 'aloqa-bank',     label: 'Aloqa Bank',      icon: Landmark,       description: "Aloqa Bank Excel format (11 ustun · read-only)", available: true },
+  { key: 'hamkor-vipiska', label: 'Hamkorbank vipiska', icon: Landmark,    description: "Hamkorbank rasmiy vipiskasi (.xls) · byacc bilan dublikatsiz", available: true },
   { key: 'counterparties', label: 'Kontragentlar',   icon: Briefcase,      description: 'INN va Nom bo\'yicha (dublikat skip)',     available: true },
   { key: 'oplata-kv',      label: 'ОплатыКв',        icon: Home,           description: 'Kvartira to\'lovlari (ID bo\'yicha dublikat skip)', available: true },
 ];
@@ -54,7 +55,7 @@ export default function ImportPage() {
   return (
     <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
       {/* ─── Kind selector (cards) ─── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {KINDS.map((k) => {
           const Icon = k.icon;
           const active = activeKind === k.key;
@@ -100,6 +101,7 @@ export default function ImportPage() {
       {/* ─── Active panel ─── */}
       {activeKind === 'transactions' && <TransactionsImportPanel />}
       {activeKind === 'aloqa-bank' && <AloqaBankImportPanel />}
+      {activeKind === 'hamkor-vipiska' && <HamkorVipiskaImportPanel />}
       {activeKind === 'counterparties' && <CounterpartiesImportPanel />}
       {activeKind === 'oplata-kv' && <OplataKvImportPanel />}
     </div>
@@ -538,6 +540,322 @@ function AloqaBankImportPanel() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// HAMKORBANK VIPISKA (выписка) import paneli — HTML .xls, preview → commit
+// byacc (avto-sync) bilan DUBLIKAT bo'lmaydi: har yozuvga xonpay uuid yoki
+// kompozit kalit hisoblanadi va mavjud yozuvlar bilan solishtiriladi.
+// ═══════════════════════════════════════════════════════════════════════
+interface HamkorPreview {
+  previewId: string;
+  fileName: string | null;
+  accountNo: string | null;
+  accountMapped: boolean;
+  ownerName: string | null;
+  period: string | null;
+  opening: number | null;
+  closing: number | null;
+  netCalc: number | null;
+  integrityOk: boolean | null;
+  total: number;
+  willInsert: number;
+  duplicatesInDb: number;
+  duplicatesInFile: number;
+  errors: number;
+  errorRows: Array<{ row: number; reason: string }>;
+  skippedRows: Array<{ row: number; id: string; contractNo: string; reason: string }>;
+  duration: number;
+  expiresAt: string;
+}
+
+function fmtSom(n: number | null): string {
+  if (n == null) return '—';
+  return n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function HamkorVipiskaImportPanel() {
+  const { locale } = useParams<{ locale: string }>();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [preview, setPreview] = useState<HamkorPreview | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [errorsOpen, setErrorsOpen] = useState(false);
+  const [skippedOpen, setSkippedOpen] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
+
+  const previewMut = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.postForm<HamkorPreview>('/import/hamkor-vipiska/preview', fd, { timeout: 600_000 });
+    },
+    onSuccess: (p) => {
+      setPreview(p);
+      setResult(null);
+      if (!p.accountMapped) {
+        toast(`Hisob ${p.accountNo} bazada topilmadi — avval qo'shing`, {
+          icon: '⚠️',
+          style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' },
+        });
+      } else if (p.willInsert === 0) {
+        toast(`Yangi yozuv yo'q — barchasi bazada bor (${p.duplicatesInDb})`, {
+          icon: 'ℹ️',
+          style: { background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe' },
+        });
+      } else {
+        toast.success(`Tekshirildi: ${p.willInsert} ta yangi to'lov tasdiqlash kerak`);
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || 'Tekshirish xato'),
+  });
+
+  const commitMut = useMutation({
+    mutationFn: async (previewId: string) => api.post<ImportResult>('/import/hamkor-vipiska/commit', { previewId }, { timeout: 600_000 }),
+    onSuccess: (r) => {
+      setResult(r);
+      setPreview(null);
+      toast.success(`${r.added} ta Hamkorbank to'lovi qo'shildi`);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Commit xato'),
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: async (previewId: string) => api.post('/import/hamkor-vipiska/cancel', { previewId }),
+    onSuccess: () => {
+      setPreview(null);
+      setFileName(null);
+      toast('Bekor qilindi — hech narsa qo\'shilmadi', {
+        icon: '↩️',
+        style: { background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1' },
+      });
+    },
+  });
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setPreview(null);
+    setResult(null);
+    previewMut.mutate(file);
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  const busy = previewMut.isPending || commitMut.isPending;
+
+  return (
+    <div className="space-y-5">
+      <Card className="border-0 shadow-soft">
+        <CardContent className="p-6 space-y-5">
+          <div className="flex items-center gap-2 pb-1">
+            <Landmark className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Hamkorbank vipiska (выписка) import</div>
+            <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 className="h-2.5 w-2.5" /> DUBLIKATSIZ
+            </span>
+          </div>
+          <div className="rounded-lg ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/40 p-3 text-[11.5px] text-emerald-900 dark:text-emerald-300 flex gap-2 items-start">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+            <div>
+              Bank rasmiy vipiskasini (bitta hisob, <b>.xls</b>) yuklang — eski davrlar uchun.
+              Har to'lov <b>xonpay yoki kompozit kalit</b> bo'yicha avto-sync (byacc) va mavjud yozuvlar bilan
+              solishtiriladi: <b>dublikat bo'lmaydi</b>. Avval tekshiriladi, tasdiqlaganingizdan keyingina yoziladi.
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <input ref={fileRef} type="file" accept=".xls,.xlsx,.htm,.html" onChange={handleFileChange} className="hidden" />
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              className="h-12 px-5 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold"
+            >
+              {previewMut.isPending ? (
+                <><Loader2 className="h-5 w-5 animate-spin" /> Tekshirilmoqda...</>
+              ) : commitMut.isPending ? (
+                <><Loader2 className="h-5 w-5 animate-spin" /> Qo'shilmoqda...</>
+              ) : (
+                <><Upload className="h-5 w-5" /> Vipiska yuklash (.xls)</>
+              )}
+            </Button>
+            {fileName && !busy && (
+              <div className="text-[12px] text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> {fileName}
+              </div>
+            )}
+          </div>
+
+          {/* PREVIEW */}
+          {preview && !result && (
+            <div className="space-y-3 rounded-2xl ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/40 p-4">
+              <div className="flex items-center gap-2 pb-1">
+                <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                <div className="text-[13px] font-semibold text-indigo-900 dark:text-indigo-300">Tekshirish natijasi (bazaga hali qo'shilmadi)</div>
+                <span className="ml-auto text-[10px] text-indigo-700/70 dark:text-indigo-400 tabular-nums">⏱ {preview.duration}s</span>
+              </div>
+
+              {/* Hisob + davr */}
+              <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3 text-[11.5px] space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-slate-500 dark:text-slate-400">Hisob:</span>
+                  <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{preview.accountNo || '—'}</span>
+                  {preview.accountMapped ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"><Check className="h-2.5 w-2.5" /> Bazada bor</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300"><AlertTriangle className="h-2.5 w-2.5" /> TOPILMADI</span>
+                  )}
+                  {preview.ownerName && <span className="text-slate-600 dark:text-slate-300 truncate">· {preview.ownerName}</span>}
+                </div>
+                {preview.period && <div className="text-slate-500 dark:text-slate-400">Davr: <span className="text-slate-700 dark:text-slate-300">{preview.period}</span></div>}
+                {/* Integrity */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-slate-500 dark:text-slate-400">Balans tekshiruvi:</span>
+                  {preview.integrityOk == null ? (
+                    <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-semibold"><AlertTriangle className="h-3 w-3" /> Tekshira olmadim (yopilish qoldig'i topilmadi) — diqqat bilan qarang</span>
+                  ) : preview.integrityOk ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-semibold"><CheckCircle2 className="h-3 w-3" /> MOS (bironta to'lov o'tkazib yuborilmagan)</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300 font-semibold"><AlertTriangle className="h-3 w-3" /> FARQ — faylni tekshiring!</span>
+                  )}
+                  <span className="text-[10px] text-slate-400 tabular-nums">(ochilish {fmtSom(preview.opening)} + oborot {fmtSom(preview.netCalc)} → yopilish {fmtSom(preview.closing)})</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <Stat label="Jami yozuv" value={preview.total} color="slate" />
+                <Stat label="Yangi (qo'shiladi)" value={preview.willInsert} color="emerald" />
+                <Stat label="Bazada bor" value={preview.duplicatesInDb} color="amber" />
+                <Stat label="Faylda takror" value={preview.duplicatesInFile} color="amber" />
+                <Stat label="Xato" value={preview.errors} color="rose" />
+              </div>
+
+              {!preview.accountMapped && (
+                <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/60 dark:bg-rose-950/40 px-4 py-3 text-[12px] text-rose-900 dark:text-rose-300 flex gap-2 items-start">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>Bu hisob (<b className="font-mono">{preview.accountNo}</b>) bazada sozlanmagan. To'lovlar <b>jimgina tashlanmaydi</b> — avval hisobni "Sozlamalar → Hisoblar"da qo'shing, keyin vipiskani qayta yuklang.</div>
+                </div>
+              )}
+
+              {preview.errors > 0 && (
+                <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-white dark:bg-slate-900 overflow-hidden">
+                  <button onClick={() => setErrorsOpen((o) => !o)} className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                    <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> {preview.errors} ta xato qator</span>
+                    {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                  {errorsOpen && (
+                    <div className="max-h-72 overflow-y-auto divide-y divide-rose-100 dark:divide-rose-900 border-t border-rose-200 dark:border-rose-900">
+                      {preview.errorRows.map((e, i) => (
+                        <div key={i} className="px-4 py-2 text-[11px] flex items-baseline gap-3">
+                          <span className="font-mono text-rose-700 dark:text-rose-300 shrink-0">Yozuv {e.row}</span>
+                          <span className="text-slate-700 dark:text-slate-300">{e.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {preview.skippedRows && preview.skippedRows.length > 0 && (
+                <div className="rounded-xl ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 overflow-hidden">
+                  <button onClick={() => setSkippedOpen((o) => !o)} className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40">
+                    <span className="flex items-center gap-2"><Info className="h-4 w-4" /> {preview.duplicatesInDb + preview.duplicatesInFile} ta dublikat (birinchi {preview.skippedRows.length} tasi)</span>
+                    {skippedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                  {skippedOpen && (
+                    <div className="max-h-72 overflow-y-auto divide-y divide-amber-100 dark:divide-amber-900 border-t border-amber-200 dark:border-amber-900">
+                      {preview.skippedRows.map((s, i) => (
+                        <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
+                          <span className="font-mono text-amber-700 dark:text-amber-300 shrink-0">Yozuv {s.row}</span>
+                          <div className="font-mono text-[10px] text-slate-600 dark:text-slate-300">
+                            №док: <b className="text-slate-800 dark:text-slate-200">{s.contractNo}</b>
+                            <span className="mx-2 text-amber-600 dark:text-amber-400">·</span>
+                            <span className="text-amber-800 dark:text-amber-300">{s.reason}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2 border-t border-indigo-200 dark:border-indigo-900">
+                <Button variant="outline" onClick={() => cancelMut.mutate(preview.previewId)} disabled={busy} className="gap-1.5">
+                  <X className="h-4 w-4" /> Bekor qilish
+                </Button>
+                <Button
+                  onClick={() => commitMut.mutate(preview.previewId)}
+                  disabled={busy || preview.willInsert === 0 || !preview.accountMapped}
+                  className={cn(
+                    'ml-auto gap-2 text-white font-semibold',
+                    preview.integrityOk === true
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-amber-600 hover:bg-amber-700', // balans mos emas/tekshirilmagan — ataylab override
+                  )}
+                >
+                  {commitMut.isPending ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Qo'shilmoqda...</>
+                  ) : preview.integrityOk === true ? (
+                    <><Check className="h-4 w-4" /> Tasdiqlash — {preview.willInsert.toLocaleString('uz-UZ')} to'lov qo'shilsin</>
+                  ) : (
+                    <><AlertTriangle className="h-4 w-4" /> Balans tekshirilmadi — baribir {preview.willInsert.toLocaleString('uz-UZ')} qo'shish</>
+                  )}
+                </Button>
+              </div>
+              <div className="text-[10px] text-indigo-700/70 dark:text-indigo-400">💡 Tasdiqlamasangiz hech narsa o'zgarmaydi. Preview 30 daqiqa amal qiladi.</div>
+            </div>
+          )}
+
+          {/* COMMIT natijasi */}
+          {result && (
+            <div className="space-y-3 rounded-2xl ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/40 p-4">
+              <div className="flex items-center gap-2 pb-1">
+                <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <div className="text-[13px] font-semibold text-emerald-900 dark:text-emerald-300">Import tugadi</div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat label="Jami yozuv" value={result.total} color="slate" />
+                <Stat label="Qo'shildi" value={result.added} color="emerald" />
+                <Stat label="Dublikat skip" value={result.skipped} color="amber" />
+                <Stat label="Xato" value={result.errors} color="rose" />
+              </div>
+              {result.batchId && result.added > 0 && (
+                <Link
+                  href={`/${locale}/transactions?batchId=${result.batchId}`}
+                  className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
+                >
+                  Qo'shilgan to'lovlarni ko'rish <ArrowRight className="h-4 w-4" />
+                </Link>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Format izohi */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button type="button" onClick={() => setFormatOpen((v) => !v)} className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors text-left">
+          <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Vipiska haqida</div>
+          <span className="ml-auto text-slate-400 dark:text-slate-500">{formatOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
+        </button>
+        {formatOpen && (
+          <CardContent className="px-6 pb-6 pt-0">
+            <div className="text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
+              <div>• <b>Fayl:</b> Hamkorbank internet-bankdan yuklangan rasmiy vipiska (HTML jadval, <b>.xls</b> kengaytmali, win-1251).</div>
+              <div>• <b>Bitta fayl = bitta hisob.</b> Hisob raqami vipiska sarlavhasidan avtomatik olinadi.</div>
+              <div>• <b>Sana:</b> haqiqiy to'langan kun (izohdagi "Время транзакции") — byacc bilan bir xil.</div>
+              <div>• <b>Dublikatsiz:</b> xonpay uuid yoki kompozit kalit orqali avto-sync va mavjud to'lovlar bilan solishtiriladi.</div>
+              <div>• <b>Balans tekshiruvi:</b> ochilish + oborot = yopilish (mos kelmasa ogohlantiradi).</div>
+              <div>• <b>O'chirish:</b> import tarixidan jamoaviy o'chirilganda bog'liq ОплатыКв qatorlari ham o'chadi.</div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      <BatchHistorySection refreshKey={commitMut.isSuccess ? Date.now() : 0} kind="hamkor-vipiska" />
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // IMPORT TARIXI — yuklab olish va o'chirish
 // ═══════════════════════════════════════════════════════════════════════
 interface ImportBatch {
@@ -664,6 +982,8 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
                         'text-[9px] font-bold px-1.5 py-0.5 rounded-full ring-1',
                         b.kind === 'oplata-kv'
                           ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900'
+                          : b.kind === 'hamkor-vipiska'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900'
                           : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900',
                       )}>{b.kind}</span>
                       {b.notes && (

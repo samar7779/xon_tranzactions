@@ -43,6 +43,39 @@ export class ImportController {
     return this.svc.importExcelAloqaBank(file.buffer, email, file?.originalname);
   }
 
+  // ─── Hamkorbank vipiska (выписка) — preview → commit ────────────────
+
+  @Post('hamkor-vipiska/preview')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 30 * 1024 * 1024 } }))
+  @ApiOperation({ summary: 'Hamkorbank vipiska (HTML .xls) — tekshirish (bazaga tegmaydi)' })
+  async previewHamkorVipiska(
+    @UploadedFile() file: any,
+    @CurrentUser('email') email?: string,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Vipiska fayli yuborilmadi');
+    return this.svc.previewHamkorVipiska(file.buffer, email, file?.originalname);
+  }
+
+  @Post('hamkor-vipiska/commit')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Hamkorbank vipiska preview tasdiqlash — bazaga yozish' })
+  async commitHamkorVipiska(
+    @Body('previewId') previewId: string,
+    @CurrentUser('email') email?: string,
+  ) {
+    if (!previewId) throw new BadRequestException('previewId kerak');
+    return this.svc.commitHamkorVipiska(previewId, email);
+  }
+
+  @Post('hamkor-vipiska/cancel')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Hamkorbank vipiska preview bekor qilish' })
+  async cancelHamkorVipiska(@Body('previewId') previewId: string) {
+    if (!previewId) throw new BadRequestException('previewId kerak');
+    return this.svc.cancelHamkorVipiska(previewId);
+  }
+
   // ─── Batch management ───────────────────────────────────────────────
 
   @Get('batches')

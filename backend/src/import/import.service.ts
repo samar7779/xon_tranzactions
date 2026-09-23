@@ -1,7 +1,56 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { Prisma, TxnDirection, TxnStatus, TxnType, TxnSource } from '@prisma/client';
+import {
+  hamkorDedupKey,
+  hamkorDedupKeyFromExisting,
+} from '../integrations/hamkorbank/hamkor-dedup.util';
+
+// windows-1251 → Unicode yuqori diapazon (0x80–0xFF). Hamkor vipiskasi HTML-jadval
+// bo'lib win-1251 kodlashda keladi; Node ICU'ga bog'lanmasdan aniq dekod qilish uchun.
+const CP1251_HIGH =
+  'ЂЃ‚ѓ„…†‡€‰Љ‹ЊЌЋЏ' +
+  'ђ‘’“”•–—�™љ›њќћџ' +
+  ' ЎўЈ¤Ґ¦§Ё©Є«¬­®Ї' +
+  '°±Ііґµ¶·ё№є»јЅѕї' +
+  'АБВГДЕЖЗИЙКЛМНОП' +
+  'РСТУФХЦЧШЩЪЫЬЭЮЯ' +
+  'абвгдежзийклмноп' +
+  'рстуфхцчшщъыьэюя';
+
+/** Hamkor vipiska preview holati — commitgacha xotirada saqlanadi (bazaga tegmaydi). */
+interface HamkorPreviewRow {
+  externalId: string;
+  hbDedupKey: string;
+  direction: TxnDirection;
+  amountSom: number;
+  txnDate: Date;
+  valueDate: Date | null;
+  docNumber: string;
+  description: string;
+  fromAccount: string | null;
+  toAccount: string | null;
+  fromName: string | null;
+  toName: string | null;
+}
+interface HamkorPreviewState {
+  fileName: string | null;
+  fileSize: number;
+  accountNo: string;
+  accountId: string;
+  bankId: string | null;
+  rows: HamkorPreviewRow[]; // FAQAT qo'shiladigan (yangi) qatorlar
+  total: number;
+  willInsert: number;
+  duplicatesInDb: number;
+  duplicatesInFile: number;
+  errors: number;
+  integrityOk: boolean | null; // opening + net = closing (balans mos keldimi)
+  importedBy?: string;
+  expiresAt: number;
+}
 
 /**
  * Excel'dan tranzaksiyalarni qo'lda import qilish.
@@ -26,7 +75,19 @@ import { Prisma, TxnDirection, TxnStatus, TxnType, TxnSource } from '@prisma/cli
 export class ImportService {
   private readonly log = new Logger(ImportService.name);
 
+  // Hamkor vipiska preview → commit uchun vaqtincha kesh (30 daqiqa TTL).
+  private hamkorPreviewCache = new Map<string, HamkorPreviewState>();
+  private static readonly HAMKOR_PREVIEW_TTL_MS = 30 * 60 * 1000;
+
   constructor(private prisma: PrismaService) {}
+
+  /** Muddati o'tgan preview'larni tozalaydi (har chaqiruvda). */
+  private sweepHamkorPreviews() {
+    const now = Date.now();
+    for (const [k, v] of this.hamkorPreviewCache) {
+      if (v.expiresAt < now) this.hamkorPreviewCache.delete(k);
+    }
+  }
 
   /** "596616522,10" yoki "596 616 522,10" → number (so'm) */
   private parseAmount(raw: any): number {
@@ -597,6 +658,420 @@ export class ImportService {
     return { ...result, batchId: batch.id };
   }
 
+  // ═══ HAMKORBANK VIPISKA (выписка) IMPORT ════════════════════════════
+  // Bank rasmiy vipiskasi = HTML-jadval (.xls kengaytmali, win-1251). Eski davrlar uchun
+  // (byacc timeout tufayli ololmaydigan). byacc bilan DUBLIKAT bo'lmasligi uchun har yozuvga
+  // hbDedupKey (xonpay uuid yoki kompozit) hisoblanadi — byacc/sync bilan bir xil formulada.
+  // Preview → Commit: avval tekshiriladi (bazaga tegilmaydi), tasdiqlangach yoziladi.
+
+  /** win-1251 bufer → matn (TextDecoder, ICU yo'q bo'lsa qo'lda jadval). */
+  private decodeCp1251(buf: Buffer): string {
+    try {
+      const s = new TextDecoder('windows-1251', { fatal: false }).decode(buf);
+      if (s && /[а-яА-Я]/.test(s)) return s;
+    } catch {
+      /* ICU yo'q — qo'lda dekod */
+    }
+    let out = '';
+    for (let i = 0; i < buf.length; i++) {
+      const b = buf[i];
+      out += b < 0x80 ? String.fromCharCode(b) : CP1251_HIGH[b - 0x80];
+    }
+    return out;
+  }
+
+  /** HTML teg + entity'larni tozalab matnni normallashtiradi. */
+  private stripHtml(s: string): string {
+    return s
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /** Vipiska summasi "1 238 000,00" / "1 238 000.00" → number (so'm). */
+  private parseVipiskaAmount(raw: string): number {
+    const n = parseFloat(String(raw || '').replace(/[\s ]/g, '').replace(/,/g, '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  /** "dd.mm.yyyy" yoki "dd.mm.yyyy HH:mm:ss" → Date (Toshkent, +5). */
+  private parseHamkorDateTime(s: string): Date | null {
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(String(s || '').trim());
+    if (!m) return null;
+    const [, dd, mo, yyyy, hh, mi, ss] = m;
+    const d = new Date(Date.UTC(
+      Number(yyyy), Number(mo) - 1, Number(dd),
+      (hh != null ? Number(hh) : 0) - 5, // Toshkent (+5) → UTC
+      mi != null ? Number(mi) : 0,
+      ss != null ? Number(ss) : 0,
+    ));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  /** Purpos ichidan HAQIQIY to'langan kun (Время транзакции). Karta to'lovlarida bor. */
+  private actualDateFromPurpose(s: string): string | undefined {
+    const m = /Время\s+транзакции\s+(\d{2}\.\d{2}\.\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)/.exec(String(s || ''));
+    return m ? m[1].replace(/\s+/g, ' ').trim() : undefined;
+  }
+
+  /**
+   * Vipiskani parse qiladi (bazaga tegmaydi): HTML jadvaldan yozuvlar + header'dan
+   * hisob/egasi/davr/qoldiqlarni ajratadi.
+   */
+  private parseHamkorVipiska(buffer: Buffer): {
+    accountNo: string | null;
+    ownerName: string | null;
+    period: string | null;
+    opening: number | null;
+    closing: number | null;
+    records: string[][];
+  } {
+    const html = this.decodeCp1251(buffer);
+    const rows: string[][] = [];
+    const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = trRe.exec(html))) {
+      const tdRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+      const cells: string[] = [];
+      let c: RegExpExecArray | null;
+      while ((c = tdRe.exec(m[1]))) cells.push(this.stripHtml(c[1]));
+      if (cells.length) rows.push(cells);
+    }
+    // Yozuvlar: datetime bilan boshlanadigan 8-katakli qatorlar
+    const dr = /^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}$/;
+    const records: string[][] = [];
+    for (const r of rows) {
+      for (let i = 0; i < r.length; i++) {
+        if (dr.test(r[i]) && r[i + 6] !== undefined) {
+          records.push(r.slice(i, i + 8));
+          i += 7;
+        }
+      }
+    }
+    // Header — birinchi yozuvgacha; o'z hisobimiz = header'dagi 1-chi 20-xonali raqam
+    const flat = rows.map((r) => r.join(' | ')).join('\n');
+    const firstDate = /\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}/.exec(flat);
+    const header = firstDate ? flat.slice(0, firstDate.index) : flat;
+    const accountNo = (/(\d{20})/.exec(header) || [])[1] || null;
+    let ownerName: string | null = null;
+    if (accountNo) {
+      const after = header.slice(header.indexOf(accountNo) + 20);
+      const nm = /^[\s|]*([^|]+?)\s*(?:ИНН|INN|\||$)/.exec(after);
+      ownerName = nm && nm[1].trim() ? nm[1].trim().slice(0, 190) : null;
+    }
+    const per = /[cсCС]\s+(\d{2}\.\d{2}\.\d{4})\s+по\s+(\d{2}\.\d{2}\.\d{4})/.exec(flat);
+    const period = per ? `${per[1]} – ${per[2]}` : null;
+    const pick = (re: RegExp): number | null => {
+      const mm = re.exec(flat);
+      return mm ? this.parseVipiskaAmount(mm[1]) : null;
+    };
+    const opening = pick(/начало периода:\s*([\d\s .,]+)/i);
+    const closing = pick(/конец периода:\s*([\d\s .,]+)/i);
+    return { accountNo, ownerName, period, opening, closing, records };
+  }
+
+  async previewHamkorVipiska(
+    buffer: Buffer,
+    importedBy?: string,
+    fileName?: string,
+  ): Promise<{
+    previewId: string;
+    fileName: string | null;
+    accountNo: string | null;
+    accountMapped: boolean;
+    ownerName: string | null;
+    period: string | null;
+    opening: number | null;
+    closing: number | null;
+    netCalc: number | null;
+    integrityOk: boolean | null;
+    total: number;
+    willInsert: number;
+    duplicatesInDb: number;
+    duplicatesInFile: number;
+    errors: number;
+    errorRows: Array<{ row: number; reason: string }>;
+    skippedRows: Array<{ row: number; id: string; contractNo: string; reason: string }>;
+    duration: number;
+    expiresAt: string;
+  }> {
+    this.sweepHamkorPreviews();
+    const started = Date.now();
+    const parsed = this.parseHamkorVipiska(buffer);
+    if (!parsed.accountNo) {
+      throw new BadRequestException("Vipiska'dan hisob raqami (Счет) topilmadi — fayl Hamkor vipiskasi ekaniga ishonch hosil qiling");
+    }
+
+    const account = await this.prisma.bankAccount.findFirst({
+      where: { accountNo: parsed.accountNo },
+      include: { bank: true },
+    });
+
+    // Integrity: opening + kredit − debit ?= closing (bironta qator o'tkazib yuborilmaganini tekshiradi)
+    let sumCr = 0;
+    let sumDt = 0;
+
+    const errorRows: Array<{ row: number; reason: string }> = [];
+    const skippedRows: Array<{ row: number; id: string; contractNo: string; reason: string }> = [];
+    const seen = new Set<string>();
+    const newRows: HamkorPreviewRow[] = [];
+    let duplicatesInFile = 0;
+    let duplicatesInDb = 0;
+
+    // Mavjud yozuvlar kalitlari (shu hisob doirasida) — live hisoblanadi (backfill shart emas)
+    const existingKeys = new Set<string>();
+    if (account) {
+      const existing = await this.prisma.transaction.findMany({
+        where: { accountId: account.id, externalId: { startsWith: 'HB_' } },
+        select: { externalId: true, description: true, hbDedupKey: true },
+      });
+      for (const e of existing) {
+        const k = hamkorDedupKeyFromExisting(e);
+        if (k) existingKeys.add(k);
+      }
+    }
+
+    const own = parsed.accountNo;
+    parsed.records.forEach((rec, idx) => {
+      const rowNum = idx + 1;
+      const dat = rec[0];
+      const cell1 = rec[1] || '';
+      const doc = rec[2] || '';
+      const debit = this.parseVipiskaAmount(rec[5]);
+      const credit = this.parseVipiskaAmount(rec[6]);
+      const purpose = rec[7] || '';
+      sumCr += credit;
+      sumDt += debit;
+
+      if (debit === 0 && credit === 0) {
+        errorRows.push({ row: rowNum, reason: 'Debet va Kredit ikkalasi 0' });
+        return;
+      }
+      if (debit > 0 && credit > 0) {
+        errorRows.push({ row: rowNum, reason: "Debet va Kredit ikkalasi > 0 (bittasi bo'lishi kerak)" });
+        return;
+      }
+
+      const direction: TxnDirection = credit > 0 ? 'IN' : 'OUT';
+      const amountSom = credit > 0 ? credit : debit;
+      const amountTiyin = Math.round(amountSom * 100);
+      const cpAcc = (/(\d{20})/.exec(cell1) || [])[1] || null;
+      const accCt = direction === 'IN' ? own : cpAcc; // kirimda biz kreditormiz
+      const accDt = direction === 'IN' ? cpAcc : own;
+
+      const key = hamkorDedupKey({ purpose, num: doc, ddate: dat, accCt, accDt, amountTiyin, ownAccount: own });
+      const externalId = ('HB_IMP_' + key.replace(':', '_')).slice(0, 190);
+
+      // in-file dublikat
+      if (seen.has(key)) {
+        duplicatesInFile++;
+        if (skippedRows.length < 50) skippedRows.push({ row: rowNum, id: externalId, contractNo: doc, reason: 'Faylda takror' });
+        return;
+      }
+      seen.add(key);
+      // DB dublikat (byacc yoki oldingi import)
+      if (existingKeys.has(key)) {
+        duplicatesInDb++;
+        if (skippedRows.length < 50) skippedRows.push({ row: rowNum, id: externalId, contractNo: doc, reason: 'Bazada bor (byacc yoki oldingi import)' });
+        return;
+      }
+
+      // sana — HAQIQIY kun (Время транзакции) bo'lsa, aks holda Дата (byacc bilan bir xil)
+      const actual = this.actualDateFromPurpose(purpose);
+      const txnDate = (actual ? this.parseHamkorDateTime(actual) : null) || this.parseHamkorDateTime(dat) || new Date();
+      const cpName = cell1.replace(/\d{20}/g, '').replace(/ИНН.*$/i, '').replace(/\s+/g, ' ').trim().slice(0, 255) || null;
+
+      newRows.push({
+        externalId,
+        hbDedupKey: key,
+        direction,
+        amountSom,
+        txnDate,
+        valueDate: null,
+        docNumber: doc.slice(0, 64),
+        description: purpose.slice(0, 10000),
+        fromAccount: accDt, // payer
+        toAccount: accCt, // receiver
+        fromName: direction === 'IN' ? cpName : parsed.ownerName,
+        toName: direction === 'IN' ? parsed.ownerName : cpName,
+      });
+    });
+
+    const total = parsed.records.length;
+    const netCalc = sumCr - sumDt;
+    const integrityOk =
+      parsed.closing != null
+        ? Math.abs((parsed.opening ?? 0) + netCalc - parsed.closing) < 0.5
+        : null;
+
+    const previewId = randomUUID();
+    const expiresAt = Date.now() + ImportService.HAMKOR_PREVIEW_TTL_MS;
+
+    // Hisob topilmasa — hech narsa yozib bo'lmaydi (jimgina tashlamaymiz, xabar beramiz)
+    this.hamkorPreviewCache.set(previewId, {
+      fileName: fileName?.slice(0, 255) || null,
+      fileSize: buffer.length,
+      accountNo: parsed.accountNo,
+      accountId: account?.id || '',
+      bankId: account?.bankId || null,
+      rows: account ? newRows : [],
+      total,
+      willInsert: account ? newRows.length : 0,
+      duplicatesInDb,
+      duplicatesInFile,
+      errors: errorRows.length,
+      integrityOk,
+      importedBy,
+      expiresAt,
+    });
+
+    const duration = Math.round((Date.now() - started) / 1000);
+    this.log.log(
+      `Hamkor vipiska preview ${previewId.slice(0, 8)}: acc ${parsed.accountNo} (${account ? 'topildi' : 'TOPILMADI'}), ` +
+      `${total} yozuv, ${account ? newRows.length : 0} yangi, ${duplicatesInDb} DB-dub, ${duplicatesInFile} fayl-dub, ${errorRows.length} xato, integrity=${integrityOk}`,
+    );
+
+    return {
+      previewId,
+      fileName: fileName?.slice(0, 255) || null,
+      accountNo: parsed.accountNo,
+      accountMapped: !!account,
+      ownerName: parsed.ownerName,
+      period: parsed.period,
+      opening: parsed.opening,
+      closing: parsed.closing,
+      netCalc,
+      integrityOk,
+      total,
+      willInsert: account ? newRows.length : 0,
+      duplicatesInDb,
+      duplicatesInFile,
+      errors: errorRows.length,
+      errorRows: errorRows.slice(0, 100),
+      skippedRows,
+      duration,
+      expiresAt: new Date(expiresAt).toISOString(),
+    };
+  }
+
+  async commitHamkorVipiska(
+    previewId: string,
+    importedBy?: string,
+  ): Promise<{ total: number; added: number; skipped: number; errors: number; errorRows: Array<{ row: number; reason: string }>; batchId?: string; duration: number }> {
+    this.sweepHamkorPreviews();
+    const state = this.hamkorPreviewCache.get(previewId);
+    if (!state) throw new BadRequestException("Preview topilmadi yoki muddati o'tgan (30 daqiqa) — faylni qayta yuklang");
+    if (!state.accountId) throw new BadRequestException("Bu hisob bazada topilmagan — avval hisobni qo'shing, keyin qayta import qiling");
+    this.hamkorPreviewCache.delete(previewId);
+
+    // Balans mos kelmagan bo'lsa (parser qator o'tkazib yuborgan bo'lishi mumkin) — audit uchun
+    // yozib qo'yamiz. Foydalanuvchi frontend'da ataylab tasdiqlagan (ogohlantirish ko'rsatilgan).
+    if (state.integrityOk === false) {
+      this.log.warn(`Hamkor vipiska commit ${previewId.slice(0, 8)}: BALANS MOS EMAS — foydalanuvchi ataylab tasdiqladi (acc ${state.accountNo})`);
+    }
+
+    const started = Date.now();
+    const batch = await this.prisma.importBatch.create({
+      data: {
+        kind: 'hamkor-vipiska',
+        fileName: state.fileName,
+        fileSize: state.fileSize,
+        importedBy: (importedBy || state.importedBy)?.slice(0, 190) || null,
+      },
+    });
+
+    const result = {
+      total: state.total,
+      added: 0,
+      skipped: state.duplicatesInDb + state.duplicatesInFile,
+      errors: state.errors,
+      errorRows: [] as Array<{ row: number; reason: string }>,
+    };
+
+    // ── RACE HIMOYASI ──
+    // Preview'dan keyin (30 daqiqa ichida) byacc sync shu yozuvlarni qo'shgan bo'lishi
+    // mumkin. Yozishdan OLDIN mavjud kalitlarni qayta o'qib, ustma-ust tushganini chiqaramiz.
+    const existKeys = new Set<string>();
+    const existing = await this.prisma.transaction.findMany({
+      where: { accountId: state.accountId, externalId: { startsWith: 'HB_' } },
+      select: { externalId: true, description: true, hbDedupKey: true },
+    });
+    for (const e of existing) {
+      const k = hamkorDedupKeyFromExisting(e);
+      if (k) existKeys.add(k);
+    }
+    const rowsToInsert = state.rows.filter((r) => !existKeys.has(r.hbDedupKey));
+    result.skipped += state.rows.length - rowsToInsert.length;
+
+    const importedAt = new Date();
+    const BATCH_SIZE = 500;
+    const actor = (importedBy || state.importedBy)?.slice(0, 190) || null;
+    const data = rowsToInsert.map((r) => ({
+      externalId: r.externalId,
+      type: 'OTHER' as TxnType,
+      status: 'COMPLETED' as TxnStatus,
+      direction: r.direction,
+      amount: new Prisma.Decimal(r.amountSom),
+      currency: 'UZS',
+      fromAccount: r.fromAccount,
+      toAccount: r.toAccount,
+      fromName: r.fromName,
+      toName: r.toName,
+      description: r.description || null,
+      docNumber: r.docNumber || null,
+      hbDedupKey: r.hbDedupKey,
+      source: 'HAMKOR_IMPORT' as TxnSource,
+      importBankNameText: 'Hamkorbank',
+      importedBy: actor,
+      importedAt,
+      importBatchId: batch.id,
+      bankId: state.bankId,
+      accountId: state.accountId,
+      txnDate: r.txnDate,
+      valueDate: r.valueDate,
+    }));
+
+    for (let i = 0; i < data.length; i += BATCH_SIZE) {
+      const chunk = data.slice(i, i + BATCH_SIZE);
+      try {
+        const rr = await this.prisma.transaction.createMany({ data: chunk, skipDuplicates: true });
+        result.added += rr.count;
+      } catch (e: any) {
+        this.log.warn(`Hamkor commit createMany xato (${i}-${i + chunk.length}): ${e?.message?.slice(0, 200)}`);
+        for (const row of chunk) {
+          try {
+            await this.prisma.transaction.create({ data: row });
+            result.added++;
+          } catch (e2: any) {
+            result.errors++;
+            result.errorRows.push({ row: 0, reason: e2?.message?.slice(0, 200) || "Noma'lum xato" });
+          }
+        }
+      }
+    }
+
+    await this.prisma.importBatch.update({
+      where: { id: batch.id },
+      data: { rowsTotal: result.total, rowsAdded: result.added, rowsSkipped: result.skipped, rowsErrors: result.errors },
+    });
+
+    const duration = Math.round((Date.now() - started) / 1000);
+    this.log.log(`Hamkor vipiska commit ${previewId.slice(0, 8)}: +${result.added}, skip ${result.skipped}, xato ${result.errors}, acc ${state.accountNo}`);
+    return { ...result, batchId: batch.id, duration };
+  }
+
+  cancelHamkorVipiska(previewId: string): { ok: boolean; canceled: boolean } {
+    const had = this.hamkorPreviewCache.has(previewId);
+    this.hamkorPreviewCache.delete(previewId);
+    return { ok: true, canceled: had };
+  }
+
   // ═══ BATCH MANAGEMENT ═══════════════════════════════════════════════
 
   /** Barcha import batch'lar (yangi avval) — frontend tarix uchun */
@@ -659,9 +1134,13 @@ export class ImportService {
     }
 
     // ─── Transactions batch (default) ─────────────────────────
-    // kind='transactions' → source='IMPORT'
-    // kind='aloqa-bank'   → source='ALOQA_BANK'
-    const batchSource: TxnSource = batch.kind === 'aloqa-bank' ? 'ALOQA_BANK' : 'IMPORT';
+    // kind='transactions'   → source='IMPORT'
+    // kind='aloqa-bank'     → source='ALOQA_BANK'
+    // kind='hamkor-vipiska' → source='HAMKOR_IMPORT'
+    const batchSource: TxnSource =
+      batch.kind === 'aloqa-bank' ? 'ALOQA_BANK'
+        : batch.kind === 'hamkor-vipiska' ? 'HAMKOR_IMPORT'
+        : 'IMPORT';
     const CHUNK = 500;
     let totalDeleted = 0;
 
@@ -733,8 +1212,11 @@ export class ImportService {
     const batch = await this.prisma.importBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new BadRequestException('Batch topilmadi');
 
-    // kind ga qarab to'g'ri source bilan filtrlash (aloqa-bank ALOQA_BANK source'ga ega)
-    const batchSource: TxnSource = batch.kind === 'aloqa-bank' ? 'ALOQA_BANK' : 'IMPORT';
+    // kind ga qarab to'g'ri source bilan filtrlash (aloqa-bank / hamkor-vipiska alohida source)
+    const batchSource: TxnSource =
+      batch.kind === 'aloqa-bank' ? 'ALOQA_BANK'
+        : batch.kind === 'hamkor-vipiska' ? 'HAMKOR_IMPORT'
+        : 'IMPORT';
     const txns = await this.prisma.transaction.findMany({
       where: { importBatchId: batchId, source: batchSource },
       include: {

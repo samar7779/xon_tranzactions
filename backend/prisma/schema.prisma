@@ -89,6 +89,13 @@ model Transaction {
   bankGeneralId String? @map("bank_general_id") @db.VarChar(64) // general_id (NCI)
   bankB2Id      String? @map("bank_b2_id") @db.VarChar(64) // b2_id
 
+  // ─── HAMKORBANK dedup kaliti ───
+  // FAQAT Hamkorbank yozuvlari to'ldiradi (byacc sync VA vipiska import). Boshqa banklar `null`.
+  // Qiymat: xonpay uuid bo'lsa `xp:<uuid>`, aks holda kompozit `cx:<num>_<ddate>_<accCt>_<accDt>_<tiyin>_<sign>`
+  // (= byacc externalId'ning general_id'siz qismi). Import↔byacc↔mavjud yozuvlar orasida
+  // DUBLIKAT bo'lmasligini ta'minlaydi (general_id vipiskada yo'q — shu bois alohida kalit kerak).
+  hbDedupKey    String? @map("hb_dedup_key") @db.VarChar(128)
+
   // Bank ichki ma'lumotlari
   bankClientId String? @map("bank_client_id") @db.VarChar(32) // client_id
   bankBranch   String? @map("bank_branch") @db.VarChar(8) // branch (operatsiya o'tgan filial)
@@ -196,6 +203,11 @@ model Transaction {
   @@index([matchStatus])
   @@index([fromInn])
   @@index([bankB2Id])
+  // Hamkorbank import↔sync DUBLIKAT oldini oladi (DB darajasida kafolat). Faqat Hamkor
+  // yozuvlari hbDedupKey to'ldiradi; boshqa banklar `null` — Postgres'da (accountId, NULL)
+  // qatorlar bir-biriga to'qnashmaydi, shu bois boshqa banklarga ta'sir YO'Q. Bir vaqtda
+  // import + byacc yozsa ham ikkinchisi shu constraint bilan rad etiladi (race himoyasi).
+  @@unique([accountId, hbDedupKey])
   @@index([erpPaymentId]) // ta'minot moslashuvi — takroriy bog'lanishni tekshirish
   @@index([bankGeneralId])
   @@index([valueDate])
@@ -370,6 +382,7 @@ enum TxnSource {
   IMPORT // Qo'lda Excel'dan import qilingan (standart format)
   MANUAL // Qo'lda admin tomonidan kiritilgan (kelajakda)
   ALOQA_BANK // Aloqa Bank Excel import (read-only — edit/delete/category bloklangan)
+  HAMKOR_IMPORT // Hamkorbank rasmiy vipiska (выписка) importi — byacc bilan dedup qilinadi
 }
 
 // ─────────────────────────────────────────────────────────────────

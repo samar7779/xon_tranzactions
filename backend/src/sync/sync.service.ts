@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
 import { HamkorbankClient } from '../integrations/hamkorbank/hamkorbank.client';
+import { hamkorDedupKey } from '../integrations/hamkorbank/hamkor-dedup.util';
 import { KbDoc1CItem, KbDoc1CResult } from '../integrations/kapitalbank/types';
 import { PaymentsService } from '../payments/payments.service';
 import { CategorizationService } from '../categorization/categorization.service';
@@ -733,6 +734,21 @@ export class SyncService implements OnModuleInit {
 
     const externalId = this.makeCompositeId(item, accountNo, bankCode);
 
+    // HAMKORBANK dedup kaliti — FAQAT Hamkor uchun (boshqa banklar `null`, ta'sirsiz).
+    // Vipiska importi bilan bir xil formulada hisoblanadi → import↔byacc dublikat bo'lmaydi.
+    const hbDedupKey =
+      bankCode === 'HAMKORBANK'
+        ? hamkorDedupKey({
+            purpose: item.purpose,
+            num: item.num,
+            ddate: item.ddate,
+            accCt: item.acc_ct,
+            accDt: item.acc_dt,
+            amountTiyin: item.amount,
+            ownAccount: accountNo,
+          })
+        : null;
+
     // Sanalar (oldindan — dedup ichida ham kerak)
     // txnDate = bank sanasi + BANK VAQTI (time → stime → input_time).
     // Ilgari faqat ddate olinardi va vaqt 00:00 bo'lib qolardi (server mintaqasida),
@@ -767,6 +783,9 @@ export class SyncService implements OnModuleInit {
           { externalId: item.b2_id || undefined },
           { externalId: item.general_id || undefined },
           { bankB2Id: item.b2_id || undefined },
+          // HAMKOR — vipiska importidan kelgan yozuvni shu kalit orqali topamiz
+          // (import externalId'da general_id yo'q, shu bois alohida kalit kerak) → dublikat yaratmaymiz
+          ...(hbDedupKey ? [{ hbDedupKey }] : []),
           // DATE-SHIFT — shu general_id bor composite ±15 kun atrofida
           ...(item.general_id ? [{
             AND: [
@@ -779,6 +798,14 @@ export class SyncService implements OnModuleInit {
     });
 
     if (existing) {
+      // ── HAMKOR IMPORT QO'RIQCHISI ──
+      // byacc shu tranzaksiyani vipiska importidan kelgan yozuv sifatida topdi (hbDedupKey orqali).
+      // Import — ataylab olingan rasmiy snapshot: uni O'ZGARTIRMAYMIZ va DUBLIKAT ham yaratmaymiz.
+      // (Bu holat kamdan-kam: byacc odatda o'tgan davrni timeout tufayli qayta ololmaydi.)
+      if (existing.source === 'HAMKOR_IMPORT' && existing.externalId !== externalId) {
+        return false; // yangi yozuv yaratilmaydi, importга tegilmaydi
+      }
+
       // ── DATE-SHIFT UPDATE ──
       // Mavjud yozuvning sanasi yoki externalId yangi keladigan'dan farq qilsa,
       // bu bank tomonida sanani ko'chirish hodisasi (proвotka o'zgargan).
@@ -797,6 +824,7 @@ export class SyncService implements OnModuleInit {
               valueDate,
               syncedAt: new Date(),
               ...(item.b2_id ? { bankB2Id: item.b2_id } : {}),
+              ...(hbDedupKey ? { hbDedupKey } : {}), // Hamkor kaliti (eski yozuvlarga ham to'ldiriladi)
               // Vaqt bo'sh bo'lsa — shu yerda ham to'ldiramiz (Hamkor yozuvlari)
               ...(item.time && !existing.operationTime ? { operationTime: item.time } : {}),
               ...(item.stime && !existing.settlementTime ? { settlementTime: item.stime } : {}),
@@ -892,7 +920,9 @@ export class SyncService implements OnModuleInit {
 
     const rawExtra = this.extractRawExtra(item);
 
-    const created = await this.prisma.transaction.create({
+    let created: { id: string };
+    try {
+      created = await this.prisma.transaction.create({
       data: {
         externalId,
         type,
@@ -923,6 +953,7 @@ export class SyncService implements OnModuleInit {
         // Bank ID'lari (alohida column)
         bankGeneralId: item.general_id,
         bankB2Id: item.b2_id,
+        hbDedupKey, // Hamkor uchun kalit (boshqa banklar null) — vipiska importi bilan dedup
 
         // Bank ichki
         bankClientId: item.client_id != null ? String(item.client_id) : null,
@@ -948,7 +979,16 @@ export class SyncService implements OnModuleInit {
         accountId,
         txnDate,
       },
-    });
+      });
+    } catch (e: any) {
+      // Race himoyasi: shu externalId yoki (accountId, hbDedupKey) allaqachon qo'shilgan
+      // (masalan Hamkor vipiska importi bilan bir vaqtda) — DUBLIKAT yaratmaymiz.
+      if (e?.code === 'P2002') {
+        this.logger.warn(`upsertOne: dublikat oldini olindi (P2002) — ${externalId}`);
+        return false;
+      }
+      throw e;
+    }
 
     // Billing avto-match: faqat kirim tranzaksiya uchun, INN orqali mijoz qidirib
     if (direction === 'IN' && item.inn_dt) {

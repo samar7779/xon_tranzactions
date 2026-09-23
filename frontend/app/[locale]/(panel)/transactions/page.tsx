@@ -184,7 +184,7 @@ export default function TransactionsPage() {
   // Shartnoma manbasi filtri — manual/ariza (multi-select)
   const [contractSources, setContractSources] = useState<Set<'manual' | 'ariza'>>(new Set());
   // Manba filtri — bank sync / import / aloqa bank
-  const [sources, setSources] = useState<Set<'SYNC' | 'IMPORT' | 'ALOQA_BANK'>>(new Set());
+  const [sources, setSources] = useState<Set<'SYNC' | 'IMPORT' | 'ALOQA_BANK' | 'HAMKOR_IMPORT'>>(new Set());
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
   // Summa filtri — 'exact' (aniq summa) yoki 'range' (summadan summagacha)
   const [amountFilter, setAmountFilter] = useState<{ mode: 'exact' | 'range'; exact: string; min: string; max: string }>(
@@ -1167,6 +1167,7 @@ export default function TransactionsPage() {
                       { key: 'SYNC', label: 'Bank sync', icon: RefreshCw },
                       { key: 'IMPORT', label: 'Import (Excel)', icon: UploadIcon },
                       { key: 'ALOQA_BANK', label: 'Aloqa Bank import', icon: Landmark },
+                      { key: 'HAMKOR_IMPORT', label: 'Hamkorbank vipiska', icon: Landmark },
                     ] as const).map((opt) => {
                       const Icon = opt.icon;
                       const checked = sources.has(opt.key);
@@ -1311,23 +1312,30 @@ export default function TransactionsPage() {
                             {(() => {
                               const isImport = it.source === 'IMPORT';
                               const isAloqa = it.source === 'ALOQA_BANK';
-                              const bankName = it.account?.bank?.name || it.bank?.name || ((isImport || isAloqa) ? it.importBankNameText : null);
+                              const isHamkorImp = it.source === 'HAMKOR_IMPORT';
+                              const anyImport = isImport || isAloqa || isHamkorImp;
+                              const bankName = it.account?.bank?.name || it.bank?.name || (anyImport ? it.importBankNameText : null);
                               const bankCode = it.account?.bank?.code || it.bank?.code || '';
                               const accountNo = it.account?.accountNo
-                                || ((isImport || isAloqa) ? (it.direction === 'OUT' ? it.fromAccount : it.toAccount) : '');
+                                || (anyImport ? (it.direction === 'OUT' ? it.fromAccount : it.toAccount) : '');
                               return (
                                 <div className="flex items-center gap-2">
                                   <BankLogo code={bankCode} name={bankName} size={28} rounded="rounded-lg" />
                                   <div className="min-w-0">
                                     <div className="text-[12px] font-medium truncate flex items-center gap-1">
                                       <span className="truncate">{bankName || '—'}</span>
-                                      {(isImport || isAloqa) && (
+                                      {anyImport && (
                                         <span
-                                          className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300 inline-flex items-center gap-0.5"
-                                          title={isAloqa ? 'Aloqa Bank import — read-only' : 'Import'}
+                                          className={cn(
+                                            'shrink-0 text-[8px] font-bold px-1 py-0.5 rounded inline-flex items-center gap-0.5',
+                                            isHamkorImp
+                                              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                              : 'bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300',
+                                          )}
+                                          title={isAloqa ? 'Aloqa Bank import — read-only' : isHamkorImp ? 'Hamkorbank vipiska (выписка) importi' : 'Import'}
                                         >
                                           {isAloqa && <Lock className="h-2 w-2" />}
-                                          IMP
+                                          {isHamkorImp ? 'HB imp' : 'IMP'}
                                         </span>
                                       )}
                                     </div>
