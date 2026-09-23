@@ -76,6 +76,34 @@ export class ImportController {
     return this.svc.cancelHamkorVipiska(previewId);
   }
 
+  // ─── Becfil-exclusion (byacc/becfil olmaydigan sana oralig'i, faqat Hamkor) ───
+
+  @Get('hamkor-vipiska/exclusions')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Becfil olmaydigan sana oraliqlari ro\'yxati' })
+  async listExclusions(@Query('accountNo') accountNo?: string) {
+    return this.svc.listHamkorExclusions(accountNo);
+  }
+
+  @Post('hamkor-vipiska/exclusions')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Qo\'lda becfil-exclusion oralig\'i qo\'shish' })
+  async addExclusion(
+    @Body('accountNo') accountNo: string,
+    @Body('from') from: string,
+    @Body('to') to: string,
+    @CurrentUser('email') email?: string,
+  ) {
+    return this.svc.addHamkorExclusion(accountNo, from, to, email);
+  }
+
+  @Delete('hamkor-vipiska/exclusions/:id')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Becfil-exclusion oralig\'ini o\'chirish' })
+  async deleteExclusion(@Param('id') id: string) {
+    return this.svc.deleteHamkorExclusion(id);
+  }
+
   // ─── Batch management ───────────────────────────────────────────────
 
   @Get('batches')

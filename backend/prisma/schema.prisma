@@ -472,6 +472,7 @@ model BankAccount {
   lastSyncedAt DateTime? @map("last_synced_at")
 
   transactions Transaction[]
+  syncExclusions SyncExclusionRange[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -479,6 +480,27 @@ model BankAccount {
   @@unique([branch, accountNo])
   @@index([credentialId])
   @@map("bank_accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SYNC EXCLUSION RANGE — avto-sync (byacc/becfil) OLMAYDIGAN sana oralig'i.
+// Hamkorbank uchun: vipiska qo'lda import qilingan davr qayta olinmasin (dublikat
+// bo'lmasin). Vipiska import qilinganda avtomat yaratiladi + qo'lda tahrirlanadi.
+// upsertOne (faqat Hamkor) shu oraliqdagi to'lovlarni (haqiqiy kun) o'tkazib yuboradi.
+// ─────────────────────────────────────────────────────────────────
+model SyncExclusionRange {
+  id        String      @id @default(cuid())
+  accountId String      @map("account_id")
+  account   BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  dateFrom  DateTime    @map("date_from") @db.Date
+  dateTo    DateTime    @map("date_to") @db.Date
+  note      String?     @db.VarChar(255)
+  source    String      @default("import") @db.VarChar(16) // import (avto) | manual
+  createdBy String?     @map("created_by") @db.VarChar(190)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([accountId])
+  @@map("sync_exclusion_ranges")
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -850,8 +850,126 @@ function HamkorVipiskaImportPanel() {
         )}
       </Card>
 
+      <HamkorExclusionSection refreshKey={commitMut.isSuccess ? Date.now() : 0} />
+
       <BatchHistorySection refreshKey={commitMut.isSuccess ? Date.now() : 0} kind="hamkor-vipiska" />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BECFIL-EXCLUSION — byacc/becfil OLMAYDIGAN sana oraliqlari (faqat Hamkor)
+// Import qilinganda avtomat qo'shiladi; qo'lda ham qo'shish/o'chirish mumkin.
+// ═══════════════════════════════════════════════════════════════════════
+interface ExclusionRange {
+  id: string;
+  accountNo: string | null;
+  ownerName: string | null;
+  dateFrom: string;
+  dateTo: string;
+  note: string | null;
+  source: string;
+  createdAt: string;
+}
+
+function HamkorExclusionSection({ refreshKey }: { refreshKey: number }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(true);
+  const [accountNo, setAccountNo] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['hamkor-exclusions', refreshKey],
+    queryFn: () => api.get<{ ok: boolean; items: ExclusionRange[] }>('/import/hamkor-vipiska/exclusions'),
+    enabled: open,
+  });
+  const items = data?.items || [];
+
+  const addMut = useMutation({
+    mutationFn: () => api.post('/import/hamkor-vipiska/exclusions', { accountNo: accountNo.trim(), from, to }),
+    onSuccess: () => {
+      toast.success('Oraliq qo\'shildi — byacc bu davrni olmaydi');
+      setAccountNo(''); setFrom(''); setTo('');
+      qc.invalidateQueries({ queryKey: ['hamkor-exclusions'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const delMut = useMutation({
+    mutationFn: (id: string) => api.delete(`/import/hamkor-vipiska/exclusions/${id}`),
+    onSuccess: () => {
+      toast.success('O\'chirildi');
+      qc.invalidateQueries({ queryKey: ['hamkor-exclusions'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors text-left">
+        <Lock className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">becfil olmaydigan davrlar</div>
+        <span className="text-[11px] text-slate-400 dark:text-slate-500">{items.length} ta oraliq</span>
+        <span className="ml-auto text-slate-400 dark:text-slate-500">{open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
+      </button>
+      {open && (
+        <CardContent className="px-6 pb-6 pt-0 space-y-4">
+          <div className="rounded-lg ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/40 p-3 text-[11.5px] text-emerald-900 dark:text-emerald-300 flex gap-2 items-start">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <div>Bu oraliqlardagi to'lovlarni <b>byacc/becfil avtomatik olmaydi</b> (faqat Hamkor) — qo'lda import qilingan davr bilan ustma-ust tushib dublikat bo'lmasin. Vipiska import qilinganda avtomat qo'shiladi; qo'lda ham qo'shishingiz mumkin.</div>
+          </div>
+
+          {/* Qo'lda qo'shish */}
+          <div className="flex items-end gap-2 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Hisob raqami</label>
+              <input value={accountNo} onChange={(e) => setAccountNo(e.target.value)} placeholder="20208..." className="h-9 w-52 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 px-3 text-[12px] font-mono" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Boshlanish</label>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 px-3 text-[12px]" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Tugash</label>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 px-3 text-[12px]" />
+            </div>
+            <Button
+              onClick={() => addMut.mutate()}
+              disabled={addMut.isPending || !accountNo.trim() || !from || !to}
+              className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold"
+            >
+              {addMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Qo'shish
+            </Button>
+          </div>
+
+          {/* Ro'yxat */}
+          {isLoading ? (
+            <div className="flex items-center gap-2 py-4 text-slate-400 justify-center text-[12px]"><Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...</div>
+          ) : items.length === 0 ? (
+            <div className="text-center text-[12px] text-slate-400 dark:text-slate-500 py-6 rounded-xl ring-1 ring-dashed ring-slate-200 dark:ring-slate-700">Hozircha oraliq yo'q</div>
+          ) : (
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+              {items.map((r) => (
+                <div key={r.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap text-[12px]">
+                      <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{r.dateFrom} → {r.dateTo}</span>
+                      <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full', r.source === 'import' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300')}>{r.source === 'import' ? 'avto' : 'qo\'lda'}</span>
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
+                      <span className="font-mono">{r.accountNo || '—'}</span>{r.ownerName && <> · {r.ownerName}</>}{r.note && <> · {r.note}</>}
+                    </div>
+                  </div>
+                  <button onClick={() => delMut.mutate(r.id)} disabled={delMut.isPending} title="O'chirish" className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
   );
 }
 

@@ -32,6 +32,37 @@ export class SyncService implements OnModuleInit {
   // FIX (B#4): bir hisobga bir vaqtda bitta syncAccount — parallel (cron ustma-ust) ishga tushishni oldini oladi
   private readonly syncingAccounts = new Set<string>();
 
+  // Becfil-exclusion kesh (accountId → oraliqlar), 30s TTL — upsertOne har item uchun DB so'ramasin.
+  private exclusionCache = new Map<string, { ranges: Array<{ from: string; to: string }>; at: number }>();
+  private static readonly EXCLUSION_TTL_MS = 30_000;
+
+  /** Shu hisobning becfil-exclusion oralig'idagi sana (haqiqiy kun, Toshkent) — byacc olmaydi. */
+  private async isDateExcluded(accountId: string, txnDate: Date): Promise<boolean> {
+    const now = Date.now();
+    let entry = this.exclusionCache.get(accountId);
+    if (!entry || now - entry.at > SyncService.EXCLUSION_TTL_MS) {
+      try {
+        const rows = await this.prisma.syncExclusionRange.findMany({
+          where: { accountId },
+          select: { dateFrom: true, dateTo: true },
+        });
+        entry = {
+          ranges: rows.map((r) => ({
+            from: r.dateFrom.toISOString().slice(0, 10),
+            to: r.dateTo.toISOString().slice(0, 10),
+          })),
+          at: now,
+        };
+        this.exclusionCache.set(accountId, entry);
+      } catch {
+        return false; // xatoda bloklamaymiz (sync to'xtamasin)
+      }
+    }
+    if (entry.ranges.length === 0) return false;
+    const day = new Date(txnDate.getTime() + 5 * 3600 * 1000).toISOString().slice(0, 10); // Toshkent kuni
+    return entry.ranges.some((r) => day >= r.from && day <= r.to);
+  }
+
   constructor(
     private prisma: PrismaService,
     private crypto: CryptoService,
@@ -769,6 +800,13 @@ export class SyncService implements OnModuleInit {
     const valueDate = this.parseKbDateOnly(item.vdate);
     const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
 
+    // ── HAMKOR BECFIL-EXCLUSION ──
+    // Vipiska QO'LDA import qilingan sana oralig'idagi to'lovlarni byacc/becfil OLMAYDI —
+    // ustma-ustlik (va dublikat) bo'lmasin. Faqat Hamkor; haqiqiy to'lov kuni (txnDate) bo'yicha.
+    if (bankCode === 'HAMKORBANK' && (await this.isDateExcluded(accountId, txnDate))) {
+      return false; // qo'lda import qilingan davr — yangi yozuv yaratilmaydi
+    }
+
     // Mavjudligini tekshirish — FAQAT shu account doirasida
     // 1) Standard dedup: externalId/b2_id/general_id/bankB2Id
     // 2) DATE-SHIFT: shu general_id bilan ±15 kun atrofida yozuv bormi
@@ -783,9 +821,6 @@ export class SyncService implements OnModuleInit {
           { externalId: item.b2_id || undefined },
           { externalId: item.general_id || undefined },
           { bankB2Id: item.b2_id || undefined },
-          // HAMKOR — vipiska importidan kelgan yozuvni shu kalit orqali topamiz
-          // (import externalId'da general_id yo'q, shu bois alohida kalit kerak) → dublikat yaratmaymiz
-          ...(hbDedupKey ? [{ hbDedupKey }] : []),
           // DATE-SHIFT — shu general_id bor composite ±15 kun atrofida
           ...(item.general_id ? [{
             AND: [
@@ -798,14 +833,6 @@ export class SyncService implements OnModuleInit {
     });
 
     if (existing) {
-      // ── HAMKOR IMPORT QO'RIQCHISI ──
-      // byacc shu tranzaksiyani vipiska importidan kelgan yozuv sifatida topdi (hbDedupKey orqali).
-      // Import — ataylab olingan rasmiy snapshot: uni O'ZGARTIRMAYMIZ va DUBLIKAT ham yaratmaymiz.
-      // (Bu holat kamdan-kam: byacc odatda o'tgan davrni timeout tufayli qayta ololmaydi.)
-      if (existing.source === 'HAMKOR_IMPORT' && existing.externalId !== externalId) {
-        return false; // yangi yozuv yaratilmaydi, importга tegilmaydi
-      }
-
       // ── DATE-SHIFT UPDATE ──
       // Mavjud yozuvning sanasi yoki externalId yangi keladigan'dan farq qilsa,
       // bu bank tomonida sanani ko'chirish hodisasi (proвotka o'zgargan).

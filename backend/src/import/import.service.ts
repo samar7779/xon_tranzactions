@@ -49,6 +49,8 @@ interface HamkorPreviewState {
   duplicatesInFile: number;
   errors: number;
   integrityOk: boolean | null; // opening + net = closing (balans mos keldimi)
+  periodFrom: string | null;   // import davri boshi (haqiqiy kun, yyyy-mm-dd) — becfil-exclusion uchun
+  periodTo: string | null;     // import davri oxiri
   importedBy?: string;
   expiresAt: number;
 }
@@ -802,6 +804,8 @@ export class ImportService {
     errors: number;
     errorRows: Array<{ row: number; reason: string }>;
     skippedRows: Array<{ row: number; id: string; contractNo: string; reason: string }>;
+    periodFrom: string | null;
+    periodTo: string | null;
     duration: number;
     expiresAt: string;
   }> {
@@ -820,6 +824,9 @@ export class ImportService {
     // Integrity: opening + kredit − debit ?= closing (bironta qator o'tkazib yuborilmaganini tekshiradi)
     let sumCr = 0;
     let sumDt = 0;
+    // Import davri (haqiqiy kun min/max) — becfil-exclusion oralig'ini avtomat aniqlash uchun
+    let minTxn: Date | null = null;
+    let maxTxn: Date | null = null;
 
     const errorRows: Array<{ row: number; reason: string }> = [];
     const skippedRows: Array<{ row: number; id: string; contractNo: string; reason: string }> = [];
@@ -869,6 +876,14 @@ export class ImportService {
       const accCt = direction === 'IN' ? own : cpAcc; // kirimda biz kreditormiz
       const accDt = direction === 'IN' ? cpAcc : own;
 
+      // sana — HAQIQIY kun (Время транзакции) bo'lsa, aks holda Дата (byacc bilan bir xil).
+      // becfil-exclusion oralig'i shu haqiqiy kunlar bo'yicha (byacc ham shuni ishlatadi).
+      const actual = this.actualDateFromPurpose(purpose);
+      const txnDate = (actual ? this.parseHamkorDateTime(actual) : null) || this.parseHamkorDateTime(dat) || new Date();
+      // Butun import davri (dublikatlar ham) — exclusion oralig'ini aniqlash uchun
+      if (!minTxn || txnDate < minTxn) minTxn = txnDate;
+      if (!maxTxn || txnDate > maxTxn) maxTxn = txnDate;
+
       const key = hamkorDedupKey({ purpose, num: doc, ddate: dat, accCt, accDt, amountTiyin, ownAccount: own });
       // externalId — byacc bilan bir xil KOMPOZIT tuzilish, faqat general_id o'rnida "IMP"
       // (general_id vipiskada yo'q). Kompozit har hisobda noyob (tekshirilgan) → to'qnashmaydi.
@@ -890,9 +905,6 @@ export class ImportService {
         return;
       }
 
-      // sana — HAQIQIY kun (Время транзакции) bo'lsa, aks holda Дата (byacc bilan bir xil)
-      const actual = this.actualDateFromPurpose(purpose);
-      const txnDate = (actual ? this.parseHamkorDateTime(actual) : null) || this.parseHamkorDateTime(dat) || new Date();
       const cpName = cell1.replace(/\d{20}/g, '').replace(/ИНН.*$/i, '').replace(/\s+/g, ' ').trim().slice(0, 255) || null;
 
       newRows.push({
@@ -918,6 +930,11 @@ export class ImportService {
         ? Math.abs((parsed.opening ?? 0) + netCalc - parsed.closing) < 0.5
         : null;
 
+    // Import davri (haqiqiy kun min/max, Toshkent) — becfil-exclusion oralig'i shu bo'ladi
+    const tashDay = (d: Date | null) => (d ? new Date(d.getTime() + 5 * 3600 * 1000).toISOString().slice(0, 10) : null);
+    const periodFrom = tashDay(minTxn);
+    const periodTo = tashDay(maxTxn);
+
     const previewId = randomUUID();
     const expiresAt = Date.now() + ImportService.HAMKOR_PREVIEW_TTL_MS;
 
@@ -935,6 +952,8 @@ export class ImportService {
       duplicatesInFile,
       errors: errorRows.length,
       integrityOk,
+      periodFrom,
+      periodTo,
       importedBy,
       expiresAt,
     });
@@ -963,6 +982,8 @@ export class ImportService {
       errors: errorRows.length,
       errorRows: errorRows.slice(0, 100),
       skippedRows,
+      periodFrom,
+      periodTo,
       duration,
       expiresAt: new Date(expiresAt).toISOString(),
     };
@@ -1072,6 +1093,27 @@ export class ImportService {
     const duration = Math.round((Date.now() - started) / 1000);
     this.log.log(`Hamkor vipiska commit ${previewId.slice(0, 8)}: +${result.added}, skip ${result.skipped}, xato ${result.errors}, acc ${state.accountNo}`);
 
+    // ── BECFIL-EXCLUSION (avtomat) ──
+    // Import qilingan davrni byacc/becfil qayta OLMASIN (dublikat bo'lmasin). Foydalanuvchi
+    // keyin tahrirlashi/o'chirishi mumkin. Davr = import qilingan haqiqiy kunlar min–max.
+    if (state.periodFrom && state.periodTo) {
+      try {
+        await this.prisma.syncExclusionRange.create({
+          data: {
+            accountId: state.accountId,
+            dateFrom: new Date(state.periodFrom + 'T00:00:00Z'),
+            dateTo: new Date(state.periodTo + 'T00:00:00Z'),
+            note: `Vipiska import (${state.fileName || ''})`.slice(0, 255),
+            source: 'import',
+            createdBy: actor,
+          },
+        });
+        this.log.log(`Hamkor becfil-exclusion: acc ${state.accountNo} [${state.periodFrom} .. ${state.periodTo}]`);
+      } catch (e: any) {
+        this.log.warn(`Hamkor exclusion yaratishda xato: ${e?.message}`);
+      }
+    }
+
     // ── AVTO-KATEGORIYALASH (fon) ──
     // byacc sync kabi: import qilingan yozuvlarga shartnoma raqamini izohdan ajratib,
     // CRM bilan tekshirib kategoriya qo'yamiz. Commit javobini KUTKAZMAYDI (fire-and-forget),
@@ -1102,6 +1144,70 @@ export class ImportService {
     const had = this.hamkorPreviewCache.has(previewId);
     this.hamkorPreviewCache.delete(previewId);
     return { ok: true, canceled: had };
+  }
+
+  // ── BECFIL-EXCLUSION oraliqlari (byacc/becfil olmaydigan davr) ──
+
+  /** Ro'yxat — ixtiyoriy accountNo bo'yicha filtrlab. */
+  async listHamkorExclusions(accountNo?: string) {
+    const where: any = {};
+    if (accountNo) {
+      const acc = await this.prisma.bankAccount.findFirst({ where: { accountNo }, select: { id: true } });
+      where.accountId = acc?.id || '__none__';
+    }
+    const rows = await this.prisma.syncExclusionRange.findMany({
+      where,
+      orderBy: { dateFrom: 'desc' },
+      include: { account: { select: { accountNo: true, ownerName: true } } },
+      take: 500,
+    });
+    return {
+      ok: true,
+      items: rows.map((r) => ({
+        id: r.id,
+        accountNo: r.account?.accountNo || null,
+        ownerName: r.account?.ownerName || null,
+        dateFrom: r.dateFrom.toISOString().slice(0, 10),
+        dateTo: r.dateTo.toISOString().slice(0, 10),
+        note: r.note,
+        source: r.source,
+        createdAt: r.createdAt,
+      })),
+    };
+  }
+
+  /** Qo'lda oraliq qo'shish (foydalanuvchi 2 sana kiritadi). */
+  async addHamkorExclusion(accountNo: string, from: string, to: string, by?: string) {
+    if (!accountNo) throw new BadRequestException('Hisob raqami kerak');
+    const acc = await this.prisma.bankAccount.findFirst({ where: { accountNo }, select: { id: true } });
+    if (!acc) throw new BadRequestException(`Hisob topilmadi: ${accountNo}`);
+    // yyyy-mm-dd (HTML date input) yoki dd.mm.yyyy → yyyy-mm-dd
+    const toDay = (s: string): string | null => {
+      const t = String(s || '').trim();
+      let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(t);
+      if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+      return null;
+    };
+    const fromDay = toDay(from);
+    const toDayStr = toDay(to);
+    if (!fromDay || !toDayStr) throw new BadRequestException("Sana noto'g'ri (yyyy-mm-dd yoki dd.mm.yyyy)");
+    // @db.Date — kun boshini UTC bilan
+    let a = new Date(fromDay + 'T00:00:00Z');
+    let b = new Date(toDayStr + 'T00:00:00Z');
+    if (a > b) { const t = a; a = b; b = t; } // tartib
+    const created = await this.prisma.syncExclusionRange.create({
+      data: { accountId: acc.id, dateFrom: a, dateTo: b, note: 'Qo\'lda qo\'shilgan', source: 'manual', createdBy: by?.slice(0, 190) || null },
+    });
+    return { ok: true, id: created.id };
+  }
+
+  async deleteHamkorExclusion(id: string) {
+    await this.prisma.syncExclusionRange.delete({ where: { id } }).catch(() => {
+      throw new BadRequestException('Oraliq topilmadi');
+    });
+    return { ok: true };
   }
 
   // ═══ BATCH MANAGEMENT ═══════════════════════════════════════════════
