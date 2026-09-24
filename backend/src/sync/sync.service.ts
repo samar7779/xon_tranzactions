@@ -800,12 +800,15 @@ export class SyncService implements OnModuleInit {
     const valueDate = this.parseKbDateOnly(item.vdate);
     const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
 
-    // ── HAMKOR BECFIL-EXCLUSION ──
-    // Vipiska QO'LDA import qilingan sana oralig'idagi to'lovlarni byacc/becfil OLMAYDI —
-    // ustma-ustlik (va dublikat) bo'lmasin. Faqat Hamkor; haqiqiy to'lov kuni (txnDate) bo'yicha.
-    if (bankCode === 'HAMKORBANK' && (await this.isDateExcluded(accountId, txnDate))) {
-      return false; // qo'lda import qilingan davr — yangi yozuv yaratilmaydi
-    }
+    // ── HAMKOR BECFIL-EXCLUSION (O'CHIRILGAN) ──
+    // ⚠️ Bu tekshiruv KUNLIK SYNC'ni sindirdi: Hamkor karta to'lovlari SETTLEMENT partiya
+    // bo'lib keladi — byacc bugungi kunni (bankDay) so'raganда, HAQIQIY sanasi o'tgan
+    // (import qilingan) davrga tushadigan to'lovlar keladi. Exclusion haqiqiy sana bo'yicha
+    // tekshirгani uchun ularni (va yangilarini ham) noto'g'ri skip qilardi. byacc backfill
+    // baribir bank tomonidan buzuq (-899/502) — exclusion hozir kerak emas. Dublikatni
+    // `@@unique([accountId, hbDedupKey])` + P2002 baribir to'xtatadi (import↔sync).
+    // (Kelajakda byacc backfill tuzalсa — exclusion FAQAT backfill'ga, kunlik sync'ga emas,
+    //  qayta qo'shiladi.)
 
     // Mavjudligini tekshirish — FAQAT shu account doirasida
     // 1) Standard dedup: externalId/b2_id/general_id/bankB2Id
