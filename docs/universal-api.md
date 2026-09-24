@@ -44,7 +44,7 @@ Kalit ikki qismdan iborat:
 | **Key ID** | `xk_live_...` | ochiq, ro'yxatda ham ko'rinadi |
 | **Secret** | `xs_live_...` | maxfiy, faqat yaratishda ko'rsatiladi |
 
-Kalitni keyinchalik **bekor qilish** (deaktivatsiya) mumkin — ro'yxatdagi amallar ustunidan.
+Kalitni keyinchalik ro'yxatdagi **qalam** tugmasi orqali **tahrirlash** (nom, tavsif, scope, muddat, IP whitelist) yoki **bekor qilish** (deaktivatsiya) mumkin. Secret esa tahrirlanmaydi va qayta ko'rsatilmaydi.
 
 ---
 
@@ -81,6 +81,8 @@ U yerda:
 - chap tomonda barcha endpoint'lar, **"UNIVERSAL (3 QOIDA)"** bo'limi bilan;
 - o'rtada parametrlarni to'ldirib **"Ishga tushirish"**;
 - o'ng tomonda javob va **cURL / Node.js / PHP / Python** uchun tayyor kod.
+
+> ⚠️ Bu manzillar **HTTP so'rov**, terminal buyrug'i emas. `GET /universal/objects` ni to'g'ridan-to'g'ri serverning shell'iga yozmang — aks holda `Command 'GET' not found` chiqadi. Ularni brauzerga, Postman'ga yoki yuqoridagi `curl` ichiga qo'ying.
 
 ---
 
@@ -455,7 +457,9 @@ Filtr qurish uchun tayyor ro'yxatlar. Parametr kerak emas.
 
 ## 9. Kod misollari
 
-Quyidagi misollarda `KEY` va `SECRET` o'rniga o'z kalitlaringizni qo'ying.
+Misollardagi `xk_live_...` va `xs_live_...` o'rniga o'z kalitlaringizni qo'ying.
+
+> Kalitni kod ichiga yozib qo'ymang — muhit o'zgaruvchisida (`XON_KEY`, `XON_SECRET`) saqlang va git'ga tushirmang.
 
 ### cURL
 
@@ -611,7 +615,7 @@ GET /universal/statement?account=...&dateFrom=...&direction=OUT&minAmount=100000
 6. **`banks` parametri obyekt endpoint'larida bank ID kutadi**, `accounts`/`statement` da esa **kod ham, id ham** bo'ladi. Id'ni `/filters` dan oling.
 7. **CRM filtrlari** (`crmStatuses`, `propertyTypes`, `branches`) CRM'da tasdiqlangan shartnomalarga tegishli. CRM'da topilmagan shartnoma bu filtrlarga tushmaydi.
 8. **Obyekt `—`** — obyekt biriktirilmagan to'lovlar. Filtrda ham xuddi shu belgi ishlatiladi.
-9. **Vaqt mintaqasi** — Toshkent (+05:00). Sanalar javobda UTC ko'rinishida (`Z` bilan) qaytadi, lekin filtr +05:00 bo'yicha hisoblanadi.
+9. **Vaqt mintaqasi** — `statement` da kun chegarasi Toshkent (+05:00) bo'yicha hisoblanadi; obyekt endpoint'larida to'lov sanasi vaqtsiz kalendar sana, mintaqa ta'sir qilmaydi. Javobdagi sanalar har doim UTC ko'rinishida (`Z` bilan) qaytadi.
 10. **Ba'zi eski tranzaksiyalarda `time` bo'sh** — bank o'sha yozuvda vaqt yubormagan.
 11. **IP whitelist** yoqilgan bo'lsa, serveringiz IP'si o'zgarganda `401` chiqadi — kalit sozlamasidan yangilang.
 
