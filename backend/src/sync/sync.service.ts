@@ -791,10 +791,13 @@ export class SyncService implements OnModuleInit {
     // to'lovlar bitta kunga tiqilib qolmasin; vipiska/CRM bilan mos). Bo'lmasa (Kapital/Ipak/
     // oddiy o'tkazma) — AVVALGIDEK item.ddate'dan. ⚠️ externalId/composite DOIM ddate bo'yicha
     // (makeCompositeId item.ddate ishlatadi) — ОплатыКв bog'lanishi buzilmaydi.
-    const txnDate = (item.txnDate1C
-      ? this.buildTxnDateTime(item.txnDate1C)        // o'z vaqti bilan
-      : this.buildTxnDateTime(item.ddate, item.time, item.stime, item.input_time))
-      || this.parseKbDate(item.txnDate1C || item.ddate)
+    // txnDate = pul HISOBGA TUSHGAN sana (docDate/ddate) — Kapital/Ipak bilan bir xil,
+    // bank vipiskasidagi "Дата" ustuniga MOS. (Ilgari Время транзакции = karta surilgan
+    // vaqt ishlatilardi — bu NOTO'G'RI edi; user hisobga tushgan sanani so'radi.)
+    // Eslatma: item.txnDate1C hali normalizeItem'da ajratiladi va pastdagi date-shift
+    // changelog gate + ОплатыКв kaskadida ishlatiladi (Hamkor karta to'lovi belgisi sifatida).
+    const txnDate = this.buildTxnDateTime(item.ddate, item.time, item.stime, item.input_time)
+      || this.parseKbDate(item.ddate)
       || new Date();
     // valueDate — @db.Date ustuni: UTC peshin bilan (TZ siljishi kun almashtirib yubormasin)
     const valueDate = this.parseKbDateOnly(item.vdate);

@@ -876,10 +876,9 @@ export class ImportService {
       const accCt = direction === 'IN' ? own : cpAcc; // kirimda biz kreditormiz
       const accDt = direction === 'IN' ? cpAcc : own;
 
-      // sana — HAQIQIY kun (Время транзакции) bo'lsa, aks holda Дата (byacc bilan bir xil).
-      // becfil-exclusion oralig'i shu haqiqiy kunlar bo'yicha (byacc ham shuni ishlatadi).
-      const actual = this.actualDateFromPurpose(purpose);
-      const txnDate = (actual ? this.parseHamkorDateTime(actual) : null) || this.parseHamkorDateTime(dat) || new Date();
+      // sana — pul HISOBGA TUSHGAN sana = "Дата" ustuni (dat). byacc'ning ddate/docDate'siga
+      // MOS (Kapital/Ipak bilan ham bir xil). (Ilgari Время транзакции ishlatilardi — noto'g'ri.)
+      const txnDate = this.parseHamkorDateTime(dat) || new Date();
       // Butun import davri (dublikatlar ham) — exclusion oralig'ini aniqlash uchun
       if (!minTxn || txnDate < minTxn) minTxn = txnDate;
       if (!maxTxn || txnDate > maxTxn) maxTxn = txnDate;
