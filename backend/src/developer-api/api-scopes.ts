@@ -8,6 +8,7 @@ export const API_SCOPES = {
   OPLATA_KV_READ: 'oplatakv:read',
   ACCOUNTS_READ: 'accounts:read',
   COUNTERPARTIES_READ: 'counterparties:read',
+  UNIVERSAL_READ: 'universal:read',
 } as const;
 
 export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];
@@ -36,6 +37,13 @@ export const API_SCOPE_CATALOG: ApiScopeMeta[] = [
     value: API_SCOPES.ACCOUNTS_READ,
     label: 'Hisob raqamlar — o\'qish',
     description: 'Bank hisob raqamlari ro\'yxati: hisob raqami, bank, egasi, qoldiq. ' +
+      'Login, parol va API credentials BERILMAYDI.',
+  },
+  {
+    value: API_SCOPES.UNIVERSAL_READ,
+    label: 'Universal — o\'qish',
+    description: 'Uchta hisobot bitta kalitda: (1) obyektlar bo\'yicha to\'lovlar — sana/oraliq va ' +
+      'panel filtrlari bilan, shartnoma kesimigacha; (2) bank hisoblari va qoldiqlar; (3) vipiska. ' +
       'Login, parol va API credentials BERILMAYDI.',
   },
   {

@@ -43,7 +43,7 @@ interface EndpointParam {
 interface Endpoint {
   method: 'GET' | 'POST';
   path: string;
-  groupKey: 'start' | 'meta' | 'transactions' | 'oplatakv' | 'accounts' | 'counterparties';
+  groupKey: 'start' | 'meta' | 'universal' | 'transactions' | 'oplatakv' | 'accounts' | 'counterparties';
   titleKey: string;
   descKey: string;
   scope?: string;
@@ -122,6 +122,86 @@ const ENDPOINTS: Endpoint[] = [
   },
 
   {
+    method: 'GET', path: '/api/v1/universal/objects', groupKey: 'universal',
+    titleKey: 'uniObjT', descKey: 'uniObjD', scope: 'universal:read',
+    params: [
+      { name: 'date', in: 'query', descKey: 'uniDate', example: '2026-09-24' },
+      { name: 'dateFrom', in: 'query', descKey: 'uniFrom', example: '2026-09-01' },
+      { name: 'dateTo', in: 'query', descKey: 'uniTo', example: '2026-09-24' },
+      { name: 'mode', in: 'query', descKey: 'uniMode', example: 'normal' },
+      { name: 'includeSchotchik', in: 'query', descKey: 'uniSch', example: '' },
+      { name: 'crmStatuses', in: 'query', descKey: 'uniCrm', example: '' },
+      { name: 'propertyTypes', in: 'query', descKey: 'uniType', example: '' },
+      { name: 'branches', in: 'query', descKey: 'uniBranch', example: '' },
+      { name: 'banks', in: 'query', descKey: 'uniBanks', example: '' },
+      { name: 'withContracts', in: 'query', descKey: 'uniWithC', example: '1' },
+    ],
+  },
+  {
+    method: 'GET', path: '/api/v1/universal/objects/contracts', groupKey: 'universal',
+    titleKey: 'uniConT', descKey: 'uniConD', scope: 'universal:read',
+    params: [
+      { name: 'date', in: 'query', descKey: 'uniDate', example: '2026-09-24' },
+      { name: 'dateFrom', in: 'query', descKey: 'uniFrom', example: '2026-09-01' },
+      { name: 'dateTo', in: 'query', descKey: 'uniTo', example: '2026-09-24' },
+      { name: 'mode', in: 'query', descKey: 'uniMode', example: 'normal' },
+      { name: 'includeSchotchik', in: 'query', descKey: 'uniSch', example: '' },
+      { name: 'crmStatuses', in: 'query', descKey: 'uniCrm', example: '' },
+      { name: 'propertyTypes', in: 'query', descKey: 'uniType', example: '' },
+      { name: 'branches', in: 'query', descKey: 'uniBranch', example: '' },
+      { name: 'banks', in: 'query', descKey: 'uniBanks', example: '' },
+      { name: 'object', in: 'query', descKey: 'uniObject', example: '' },
+    ],
+  },
+  {
+    method: 'GET', path: '/api/v1/universal/objects/payments', groupKey: 'universal',
+    titleKey: 'uniPayT', descKey: 'uniPayD', scope: 'universal:read',
+    params: [
+      { name: 'date', in: 'query', descKey: 'uniDate', example: '2026-09-24' },
+      { name: 'dateFrom', in: 'query', descKey: 'uniFrom', example: '2026-09-01' },
+      { name: 'dateTo', in: 'query', descKey: 'uniTo', example: '2026-09-24' },
+      { name: 'mode', in: 'query', descKey: 'uniMode', example: 'normal' },
+      { name: 'includeSchotchik', in: 'query', descKey: 'uniSch', example: '' },
+      { name: 'crmStatuses', in: 'query', descKey: 'uniCrm', example: '' },
+      { name: 'propertyTypes', in: 'query', descKey: 'uniType', example: '' },
+      { name: 'branches', in: 'query', descKey: 'uniBranch', example: '' },
+      { name: 'banks', in: 'query', descKey: 'uniBanks', example: '' },
+      { name: 'object', in: 'query', descKey: 'uniObject', example: '' },
+    ],
+  },
+  {
+    method: 'GET', path: '/api/v1/universal/accounts', groupKey: 'universal',
+    titleKey: 'uniAccT', descKey: 'uniAccD', scope: 'universal:read',
+    params: [
+      { name: 'bank', in: 'query', descKey: 'uniBank', example: 'HAMKORBANK' },
+      { name: 'allBanks', in: 'query', descKey: 'uniAllB', example: '' },
+      { name: 'syncOnly', in: 'query', descKey: 'uniSyncO', example: '' },
+      { name: 'q', in: 'query', descKey: 'uniQ', example: '' },
+    ],
+  },
+  {
+    method: 'GET', path: '/api/v1/universal/statement', groupKey: 'universal',
+    titleKey: 'uniStmT', descKey: 'uniStmD', scope: 'universal:read',
+    params: [
+      { name: 'account', in: 'query', descKey: 'uniAcc', example: '20208000305409155002' },
+      { name: 'bank', in: 'query', descKey: 'uniBank', example: '' },
+      { name: 'dateFrom', in: 'query', descKey: 'uniFrom', example: '2026-09-01' },
+      { name: 'dateTo', in: 'query', descKey: 'uniTo', example: '2026-09-24' },
+      { name: 'direction', in: 'query', descKey: 'uniDir', example: '' },
+      { name: 'q', in: 'query', descKey: 'uniQ2', example: '' },
+      { name: 'contractNo', in: 'query', descKey: 'uniCon', example: '' },
+      { name: 'minAmount', in: 'query', descKey: 'uniMin', example: '' },
+      { name: 'maxAmount', in: 'query', descKey: 'uniMax', example: '' },
+      { name: 'limit', in: 'query', descKey: 'uniLim', example: '1000' },
+      { name: 'offset', in: 'query', descKey: 'uniOff', example: '0' },
+    ],
+  },
+  {
+    method: 'GET', path: '/api/v1/universal/filters', groupKey: 'universal',
+    titleKey: 'uniFltT', descKey: 'uniFltD', scope: 'universal:read',
+  },
+
+  {
     method: 'GET', path: '/api/v1/accounts', groupKey: 'accounts',
     titleKey: 'acListT', descKey: 'acListD', scope: 'accounts:read',
     params: [{ name: 'q', in: 'query', descKey: 'qAccount', example: '' }],
@@ -148,7 +228,7 @@ const ENDPOINTS: Endpoint[] = [
   },
 ];
 
-const groupOrder: Array<Endpoint['groupKey']> = ['start', 'meta', 'transactions', 'oplatakv', 'accounts', 'counterparties'];
+const groupOrder: Array<Endpoint['groupKey']> = ['start', 'meta', 'universal', 'transactions', 'oplatakv', 'accounts', 'counterparties'];
 
 // ════════════════════════════════════════════════════════
 // FLAG ICONS

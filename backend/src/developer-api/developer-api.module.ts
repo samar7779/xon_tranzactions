@@ -5,6 +5,8 @@ import { PublicApiController } from './public-api.controller';
 import { ApiKeyAuthGuard } from './guards/api-key-auth.guard';
 import { ApiLoggerInterceptor } from './interceptors/api-logger.interceptor';
 import { CrmModule } from '../crm/crm.module';
+import { OplataKvModule } from '../oplata-kv/oplata-kv.module';
+import { UniversalApiController } from './universal-api.controller';
 
 /**
  * Tashqi tizim integratsiyasi uchun REST API:
@@ -12,8 +14,8 @@ import { CrmModule } from '../crm/crm.module';
  *   - Public endpoint'lar (/api/v1/*) — X-API-Key + X-API-Secret bilan
  */
 @Module({
-  imports: [CrmModule],
-  controllers: [ApiKeyAdminController, PublicApiController],
+  imports: [CrmModule, OplataKvModule],
+  controllers: [ApiKeyAdminController, PublicApiController, UniversalApiController],
   providers: [ApiKeyService, ApiKeyAuthGuard, ApiLoggerInterceptor],
   exports: [ApiKeyService],
 })

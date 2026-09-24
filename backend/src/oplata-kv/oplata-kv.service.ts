@@ -22,6 +22,14 @@ import {
 
 type Actor = { id?: string | null; name?: string | null };
 
+/** Obyekt hisoboti (dashboard + Universal API) filtrlari */
+export type ObjectReportOpts = {
+  dateFrom?: string; dateTo?: string;
+  mode?: 'normal' | 'refund';
+  includeSchotchik?: boolean;
+  crmStatuses?: string; propertyTypes?: string; branches?: string; banks?: string;
+};
+
 export interface ImportResult {
   total: number;
   added: number;
@@ -1004,7 +1012,90 @@ export class OplataKvService {
    * Obyektlar bo'yicha to'lovlar yig'indisi — Telegram hisobotidagi kabi:
    * har obyekt uchun Сумма оплаты / 1 взнос / Ойлик, + umumiy ЖАМИ.
    */
-  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean; crmStatuses?: string; propertyTypes?: string; branches?: string; banks?: string } = {}) {
+  /**
+   * SHARTNOMA kesimi — obyekt hisobotidagi ayni filtrlar bilan, lekin
+   * guruhlash obyekt + shartnoma bo'yicha. "Bu to'lovlar qaysi shartnomalardan
+   * tushgan?" degan savolga javob beradi (Universal API uchun).
+   */
+  async byObjectContracts(opts: ObjectReportOpts & { object?: string } = {}) {
+    const where = await this.buildObjectReportWhere(opts);
+    if (opts.object && opts.object !== '__ALL__') {
+      if (opts.object === '—') where.OR = [{ object: null }, { object: '' }];
+      else where.object = opts.object;
+    }
+
+    type Row = { object: string; contractNo: string; client: string | null; paymentAmount: number; firstInstallment: number; monthlyAmount: number; count: number };
+    const acc = new Map<string, Row>();
+    const qo = (o: string | null, c: string) => `${o ?? ''}||${c}`;
+
+    if (opts.banks && opts.banks.trim()) {
+      // Bank filtri — tranzaksiya orqali aniqlanadi, SQL groupBy'da yo'q
+      const all = await this.prisma.oplataKv.findMany({
+        where,
+        select: {
+          object: true, contractNo: true, client: true, sourceTxId: true,
+          paymentAmount: true, firstInstallment: true, monthlyAmount: true,
+        },
+      });
+      for (const r of await this.filterRowsByBank(all, opts.banks)) {
+        const k = qo(r.object, r.contractNo);
+        const g = acc.get(k) ?? { object: r.object || '—', contractNo: r.contractNo, client: r.client, paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0, count: 0 };
+        g.paymentAmount    += Number(r.paymentAmount    ?? 0);
+        g.firstInstallment += Number(r.firstInstallment ?? 0);
+        g.monthlyAmount    += Number(r.monthlyAmount    ?? 0);
+        g.count++;
+        if (!g.client && r.client) g.client = r.client;
+        acc.set(k, g);
+      }
+    } else {
+      const grouped = await (this.prisma.oplataKv.groupBy as any)({
+        by: ['object', 'contractNo'],
+        where,
+        _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
+        _count: true,
+      });
+      for (const g of grouped as any[]) {
+        acc.set(qo(g.object, g.contractNo), {
+          object: g.object || '—',
+          contractNo: g.contractNo,
+          client: null,
+          paymentAmount:    Number(g._sum.paymentAmount    ?? 0),
+          firstInstallment: Number(g._sum.firstInstallment ?? 0),
+          monthlyAmount:    Number(g._sum.monthlyAmount    ?? 0),
+          count: g._count,
+        });
+      }
+      // Mijoz nomini to'ldiramiz (groupBy'da yo'q)
+      const nos = Array.from(new Set(Array.from(acc.values()).map((r) => r.contractNo))).slice(0, 5000);
+      if (nos.length) {
+        const named = await this.prisma.oplataKv.findMany({
+          where: { contractNo: { in: nos }, client: { not: null } },
+          select: { contractNo: true, client: true },
+          distinct: ['contractNo'],
+        });
+        const byNo = new Map(named.map((n) => [n.contractNo, n.client]));
+        for (const r of acc.values()) r.client = byNo.get(r.contractNo) ?? null;
+      }
+    }
+
+    const rows = Array.from(acc.values()).sort(
+      (a, b) => a.object.localeCompare(b.object, 'ru') || b.paymentAmount - a.paymentAmount,
+    );
+    const total = rows.reduce(
+      (t, r) => ({
+        paymentAmount: t.paymentAmount + r.paymentAmount,
+        firstInstallment: t.firstInstallment + r.firstInstallment,
+        monthlyAmount: t.monthlyAmount + r.monthlyAmount,
+        count: t.count + r.count,
+      }),
+      { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0, count: 0 },
+    );
+    return { ok: true as const, rows, total };
+  }
+
+  /** Obyekt hisoboti filtrlari — byObject / byObjectContracts uchun umumiy. */
+  async buildObjectReportWhere(opts: ObjectReportOpts = {}): Promise<any> {
+
     const where: any = {};
     if (opts.dateFrom || opts.dateTo) {
       const range: any = {};
@@ -1049,6 +1140,11 @@ export class OplataKvService {
       const bf = await this.buildBranchFilter(opts.branches);
       if (bf) where.AND = [...(where.AND || []), bf];
     }
+    return where;
+  }
+
+  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean; crmStatuses?: string; propertyTypes?: string; branches?: string; banks?: string } = {}) {
+    const where = await this.buildObjectReportWhere(opts);
 
     type Grouped = Array<{ object: string | null; _sum: { paymentAmount: any; firstInstallment: any; monthlyAmount: any }; _count: number }>;
     let grouped: Grouped;
