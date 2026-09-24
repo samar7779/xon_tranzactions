@@ -352,50 +352,65 @@ export class MemorialOrderService {
     let accounts = allAccounts.filter((a) => recipientAccts.has(a.accountNo));
     if (!accounts.length) accounts = allAccounts;
 
-    // Kerakli sanalar — har to'lov sanasi ±1 kun (bank sanasi biroz farq qilishi mumkin)
-    const dates = new Set<string>();
-    for (const i of need) {
+    // ── Sanalar IKKI BOSQICHDA so'raladi ──
+    // Ilgari har to'lov uchun darrov 3 kun (o'zi ±1) so'ralardi va 90 ta so'rov
+    // chegarasi tez tugab, to'lovlarning ko'pi umuman so'ralmay qolardi
+    // (masalan: 48 ta to'lov → 139 kun kerak, 90 tasi so'ralgan).
+    // Endi: 1-bosqich — faqat ANIQ sanalar; 2-bosqich — topilmay qolganlari uchun ±1 kun.
+    const aniqSana = (i: number): string | null => {
       const base = rows[i].date as Date;
-      if (!(base instanceof Date) || isNaN(base.getTime())) continue;
-      for (const off of [0, -1, 1]) {
-        const s = this.toApiDate(new Date(base.getTime() + off * 86_400_000));
-        if (s) dates.add(s);
-      }
+      if (!(base instanceof Date) || isNaN(base.getTime())) return null;
+      return this.toApiDate(base);
+    };
+    const bosqich1 = new Set<string>();
+    for (const i of need) {
+      const s = aniqSana(i);
+      if (s) bosqich1.add(s);
     }
-    if (!dates.size) return;
+    if (!bosqich1.size) return;
 
-    // getDoc1C — har (hisob, sana) uchun, cheklangan
-    const MAX_CALLS = 90;
+    const MAX_CALLS = 250;
     let calls = 0;
     const pool: KbDoc1CItem[] = [];
-    for (const acc of accounts) {
-      const cred: any = (acc as any).credential;
-      const bank = cred?.bank;
-      if (!bank?.apiBaseUrl || !cred?.passwordEnc) continue;
-      let password: string;
-      try { password = this.crypto.decrypt(cred.passwordEnc); } catch { continue; }
-      const login = (cred.loginPrefix || '') + cred.loginName;
-      for (const date of dates) {
-        if (calls >= MAX_CALLS) break;
-        calls++;
-        try {
-          const result = await this.kb.getDoc1C({
-            baseUrl: bank.apiBaseUrl,
-            login,
-            password,
-            branch: acc.branch,
-            account: acc.accountNo,
-            date,
-            useProxy: cred.useProxy === true,
-          });
-          for (const it of result?.content || []) pool.push(it);
-        } catch (e: any) {
-          this.log.warn(`getDoc1C ${acc.accountNo} ${date}: ${e?.message}`);
+    const solingan = new Set<string>(); // (hisob|sana) — takror so'ramaslik uchun
+    /** Berilgan sanalarni bankdan o'qib pool'ga qo'shadi; nechta so'rov ketganini qaytaradi */
+    const bankdanOl = async (dates: Set<string>) => {
+      for (const acc of accounts) {
+        const cred: any = (acc as any).credential;
+        const bank = cred?.bank;
+        if (!bank?.apiBaseUrl || !cred?.passwordEnc) continue;
+        let password: string;
+        try { password = this.crypto.decrypt(cred.passwordEnc); } catch { continue; }
+        const login = (cred.loginPrefix || '') + cred.loginName;
+        for (const date of dates) {
+          const kalit = `${acc.accountNo}|${date}`;
+          if (solingan.has(kalit)) continue;
+          if (calls >= MAX_CALLS) return;
+          solingan.add(kalit);
+          calls++;
+          try {
+            const result = await this.kb.getDoc1C({
+              baseUrl: bank.apiBaseUrl,
+              login,
+              password,
+              branch: acc.branch,
+              account: acc.accountNo,
+              date,
+              useProxy: cred.useProxy === true,
+            });
+            for (const it of result?.content || []) pool.push(it);
+          } catch (e: any) {
+            this.log.warn(`getDoc1C ${acc.accountNo} ${date}: ${e?.message}`);
+          }
         }
       }
-      if (calls >= MAX_CALLS) break;
-    }
-    this.log.log(`Мем.ордер bankdan: contract=${contractNo} need=${need.length} accounts=${accounts.length} dates=${dates.size} calls=${calls} pool=${pool.length}`);
+    };
+
+    await bankdanOl(bosqich1);
+    this.log.log(
+      `Мем.ордер bankdan (1-bosqich): contract=${contractNo} need=${need.length} ` +
+      `accounts=${accounts.length} dates=${bosqich1.size} calls=${calls} pool=${pool.length}`,
+    );
     if (!pool.length) return;
 
     // Mos to'lovni topish: summa (deyarli) teng + shartnoma № purpose ichida + SANA yaqin.
@@ -415,7 +430,11 @@ export class MemorialOrderService {
 
     const used = new Set<string>();
     let filled = 0;
-    for (const i of need) {
+    const qolgan = new Set<number>(need); // hali to'ldirilmagan qatorlar
+
+    /** pool'dagi hujjatlarni hali bo'sh qatorlarga moslaydi */
+    const mosla = () => {
+    for (const i of Array.from(qolgan)) {
       const amt = Number(rows[i].paymentAmount ?? blocks[i].amount ?? 0);
       const rowDate = rows[i].date instanceof Date ? (rows[i].date as Date) : null;
       let best: KbDoc1CItem | undefined;
@@ -443,12 +462,44 @@ export class MemorialOrderService {
       if (best) {
         blocks[i] = this.blockFromBankItem(best);
         used.add(keyOf(best));
+        qolgan.delete(i);
         filled++;
       }
       // Topilmasa — blok "нет данных" bo'lib qoladi. Bu NOTO'G'RI order
       // ko'rsatishdan ko'ra to'g'riroq (reyestrda "Без данных" hisoblanadi).
     }
-    this.log.log(`Мем.ордер bankdan to'ldirildi: ${filled}/${need.length} (takrorsiz, sana ±${MAX_DAY_GAP} kun)`);
+    };
+
+    mosla();
+
+    // ── 2-BOSQICH ──
+    // Hali to'ldirilmaganlar uchun qo'shni kunlarni (±1) so'raymiz: bank sanasi
+    // to'lov sanasidan bir kun farq qilishi mumkin. Budjet qolgan bo'lsagina.
+    if (qolgan.size > 0 && calls < MAX_CALLS) {
+      const bosqich2 = new Set<string>();
+      for (const i of qolgan) {
+        const base = rows[i].date as Date;
+        if (!(base instanceof Date) || isNaN(base.getTime())) continue;
+        for (const off of [-1, 1]) {
+          const s = this.toApiDate(new Date(base.getTime() + off * 86_400_000));
+          if (s) bosqich2.add(s);
+        }
+      }
+      if (bosqich2.size) {
+        const oldingiPool = pool.length;
+        await bankdanOl(bosqich2);
+        this.log.log(
+          `Мем.ордер bankdan (2-bosqich): qolgan=${qolgan.size} dates=${bosqich2.size} ` +
+          `calls=${calls} yangi=${pool.length - oldingiPool}`,
+        );
+        if (pool.length > oldingiPool) mosla();
+      }
+    }
+
+    this.log.log(
+      `Мем.ордер bankdan to'ldirildi: ${filled}/${need.length} ` +
+      `(qolgan ${qolgan.size}, so'rov ${calls}/${MAX_CALLS}, sana ±${MAX_DAY_GAP} kun)`,
+    );
   }
 
   private blockFromBankItem(it: KbDoc1CItem): OrderBlock {
