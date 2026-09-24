@@ -1,7 +1,9 @@
-import { Controller, Get, Query, UseGuards, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards, UseInterceptors, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
+import { StatementService } from '../transactions/statement.service';
 import { ApiKeyAuthGuard } from './guards/api-key-auth.guard';
 import { ApiLoggerInterceptor } from './interceptors/api-logger.interceptor';
 import { RequireApiScopes } from './decorators/api-scopes.decorator';
@@ -32,7 +34,13 @@ export class UniversalApiController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly oplataKv: OplataKvService,
+    private readonly statementSvc: StatementService,
   ) {}
+
+  /** Toshkent (UTC+5) bo'yicha bugungi kun — YYYY-MM-DD. */
+  private bugun(): string {
+    return new Date(Date.now() + 5 * 3_600_000).toISOString().slice(0, 10);
+  }
 
   /** `date` berilsa bitta kunga aylantiradi; aks holda dateFrom/dateTo. */
   private sanalar(date?: string, dateFrom?: string, dateTo?: string) {
@@ -398,6 +406,58 @@ export class UniversalApiController {
           : null,
       })),
     };
+  }
+
+  /**
+   * Paneldagi "Vipiska" tugmasi beradigan AYNAN o'sha Excel — bankning rasmiy
+   * «Выписка лицевых счетов» hujjati. Ma'lumot bazadan emas, to'g'ridan-to'g'ri
+   * bankdan (GetDoc1C) kunma-kun olinadi, shuning uchun sekinroq ishlaydi.
+   *
+   * Telegram bot shu faylni yuklab olib foydalanuvchiga uzatadi — bot o'zi
+   * hech narsa yasamaydi, panel bilan bir xil hujjat chiqadi.
+   *
+   * Sana berilmasa — bugungi kun (Toshkent).
+   * ⚠️ Hozircha faqat KAPITALBANK_V3 hisoblari; boshqa bankda xato qaytadi.
+   */
+  @Get('statement.xlsx')
+  @RequireApiScopes(API_SCOPES.UNIVERSAL_READ)
+  @ApiOperation({
+    summary: 'Bank vipiskasi — Excel fayl (paneldagi bilan aynan bir xil)',
+    description:
+      "account — hisob raqami yoki id (majburiy). Sana: date, yoki dateFrom+dateTo; " +
+      "berilmasa bugungi kun olinadi. Javob — .xlsx fayl (JSON emas). " +
+      "Ma'lumot bankdan jonli olinadi, davr 92 kundan oshmasligi kerak. " +
+      "Faqat Kapitalbank hisoblari uchun ishlaydi.",
+  })
+  async statementXlsx(
+    @Res() res: Response,
+    @Query('account') account?: string,
+    @Query('date') date?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    if (!account || !account.trim()) {
+      throw new BadRequestException('account (hisob raqami yoki id) berilishi kerak');
+    }
+    const t = account.trim();
+    const acc = await this.prisma.bankAccount.findFirst({
+      where: { OR: [{ accountNo: t }, { id: t }] },
+      select: { id: true },
+    });
+    if (!acc) throw new NotFoundException(`Hisob topilmadi: ${t}`);
+
+    let { dateFrom: df, dateTo: dt } = this.sanalar(date, dateFrom, dateTo);
+    if (!df && !dt) { const b = this.bugun(); df = b; dt = b; }
+    else if (!df) df = dt;
+    else if (!dt) dt = df;
+
+    const { buffer, filename } = await this.statementSvc.build(acc.id, df!, dt!);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
   }
 
   // ═══════════════ FILTR QIYMATLARI ═══════════════

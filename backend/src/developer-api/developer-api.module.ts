@@ -6,6 +6,7 @@ import { ApiKeyAuthGuard } from './guards/api-key-auth.guard';
 import { ApiLoggerInterceptor } from './interceptors/api-logger.interceptor';
 import { CrmModule } from '../crm/crm.module';
 import { OplataKvModule } from '../oplata-kv/oplata-kv.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 import { UniversalApiController } from './universal-api.controller';
 
 /**
@@ -14,7 +15,7 @@ import { UniversalApiController } from './universal-api.controller';
  *   - Public endpoint'lar (/api/v1/*) — X-API-Key + X-API-Secret bilan
  */
 @Module({
-  imports: [CrmModule, OplataKvModule],
+  imports: [CrmModule, OplataKvModule, TransactionsModule],
   controllers: [ApiKeyAdminController, PublicApiController, UniversalApiController],
   providers: [ApiKeyService, ApiKeyAuthGuard, ApiLoggerInterceptor],
   exports: [ApiKeyService],

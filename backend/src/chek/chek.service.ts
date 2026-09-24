@@ -18,8 +18,10 @@ export interface ChekTgConfig {
   fromHour: number;
   toHour: number;
   enabled: boolean;
+  messageStyle: string; // 'card' | 'status' | 'quote'
 }
-const DEFAULT_TG: ChekTgConfig = { botToken: '', groupId: '', intervalMin: 5, fromHour: 9, toHour: 21, enabled: false };
+const TG_STYLES = ['card', 'status', 'quote'];
+const DEFAULT_TG: ChekTgConfig = { botToken: '', groupId: '', intervalMin: 5, fromHour: 9, toHour: 21, enabled: false, messageStyle: 'card' };
 const TG_CONFIG_KEY = 'chek.tg.config';
 
 // ─── Xon HR API (menejer telegram username'ini topish) ───
@@ -321,6 +323,7 @@ export class ChekService {
       fromHour: Math.min(23, Math.max(0, Number(cfg.fromHour ?? cur.fromHour) || 0)),
       toHour: Math.min(24, Math.max(0, Number(cfg.toHour ?? cur.toHour) || 24)),
       enabled: cfg.enabled ?? cur.enabled,
+      messageStyle: TG_STYLES.includes(String(cfg.messageStyle)) ? String(cfg.messageStyle) : cur.messageStyle,
     };
     await this.prisma.setting.upsert({
       where: { key: TG_CONFIG_KEY },
@@ -330,29 +333,68 @@ export class ChekService {
     return { ok: true, config: next };
   }
 
-  private buildTgMessage(row: any): string {
-    const vid = TG_VID[row.vidDogovora] || row.vidDogovora || '—';
-    const kontr = row.kontrolyor === 'otkaz' ? '❌ Отказ' : '✅ Принят';
+  private tgWhen(row: any): string {
     const dt = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
-    let when = '';
     try {
-      when = new Intl.DateTimeFormat('ru-RU', {
+      return new Intl.DateTimeFormat('ru-RU', {
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
         hour12: false, timeZone: 'Asia/Tashkent',
       }).format(dt).replace(', ', ' ');
-    } catch { when = dt.toISOString().slice(0, 16).replace('T', ' '); }
+    } catch { return dt.toISOString().slice(0, 16).replace('T', ' '); }
+  }
 
-    const mgr = `${row.manager || '—'}${row.managerTgUsername ? '  ' + row.managerTgUsername : ''}`;
+  private buildTgMessage(row: any, style = 'card'): string {
+    const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const vid = esc(TG_VID[row.vidDogovora] || row.vidDogovora || '—');
+    const isOtkaz = row.kontrolyor === 'otkaz';
+    const manager = esc(row.manager || '—');
+    const uname = row.managerTgUsername ? ' ' + esc(row.managerTgUsername) : '';
+    const branch = esc(row.branchName || '—');
+    const contract = esc(row.contractNumber);
+    const prichina = row.prichinaOtkaza ? esc(row.prichinaOtkaza) : '';
+    const when = this.tgWhen(row);
+
+    if (style === 'status') {
+      const head = isOtkaz ? '🔴 <b>ОТКАЗ</b>' : '🟢 <b>ПРИНЯТ</b>';
+      const lines = [
+        head,
+        '<i>Контроль договоров</i>',
+        '───────────',
+        `📄 <code>${contract}</code>`,
+        `👤 ${manager}${uname}`,
+        `🏢 ${branch}`,
+        `📑 ${vid}`,
+      ];
+      if (isOtkaz && prichina) lines.push(`💬 ${prichina}`);
+      lines.push('', `🕒 ${when}`);
+      return lines.join('\n');
+    }
+
+    if (style === 'quote') {
+      const inner = [
+        `📄 <b>Договор:</b> ${contract}`,
+        `👨‍💼 <b>Менеджер:</b> ${manager}${uname}`,
+        `🏢 <b>Офис:</b> ${branch}`,
+        `📑 <b>Вид:</b> ${vid}`,
+        `${isOtkaz ? '❌' : '✅'} <b>Контролёр:</b> ${isOtkaz ? 'Отказ' : 'Принят'}`,
+      ];
+      if (isOtkaz && prichina) inner.push(`⚠️ <b>Причина:</b> ${prichina}`);
+      return `📣 <b>Реестр Договоров</b>\n<blockquote>${inner.join('\n')}</blockquote>\n🕒 ${when}`;
+    }
+
+    // default — card
+    const div = '━━━━━━━━━━━━━';
     const lines = [
-      '📣 Реестр Договоров',
-      `📄 Договор №: ${row.contractNumber}`,
-      `👨‍💼 Менеджер: ${mgr}`,
-      `🏢 Офис продаж: ${row.branchName || '—'}`,
-      `📑 Вид договора: ${vid}`,
-      `🕵️ Контролёр: ${kontr}`,
+      '📣 <b>РЕЕСТР ДОГОВОРОВ</b>',
+      div,
+      `📄 <b>Договор:</b> <code>${contract}</code>`,
+      `👨‍💼 <b>Менеджер:</b> ${manager}${uname}`,
+      `🏢 <b>Офис:</b> ${branch}`,
+      `📑 <b>Вид:</b> ${vid}`,
+      `${isOtkaz ? '❌' : '✅'} <b>Контролёр:</b> ${isOtkaz ? 'Отказ' : 'Принят'}`,
     ];
-    if (row.kontrolyor === 'otkaz' && row.prichinaOtkaza) lines.push(`⚠️ Причина: ${row.prichinaOtkaza}`);
-    lines.push(`🕒 ${when}`);
+    if (isOtkaz && prichina) lines.push(`⚠️ <b>Причина:</b> ${prichina}`);
+    lines.push(div, `🕒 ${when}`);
     return lines.join('\n');
   }
 
@@ -361,7 +403,7 @@ export class ChekService {
       const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
       });
       if (!res.ok) {
         const t = await res.text().catch(() => '');

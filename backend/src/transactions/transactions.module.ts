@@ -14,6 +14,7 @@ import { OplataKvModule } from '../oplata-kv/oplata-kv.module';
   imports: [SyncModule, SverkaTelegramModule, OplataKvModule],
   controllers: [TransactionsController],
   providers: [TransactionsService, StatementService, ReconcileService, SverkaAgentService, InspectorService],
-  exports: [TransactionsService],
+  // StatementService — Universal API ham shu Excel vipiskani beradi (bot uchun)
+  exports: [TransactionsService, StatementService],
 })
 export class TransactionsModule {}

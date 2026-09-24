@@ -427,6 +427,40 @@ GET /universal/statement?account=...&dateFrom=...&dateTo=...&limit=1000&offset=1
 
 `total.count` — umumiy soni. `offset` ni `limit` qadar oshirib boring, `returned` nolga tushguncha.
 
+### `GET /universal/statement.xlsx` — Excel fayl
+
+Yuqoridagi `statement` JSON qaytaradi. Agar sizga **paneldagi «Vipiska» tugmasi beradigan aynan o'sha Excel** kerak bo'lsa — bankning rasmiy «Выписка лицевых счетов» hujjati — shu manzildan oling.
+
+| Parametr | Izoh |
+|---|---|
+| `account` | hisob raqami yoki id — **majburiy** |
+| `date` | bitta kun |
+| `dateFrom` / `dateTo` | oraliq |
+
+Sana berilmasa — **bugungi kun** (Toshkent).
+
+```bash
+curl -s -o vipiska.xlsx \
+  "https://transactions.xonapps.uz/api/v1/universal/statement.xlsx?account=20208000205720456001&date=2026-09-24" \
+  -H "X-API-Key: $XON_KEY" -H "X-API-Secret: $XON_SECRET"
+```
+
+Javob — JSON emas, `.xlsx` fayl. `Content-Disposition` da fayl nomi keladi: `vipiska_<hisob>_<dan>_<gacha>.xlsx`.
+
+**Farqi `statement` dan:**
+
+| | `statement` (JSON) | `statement.xlsx` (Excel) |
+|---|---|---|
+| Manba | bizning baza | **to'g'ridan-to'g'ri bankdan** (GetDoc1C) |
+| Tezlik | tez | sekinroq — bankdan kunma-kun olinadi |
+| Qaysi bank | hammasi | **faqat Kapitalbank** |
+| Davr | cheklanmagan | **92 kundan oshmasin** |
+| Ko'rinishi | maydonlar ro'yxati | saldo, debet/kredit aylanmasi, 11 ustun — bank hujjati |
+
+> ⚠️ Kapitalbankdan boshqa hisob berilsa: `Vipiska hozircha faqat KAPITALBANK_V3 banklar uchun` xatosi qaytadi. Hamkorbank va boshqalar uchun JSON'li `statement` dan foydalaning.
+
+> Bu endpoint fayl qaytargani uchun `/uz/api` sinov maydonida ko'rsatilmaydi — uni `curl` yoki o'z kodingizdan chaqiring.
+
 ---
 
 ## 8. Filtr qiymatlari
