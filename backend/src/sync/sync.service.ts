@@ -871,7 +871,32 @@ export class SyncService implements OnModuleInit {
           // Hamkor karta to'lovi sanasi settlement→haqiqiy kunga ko'chdi — bog'langan
           // ОплатыКв qatori sanasini ham darrov yangilaymiz (applyMovedChange kabi), aks
           // holda ОплатыКв eski (settlement) kunni ko'rsatib turardi. Faqat txnDate1C uchun.
-          if (item.txnDate1C) {
+          // ⚠️ DUBLIKAT OLDINI OLISH — externalId o'zgarganda ОплатыКв'dagi
+          // bog'lanish (source_tx_id) ESKI ID da qolib ketardi. Keyingi
+          // syncFromTransactions yangi ID ni sourceTxId bo'yicha topa olmay,
+          // o'sha to'lovni IKKINCHI marta qo'shardi. Shuning uchun bog'lanishni
+          // ham yangi ID ga ko'chiramiz.
+          if (externalIdChanged && existing.externalId) {
+            try {
+              const moved = await this.prisma.oplataKv.updateMany({
+                where: { sourceTxId: { in: [existing.externalId, existing.id] } },
+                data: { sourceTxId: externalId, date: txnDate },
+              });
+              if (moved.count) {
+                this.logger.log(
+                  `Date-shift: ОплатыКв bog'lanishi ko'chirildi (${moved.count} qator) → ${externalId}`,
+                );
+              }
+            } catch (e: any) {
+              // sourceTxId @unique — yangi ID li qator allaqachon mavjud, ya'ni
+              // dublikat oldin tug'ilgan. Sync to'xtamasin; bunday eski holatlar
+              // tozalash bosqichida hal qilinadi.
+              this.logger.warn(
+                `ОплатыКв bog'lanishini ko'chirib bo'lmadi (tx=${existing.id}): ${e?.message}`,
+              );
+            }
+          } else if (item.txnDate1C) {
+            // ID o'zgarmagan, faqat sana ko'chgan (Hamkor karta to'lovi)
             await this.prisma.oplataKv.updateMany({
               where: { sourceTxId: { in: [externalId, existing.id].filter(Boolean) } },
               data: { date: txnDate },

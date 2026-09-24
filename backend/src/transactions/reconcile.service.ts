@@ -986,6 +986,37 @@ export class ReconcileService {
     return parts.join('_');
   }
 
+  /**
+   * Sana tuzatilgach ОплатыКв bog'lanishini (source_tx_id) yangi externalId ga
+   * ko'chiradi va to'lov sanasini tenglaydi.
+   *
+   * ⚠️ Bo'lmasa: keyingi syncFromTransactions dedupe kalitini yangi externalId dan
+   * oladi, eski source_tx_id ni topa olmaydi va o'sha to'lovni IKKINCHI marta
+   * qo'shadi — ОплатыКв'da dublikat paydo bo'ladi.
+   */
+  private async relinkOplataKv(
+    oldExternalId: string | null,
+    newExternalId: string | null,
+    txId: string,
+    newDate: Date,
+  ): Promise<void> {
+    const keys = [oldExternalId, txId].filter((k): k is string => !!k);
+    if (!keys.length) return;
+    const idChanged = !!newExternalId && newExternalId !== oldExternalId;
+    try {
+      const moved = await this.prisma.oplataKv.updateMany({
+        where: { sourceTxId: { in: keys } },
+        data: { ...(idChanged ? { sourceTxId: newExternalId } : {}), date: newDate },
+      });
+      if (moved.count) {
+        this.log.log(`ОплатыКв bog'lanishi yangilandi (${moved.count} qator, tx=${txId})`);
+      }
+    } catch (e: any) {
+      // sourceTxId @unique — yangi ID li qator allaqachon bor (eski dublikat).
+      this.log.warn(`ОплатыКв bog'lanishini ko'chirib bo'lmadi (tx=${txId}): ${e?.message}`);
+    }
+  }
+
   /** Sana o'zgarishini "O'zgargan to'lovlar"ga (EDITED) yozadi — BANK O'ZGARTIRGAN bo'limida ko'rinadi. */
   private async logDateChange(
     tx: {
@@ -1061,7 +1092,10 @@ export class ReconcileService {
       await this.prisma.transaction.update({ where: { id: txId }, data: { txnDate: newDateObj } });
     }
 
-    // (b) "O'zgargan to'lovlar"ga sana o'zgarishini yozamiz
+    // (b) ОплатыКв bog'lanishini yangi ID ga ko'chiramiz (dublikat oldini olish)
+    await this.relinkOplataKv(tx.externalId, finalExternalId, txId, newDateObj);
+
+    // (c) "O'zgargan to'lovlar"ga sana o'zgarishini yozamiz
     await this.logDateChange(tx, oldDate, newDate, finalExternalId, actor);
 
     this.invalidateTodayCache();
@@ -1127,7 +1161,12 @@ export class ReconcileService {
           this.log.warn(`fixAllTxDate externalId konflikt (${it.txId}): ${e?.message} — faqat sana`);
           await this.prisma.transaction.update({ where: { id: it.txId }, data: { txnDate: new Date(`${it.newDate}T12:00:00Z`) } });
         }
-        // (b) "O'zgargan to'lovlar"ga yozamiz
+        // (b) ОплатыКв bog'lanishini yangi ID ga ko'chiramiz (dublikat oldini olish)
+        await this.relinkOplataKv(
+          tx.externalId, finalExternalId, it.txId, new Date(`${it.newDate}T12:00:00Z`),
+        );
+
+        // (c) "O'zgargan to'lovlar"ga yozamiz
         await this.logDateChange(tx, oldDate, it.newDate, finalExternalId, actor);
         results.push({ txId: it.txId, updated: true, oldDate, newDate: it.newDate, externalId: finalExternalId });
         updated++;
