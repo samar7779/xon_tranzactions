@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// DIQQAT: deploy `prisma db push --accept-data-loss` qiladi — public sxemadagi
+// shu faylda yo'q har jadvalni o'chirishga urinadi. Qo'lda yaratilgan zaxira va
+// yordamchi jadvallarni public'ga emas, alohida sxemaga qo'ying (masalan `zaxira`,
+// agentlar boti — `agents`). Boshqa rolga tegishli begona jadval deploy'ni yiqitadi
+// (2026-09-24: oplata_kv_dub_zaxira -> "permission denied", backend chiqmay qoldi).
+
 // ─────────────────────────────────────────────────────────────────
 // ROLE — RBAC: rol va unga biriktirilgan ruxsatlar (permissions)
 // Permissions list constants: backend/src/auth/permissions.ts
