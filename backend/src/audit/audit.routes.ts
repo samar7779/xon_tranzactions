@@ -19,6 +19,7 @@ const MODULE_MAP: Record<string, string> = {
   'google-export': 'export',
   shmitd: 'export',
   correction: 'correction',
+  'agent-bridge': 'agent-bridge',
 };
 
 // Eng muhim marshrutlar uchun aniq o'zbekcha nomlar (kalit = "METHOD normalized/path").
@@ -45,6 +46,7 @@ const KNOWN: Record<string, string> = {
   'POST bank-credentials': 'Bank ulanishi qo‘shildi',
   'PATCH bank-credentials/:id': 'Bank ulanishi yangilandi',
   'POST import': 'Fayl import qilindi',
+  'POST agent-bridge/exports/:id/run': 'Agent: Google eksport ishga tushirildi',
 };
 
 export function describeRoute(method: string, rawUrl: string): { module: string; action: string } {
@@ -55,6 +57,8 @@ export function describeRoute(method: string, rawUrl: string): { module: string;
 
   // ID'larni :id ga normalizatsiya (cuid, uzun hex, raqam)
   const norm = clean
+    // agent-bridge eksport id'si (masalan "sheet-1723456789012-0") — faqat shu yo'l uchun.
+    .replace(/^(agent-bridge\/exports)\/[^/]+/i, '$1/:id')
     .replace(/\/c[a-z0-9]{20,}/gi, '/:id')
     .replace(/\/[0-9a-f]{16,}/gi, '/:id')
     .replace(/\/\d+/g, '/:id');

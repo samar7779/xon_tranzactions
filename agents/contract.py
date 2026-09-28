@@ -34,7 +34,8 @@ NULL_DELEGATES: Tuple[str, ...] = ("null", "none", "")
 AGENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")  # nomda / \ .. taqiq
 
 LEADER_JSON_KEYS: Tuple[str, ...] = ("intent", "delegate_to", "task_for_agent", "human_reply")
-INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer")
+INTENT_TOLOV = "payment_check"  # checker'ga: bot TOLOV bloki qo'shadi (18-bo'lim)
+INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV)
 JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S | re.I)
 
 DELEG_HUMAN_REPLY = "Qabul qildim."
@@ -373,7 +374,7 @@ SEZGIR_PREFIKSLAR: Tuple[str, ...] = (
     "agents/__init__.py", "agents/runner.py", "agents/leader_bot.py", "agents/leader_logic.py",
     "agents/reja.py", "agents/config.py", "agents/contract.py", "agents/db.py",
     "agents/db_migrations.py", "agents/history.py", "agents/memory_blocks.py", "agents/notify.py",
-    "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py",
+    "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py",
     "agents/bin", "agents/deploy", "agents/requirements.txt", "agents/.gitignore", ".gitignore",
     "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth",
     "backend/prisma/schema.prisma",
@@ -540,6 +541,140 @@ KOD_TEGLAR_RE = re.compile(r"(<code>.*?</code>|<pre>.*?</pre>)", re.S | re.I)
 APOSTROF_VARIANTLAR = "‘’ʻʼ`´"
 _APOSTROF_TABLE = {ord(c): "'" for c in APOSTROF_VARIANTLAR}
 _NEWLINES_RE = re.compile("[\r\n\x85" + chr(0x2028) + chr(0x2029) + "]+")
+
+# ---------------------------------------------------------------------------
+# 18. To'lov tekshiruvi (payment_check.py; /tolov; Leader intent payment_check -> checker)
+#     CRM <-> transactions <-> oplata_kv, faqat o'qish. Satrlar checker.md, leader.md va
+#     knowledge/tolov_tekshirish.md bilan HARFMA-HARF.
+# ---------------------------------------------------------------------------
+TOLOV_TOPSHIRIQ_RE = re.compile(r"(?im)^\s*TOLOV:\s*(.+)$")
+TOLOV_BLOK_BOSH = "=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ==="
+TOLOV_BLOK_OXIR = CHECKER_BLOK_OXIR  # "=== TUGADI ===" (ikki blok bir topshiriqda birga kelmaydi)
+TOLOV_KOMPONENTLAR: Tuple[str, ...] = (
+    "kirish", "crm_kesh", "crm", "crm_xonpay", "oplata_kv", "transactions", "bank_izi", "kontekst",
+    "solishtirish", "farqlar", "tolovlar", "nomzodlar",
+)
+TOLOV_JADVAL_SARLAVHA = "sana | summa | tur | CRM | OKV | TX | moslik | kod"
+TOLOV_KESILDI_TPL = "(kesildi: yana {n} qator; jamilar to'liq)"
+TOLOV_FARQ_JAMLANGAN_TPL = "(yana {n} farq: {royxat})"
+
+# Hajm va vaqt (dizayn 1.9)
+TOLOV_PREFETCH_DEADLINE_S = 45
+TOLOV_TASHQI_TIMEOUT_S = 60     # leader_bot: asyncio.wait_for (thread o'zi ichki deadline bilan tugaydi)
+TOLOV_CRM_TIMEOUT_S = 20
+TOLOV_CRM_MAX_SOROV = 7         # bir prefetch'da tarmoq so'rovlari (qayta urinish ham sanaladi)
+TOLOV_CRM_KUNLIK_DEFAULT = 300
+TOLOV_CRM_KESH_S = 600          # jarayon xotirasida, diskka yozilmaydi
+TOLOV_CRM_JAVOB_MAX = 5 * 1024 * 1024
+TOLOV_CRM_LIMIT_MAX = 500
+TOLOV_BLOK_MAX = 9000
+TOLOV_JADVAL_MAX = 40
+TOLOV_JADVAL_OWNER_MAX = 15
+TOLOV_FARQ_MAX = 25
+TOLOV_QATOR_MAX = 400           # Q2/Q3; jamilar alohida SUM bilan, doim to'liq
+TOLOV_SHARTNOMA_MAX = 3
+TOLOV_VARIANT_MAX = 16
+
+# CRM: faqat GET {XONSAROY_CLIENT_BASE}/payment-history. Env faqat NOMLARI (qiymat kodda yo'q).
+TOLOV_CRM_ENV_BASE = "XONSAROY_CLIENT_BASE"
+TOLOV_CRM_ENV_KEY = "XONSAROY_API_KEY"
+TOLOV_CRM_ENV_SECRET = "XONSAROY_API_SECRET"
+TOLOV_CRM_ENV_YOQ = "AGENTS_TOLOV_CRM"            # "0" -> CRM chaqirilmaydi (default yoqilgan)
+TOLOV_CRM_ENV_KUNLIK = "AGENTS_TOLOV_CRM_KUNLIK"  # default 300
+TOLOV_CRM_BASE_DEFAULT = "https://app-api.xonsaroy.uz/api/v4/client"  # backend crm.service.ts bilan bir xil
+TOLOV_CRM_YOL = "/payment-history"
+TOLOV_CRM_PARAMLAR: Tuple[str, ...] = (
+    "contract", "transaction_id", "limit", "is_trashed", "trashed_status", "with_trashed",
+)
+KV_TOLOV_CRM_KUN = "tolov_crm_{sana}"  # sana = YYYYMMDD (Toshkent)
+
+# UNKNOWN sabablari (blokda "[crm] UNKNOWN: <sabab>")
+TOLOV_SABAB_OCHIRILGAN = "o'chirilgan"
+TOLOV_SABAB_KALIT_YOQ = "kalit yo'q"
+TOLOV_SABAB_MANZIL = "manzil yaroqsiz"
+TOLOV_SABAB_VAQT = "vaqt tugadi"
+TOLOV_SABAB_KUNLIK = "kunlik cheklov tugadi"
+TOLOV_SABAB_SOROV = "so'rov chegarasi"
+TOLOV_SABAB_KIRISH = "kirish o'qilmadi"
+TOLOV_SABAB_DB = "baza javob bermadi"
+
+# Farq kodlari -> jiddiylik (dizayn 1.7). Tartib: blokda va bilim faylida shu tartib.
+TOLOV_FARQ_KODLARI: Dict[str, str] = {
+    "XATO": "error",
+    "KANONIK_EMAS": "warn",
+    "BOSHQA_SHARTNOMA": "warn",
+    "CRM_YOQ": "error",
+    "BIZDA_YOQ": "error",
+    "OKV_YOQ": "error",
+    "TX_YOQ": "error",
+    "SUMMA_FARQ": "error",
+    "DUBLIKAT": "error",
+    "SPLIT_FARQ": "warn",
+    "SPLIT_YOQ": "warn",
+    "DRIFT": "warn",
+    "TX_HOLAT": "warn",
+    "KATEGORIYA": "warn",
+    "BANK_OCHIRGAN": "warn",
+    "BANK_KOCHIRGAN": "warn",
+    "BANK_TAHRIRLAGAN": "warn",
+    "OKV_OCHIRILGAN": "warn",
+    "ARIZA_KUTMOQDA": "info",
+    "SANA_SILJIGAN": "info",
+    "QAYTARIM": "info",
+    "PEREBROSKA": "info",
+    "VZNOS": "info",
+    "SCHETCHIK": "info",
+    "SYNC_KUTILMOQDA": "info",
+    "TXMINDATE": "info",
+    "KUCHSIZ_MOSLIK": "info",
+}
+_TUZ_BANK_IZI = "noto'g'ri bo'lsa O'zgargan to'lovlar > Tiklash; sana: Sverka fixTxDate"
+_TUZ_KUTILGAN = "odatiy; schetchik keyin oylikka o'tishi mumkin"
+_TUZ_KUTISH = "kutish yoki qo'lda qo'shish"
+# "tuzatish" maslahati (blokka tushadi, <= 90 belgi). CRM'ga yozish hech qachon bot/agent ishi emas.
+TOLOV_FARQ_TUZATISH: Dict[str, str] = {
+    "XATO": "OplatyKv > XATO → CRM (oplatakv:xato_crm) yoki tx shartnomasi",
+    "KANONIK_EMAS": "tx shartnomasini CRM kanonik shakliga (setContract)",
+    "BOSHQA_SHARTNOMA": "kim to'g'ri: egasi yoki CRM operatori; bizda tx shartnomasi",
+    "CRM_YOQ": "CRM operatori (CRM'ga biz yozmaymiz)",
+    "BIZDA_YOQ": "bankda bormi: Sverka; naqd bo'lsa odatiy",
+    "OKV_YOQ": "OplatyKv sync (Admin > Sync) yoki addOneFromTransaction",
+    "TX_YOQ": "bank o'chirgan bo'lsa: O'zgargan to'lovlar > Tiklash",
+    "SUMMA_FARQ": "bank EDITED: sync kaskad; aks holda qo'lda tekshirish",
+    "DUBLIKAT": "egasi qarori, zaxira jadvali bilan tozalash (dasturchi)",
+    "SPLIT_FARQ": "XATO → CRM > Split (applyCrmSplit); CRM type xato bo'lsa operator",
+    "SPLIT_YOQ": "/oplata-kv/:id/split yoki split-installments (force)",
+    "DRIFT": "keyingi sync tenglaydi; qolsa tx'da tuzatish",
+    "TX_HOLAT": "qo'lda tekshirish (sync status filtrlamaydi)",
+    "KATEGORIYA": "tx kategoriyasini tuzatish (kategoriyalash qoidasi)",
+    "BANK_OCHIRGAN": _TUZ_BANK_IZI,
+    "BANK_KOCHIRGAN": _TUZ_BANK_IZI,
+    "BANK_TAHRIRLAGAN": _TUZ_BANK_IZI,
+    "OKV_OCHIRILGAN": "tarixni ko'rish: kim, qachon",
+    "ARIZA_KUTMOQDA": "ariza tasdig'ini kutish (correction)",
+    "SANA_SILJIGAN": "odatiy (Hamkor settlement, XonPay)",
+    "QAYTARIM": "bizda OUT bo'lsa mos; bo'lmasa storno yoki perebroska",
+    "PEREBROSKA": _TUZ_KUTILGAN,
+    "VZNOS": _TUZ_KUTILGAN,
+    "SCHETCHIK": _TUZ_KUTILGAN,
+    "SYNC_KUTILMOQDA": _TUZ_KUTISH,
+    "TXMINDATE": _TUZ_KUTISH,
+    "KUCHSIZ_MOSLIK": "\"aniq\" dema, ID bilan tasdiqla",
+}
+
+# /tolov (LLM'siz). Toza lotin, emoji yo'q.
+MSG_TOLOV_FOYDALANISH = (
+    "Foydalanish: /tolov <shartnoma> (3 tagacha, vergul bilan), /tolov <to'lov ID>, "
+    "/tolov <summa> <sana>, /tolov mijoz <familiya ism>.\n"
+    "Misol: /tolov 821ZUR23V1 yoki /tolov 6150000 2026-09-20"
+)
+TOLOV_OWNER_SARLAVHA_TPL = "<b>To'lov tekshiruvi</b> — {kirish} — {vaqt}"
+TOLOV_OWNER_OXIR_TPL = "Tahlil uchun: \"{shartnoma} farqini tushuntir\" deb yozing."
+TOLOV_OWNER_NOMZOD = "Aniq shartnoma bilan qayta so'rang: /tolov <shartnoma>"
+TOLOV_QISQA_TPL = "To'lov tekshiruvi {kirish}: CRM {crm}; OplatyKv {okv}; bank {bank}; farq: {farq}"
+TOLOV_QISQA_NOMZOD_TPL = "To'lov tekshiruvi {kirish}: {n} nomzod, shartnoma tanlanmadi"
+TOLOV_STUB_YIQILDI_TPL = "(tolov tekshiruvi yiqildi: {xato})"
+TOLOV_STUB_MODUL_YOQ = "(payment_check yuklanmadi)"
 
 
 # ---------------------------------------------------------------------------

@@ -7,8 +7,10 @@ Ishga tushirish: python3 -m agents.leader_bot  (systemd: xon-tranzactions-leader
 - Agentlar faqat runner orqali (Claude Code CLI + setup token). SDK/API yo'q.
 - Fon vazifalar shu jarayonda: manba kuzatuvchi (15 s), heartbeat, va'da eslatmasi (25 daq x3),
   tozalash (24 soat), Facts (5 daq), Checker (4 soat), Teacher kunlik (22:30 Toshkent).
-- Ixtiyoriy modullar (reja, memory_blocks, support_facts, checker_worker, teacher_daily) kerak paytda
-  yuklanadi: biri buzilsa bot ishlashda davom etadi va Support REJA orqali tuzatish mumkin.
+- Ixtiyoriy modullar (reja, memory_blocks, support_facts, checker_worker, teacher_daily, payment_check)
+  kerak paytda yuklanadi: biri buzilsa bot ishlashda davom etadi va Support REJA orqali tuzatish mumkin.
+- To'lov tekshiruvi (payment_check): /tolov (LLM'siz jadval) va checker delegatsiyasida (intent
+  payment_check yoki topshiriqda "TOLOV:" qatori) bot blokni topshiriqqa qo'shadi. Faqat o'qish.
 """
 from __future__ import annotations
 
@@ -55,6 +57,7 @@ _MAX_DOWNLOAD = 20 * 1024 * 1024          # Bot API getFile chegarasi
 _IMG_EXT = frozenset({"jpg", "jpeg", "png", "webp", "gif"})
 _MIME_EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 _TOKEN_RE = re.compile(r"^[0-9a-f]{6,32}$")
+_TOLOV_CMD_RE = re.compile(r"^\s*/tolov(?:@\S+)?\s*", re.I)  # /tolov yoki /tolov@bot_nomi
 _JAVOB_TURLARI = frozenset({"sticker", "video", "animation", "document", "location", "contact",
                             "venue", "poll", "dice", "story"})
 _WATCH_INTERVAL_S = 15
@@ -947,7 +950,7 @@ async def delegate(agent: str, task_for_agent: str, *, intent: str, is_fwd: bool
     try:
         status, preview, run_id = await _delegate_body(
             agent, task_for_agent, is_fwd=is_fwd, image_paths=image_paths, outbox=outbox,
-            reply_to=reply_to, reply_quote=reply_quote, teacher_fwd=teacher_fwd)
+            reply_to=reply_to, reply_quote=reply_quote, teacher_fwd=teacher_fwd, intent=intent)
     except Exception as exc:
         log.exception("delegatsiya yiqildi: %s", agent)
         preview = exc.__class__.__name__
@@ -962,14 +965,45 @@ def _checker_block_stub(izoh: str) -> str:
     return "\n".join([C.CHECKER_BLOK_BOSH, izoh, C.CHECKER_BLOK_OXIR])
 
 
+def _tolov_block_stub(izoh: str) -> str:
+    return "\n".join([C.TOLOV_BLOK_BOSH, izoh, C.TOLOV_BLOK_OXIR])
+
+
+def _is_tolov(agent: str, intent: str, task_for_agent: str) -> bool:
+    """Checker'ga to'lov tekshiruvi: intent payment_check yoki (LLM intent'ni adashtirsa) TOLOV: qatori."""
+    if agent != "checker":
+        return False
+    return intent == C.INTENT_TOLOV or bool(C.TOLOV_TOPSHIRIQ_RE.search(task_for_agent or ""))
+
+
+async def _tolov_prefetch(pc: Any, matn: str) -> Any:
+    """Thread bekor qilinmaydi: ichki deadline (45 s) asosiy himoya, tashqarida 60 s."""
+    return await asyncio.wait_for(asyncio.to_thread(pc.prefetch, matn), C.TOLOV_TASHQI_TIMEOUT_S)
+
+
+async def _tolov_block(task_for_agent: str) -> str:
+    """TOLOV TEKSHIRUV NATIJALARI bloki (neytrallanmagan topshiriqdan parse). Yiqilsa stub."""
+    pc = _mod("payment_check")
+    if pc is None:
+        return _tolov_block_stub(C.TOLOV_STUB_MODUL_YOQ)
+    try:
+        return pc.format_block(await _tolov_prefetch(pc, task_for_agent or ""))
+    except Exception as exc:
+        log.exception("tolov prefetch yiqildi")
+        return _tolov_block_stub(C.TOLOV_STUB_YIQILDI_TPL.format(xato=exc.__class__.__name__))
+
+
 async def _delegate_body(agent: str, task_for_agent: str, *, is_fwd: bool, image_paths: Sequence[str],
                          outbox: notify.Outbox, reply_to: Optional[int] = None,
                          reply_quote: Optional[str] = None,
-                         teacher_fwd: bool = False) -> Tuple[str, str, Optional[int]]:
+                         teacher_fwd: bool = False, intent: str = "") -> Tuple[str, str, Optional[int]]:
     """(agent_tasks status, result_preview, run_id). Egasiga javob (synth, xato, blokisiz REJA,
-    yolg'on almashtirish, yozib qo'ydim) reply_to ga reply; REJA/xotira tasdiq so'rovlari reply emas."""
+    yolg'on almashtirish, yozib qo'ydim) reply_to ga reply; REJA/xotira tasdiq so'rovlari reply emas.
+    To'lov tekshiruvida health bloki qo'shilmaydi (ikki "=== TUGADI ===" chalkashmasin)."""
     body = history.neutralize(task_for_agent or "")
-    if agent == "checker":
+    if _is_tolov(agent, intent, task_for_agent):
+        body += "\n\n" + (await _tolov_block(task_for_agent or ""))
+    elif agent == "checker":
         cw = _mod("checker_worker")
         if cw is None:
             body += "\n\n" + _checker_block_stub("(checker_worker yuklanmadi)")
@@ -1204,6 +1238,36 @@ async def cmd_health(msg: Message) -> None:
     body = "\n".join(lines) or "(tekshiruv yo'q)"
     text = "<b>Health</b> — %s\n<pre>%s</pre>" % (_esc(config.fmt_local(config.now_utc())), _esc(body))
     await _say(text, hist=body)
+
+
+async def cmd_tolov(msg: Message) -> None:
+    """/tolov <shartnoma | ID | summa sana | mijoz ...>: LLM'siz to'lov tekshiruvi (faqat o'qish).
+    Tarixga faqat qisqa qator (jadval agent_chat_log'ga yozilmaydi)."""
+    if not _is_owner_private(msg):
+        return
+    if _is_forwarded(msg):
+        await on_text(msg)
+        return
+    arg = _TOLOV_CMD_RE.sub("", _mask_secrets(getattr(msg, "text", None) or ""), count=1).strip()
+    await _hist(C.ROLE_OWNER, ("/tolov " + C.short(arg, 60)).strip())
+    if not arg:
+        await _say(C.MSG_TOLOV_FOYDALANISH, escape=True)
+        return
+    pc = _mod("payment_check")
+    if pc is None:
+        await _say(_MSG_MODUL_YOQ_TPL.format(modul="payment_check"), escape=True)
+        return
+    if pc.parse_kirish(arg) is None:
+        await _say(C.MSG_TOLOV_FOYDALANISH, escape=True)
+        return
+    try:
+        natija = await _tolov_prefetch(pc, arg)
+        text, qisqa = pc.format_owner(natija), pc.qisqa(natija)
+    except Exception as exc:
+        log.exception("/tolov yiqildi")
+        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=exc.__class__.__name__), escape=True)
+        return
+    await _say(text, hist=qisqa)
 
 
 async def cmd_reset(msg: Message) -> None:
@@ -1449,6 +1513,7 @@ def _register(dp: Dispatcher) -> None:
     dp.message.register(cmd_start, Command("start"), ~F.forward_origin)
     dp.message.register(cmd_status, Command("status"), ~F.forward_origin)
     dp.message.register(cmd_health, Command("health"), ~F.forward_origin)
+    dp.message.register(cmd_tolov, Command("tolov"), ~F.forward_origin)
     dp.message.register(cmd_reset, Command("reset"), ~F.forward_origin)
     dp.message.register(on_text)
     dp.callback_query.register(on_callback)
@@ -1522,7 +1587,7 @@ async def run() -> None:
     except Exception:
         log.exception("probe_cli yiqildi")
     log.info("claude CLI: %s", probe)
-    for name in ("memory_blocks", "support_facts", "checker_worker", "teacher_daily"):
+    for name in ("memory_blocks", "support_facts", "checker_worker", "teacher_daily", "payment_check"):
         _mod(name)
 
     dp = Dispatcher()

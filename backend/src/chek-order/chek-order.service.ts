@@ -514,7 +514,8 @@ export class ChekOrderService {
     }
     return null;
   }
-  private resAllMatch(res: any, srcKeys: string[]): boolean {
+  // public — agent-bridge ham aynan shu "Мос/Фарқли" mantiqini ishlatadi (nusxa yozilmaydi).
+  resAllMatch(res: any, srcKeys: string[]): boolean {
     return (['initial', 'monthly', 'total'] as const).every((m) => {
       const vals = srcKeys.map((k) => this.srcVal(res, k, m)).filter((v) => v != null) as number[];
       return vals.length < 2 || vals.every((v) => Math.abs(v - vals[0]) < 1);

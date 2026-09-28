@@ -3,18 +3,18 @@
 ## Qisqasi
 
 - Bash cheklangan: faqat `git log/show/diff/status/blame` va `python3 -m py_compile <repo ichidagi .py>` ishlaydi. Qolganini `agents/bin/bash_guard.py` hook rad etadi. `sudo`, `curl`, `cat`, shell `grep`, `systemctl`, `mysql`, `/etc`, `/var/log`, `/tmp`ga URINMA.
-- Ma'lumot Facts'dan olinadi: `agents/state/support_facts.json` (Read, Grep). DB'ga to'g'ridan-to'g'ri yo'l yo'q.
+- Ma'lumot Facts'dan olinadi: `agents/state/support_facts.json` (Read, Grep). DB'ga to'g'ridan-to'g'ri yo'l yo'q. Istisno: shartnoma yoki to'lov tekshiruvida bot o'zi DB'dan (faqat o'qish) va CRM'dan (faqat `GET /payment-history`) yig'ib, tayyor blok beradi (4.2).
 - Kod faqat `[REQUEST_APPROVAL]` blokidagi `edits:` (find/replace) orqali o'zgaradi. Egasi [Ha] bosgach, tahrir, commit va `main`ga push'ni bot o'zi qiladi. [Ha] egasining push ruxsati (egasi qarori, 2026-09-28).
 - Edit/Write hech bir agentda yo'q, Teacher'da ham. Teacher xotiraga faqat `[WRITE_MEMORY]` blok bilan yozadi, blokni bot qo'llaydi.
 - "yozildi", "saqlandi" kabi 7 so'zni blokdan tashqari matnda ishlatma. Bot bloklarni olib tashlab tekshiradi va javobni almashtiradi (8-bo'lim).
 - Promptdagi eski ko'rsatma bu fayl bilan zid kelsa, shu fayl to'g'ri (7-bo'lim).
 
-Manba: `agents/runner.py`, `agents/claude_settings.json` (runner `--settings` bilan beradi), `agents/bin/bash_guard.py`, `agents/leader_bot.py`, `agents/history.py`, `agents/reja.py`, `agents/config.py`, `agents/memory_blocks.py`, `agents/contract.py`, `agents/support_facts.py`, `agents/checker_worker.py`. Server siyosati o'zgarmas deb olingan.
+Manba: `agents/runner.py`, `agents/claude_settings.json` (runner `--settings` bilan beradi), `agents/bin/bash_guard.py`, `agents/leader_bot.py`, `agents/history.py`, `agents/reja.py`, `agents/config.py`, `agents/memory_blocks.py`, `agents/contract.py`, `agents/support_facts.py`, `agents/checker_worker.py`, `agents/payment_check.py`. Server siyosati o'zgarmas deb olingan.
 
 ## 0. Eng muhim faktlar
 
 1. Bash'da faqat git (o'qish) va `py_compile`. Qolgan hammasini hook (`agents/bin/bash_guard.py`) rad etadi. `sudo`, `rm -rf`, `.env*` deny ro'yxatida ham bor.
-2. Ma'lumot manbai: Facts JSON fayli. Kalit yo'q bo'lsa, diagnostikada (TUR A) faqat "<kalit> facts'da yo'q" deyiladi. `support_facts.py`ga yangi bo'lim qo'shish REJAsi faqat egasi "qo'sh/tuzat" desa (TUR B).
+2. Ma'lumot manbai: Facts JSON fayli; shartnoma va to'lov uchun to'lov tekshiruvi bloki (4.2). Kalit yo'q bo'lsa, diagnostikada (TUR A) faqat "<kalit> facts'da yo'q" deyiladi. `support_facts.py`ga yangi bo'lim qo'shish REJAsi faqat egasi "qo'sh/tuzat" desa (TUR B).
 3. [Ha] bosilgach Support qayta chaqirilmaydi. Tahrir, `py_compile` yoki `tsc`, commit va push'ni bot o'zi qiladi (`reja.py::execute_approved`). [Ha] egasining push ruxsati: bot `main`ga o'zi push qiladi.
 4. Kod o'zgarishining yagona ishlaydigan shakli: `edits:` (find/replace). `find` faylda aynan 1 marta uchrashi shart.
 5. Agent jarayoniga server sirlari berilmaydi. Runner agent env'ini noldan quradi (oq ro'yxat), faqat: `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ`, `USER`, `CLAUDE_CODE_OAUTH_TOKEN` (= `ANTHROPIC_SETUP_TOKEN`) va ixtiyoriy `ANTHROPIC_BASE_URL`. `ANTHROPIC_API_KEY` berilmaydi. Boshqa hech bir o'zgaruvchi (DB, tokenlar, parollar) agentga yetmaydi.
@@ -62,7 +62,7 @@ Git buyrug'ini yakka yoz. Hook (`agents/bin/bash_guard.py`) rad etadi: shell met
 | `curl`, `wget` | hook rad etadi | Facts `system.services` (`nginx`, `xon-tranzactions-backend` holati), `api_usage`; Checker bloki (`[services]`) |
 | `cat`, `head`, `tail`, `ls`, `find`, `grep`, `jq` | hook rad etadi | Read, Grep, Glob |
 | `echo $TOKEN`, `env` | hook rad etadi | kerak emas: token agentga berilmaydi |
-| `python3 -c`, `venv/bin/python3`, `mysql`, `psql` | hook rad etadi | Facts; yangi ma'lumot uchun `support_facts.py` REJAsi (faqat egasi "qo'sh/tuzat" desa) |
+| `python3 -c`, `venv/bin/python3`, `mysql`, `psql` | hook rad etadi | Facts; shartnoma yoki to'lov uchun to'lov tekshiruvi bloki (4.2); yangi ma'lumot uchun `support_facts.py` REJAsi (faqat egasi "qo'sh/tuzat" desa) |
 | `npx tsc`, `npm`, `node` | hook rad etadi | `.ts`/`.tsx` uchun `tsc`ni bot REJA qo'llashda qiladi (6-bo'lim) |
 | `systemctl`, `journalctl`, `docker`, `df`, `ping` | hook rad etadi | Facts `system`; Checker'ga bot oldindan qo'shadigan natija |
 | repo tashqarisi: `/etc`, `/proc`, `~`, `/var/log`, `/tmp` | deny: `Read(//etc/**)`, `Read(//proc/**)`, `Read(~/**)`, `Read(//root/**)`. Agent CLI alohida imtiyozsiz OS foydalanuvchisida (`xonagent`): bot `.env`i, uy papkasi, push kaliti va `/proc`i yopiq | Facts bo'limlari |
@@ -106,6 +106,12 @@ Fayl katta: avval Grep bilan kalit yoki ismni top, keyin Read'ni `offset/limit` 
 ### 4.2 Boshqa yo'llar
 
 - Checker topshirig'iga bot `checker_worker.run_all_checks_once()` natijasini qo'shadi: `=== CHECKER_WORKER OLDINDAN OLINGAN NATIJALAR ===` bloki.
+- To'lov tekshiruvi (`agents/payment_check.py`). Leader intent `payment_check` bo'lsa (yoki topshiriqda `TOLOV:` qatori bo'lsa), bot health bloki o'rniga `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` ... `=== TUGADI ===` blokini qo'shadi. Egasining `/tolov` buyrug'i shu natijani LLM'siz jadval qilib beradi (5-bo'lim).
+  - Bot o'z jarayonida yig'adi: DB `db.tx("facts", readonly=True)` (statement 15 s), `transactions`, `oplata_kv`, `crm_contracts`, o'zgarish izlari, vznos, perebroska, arizalar, `xonpay_transactions`.
+  - CRM faqat `GET {XONSAROY_CLIENT_BASE}/payment-history`: metod, yo'l va parametrlar oq ro'yxatda, redirect taqiq, bir chaqiruvda 7 so'rovgacha, kesh 10 daqiqa. Kunlik cheklov `AGENTS_TOLOV_CRM_KUNLIK` (default 300), `AGENTS_TOLOV_CRM=0` bo'lsa CRM chaqirilmaydi. Modulda CRM'ga POST, PUT, DELETE kodi yo'q: CRM faqat o'qiladi.
+  - Kalit (`XONSAROY_API_KEY`, `XONSAROY_API_SECRET`) faqat bot jarayonida. Agent env'iga, logga, blokka tushmaydi.
+  - Blokda mijoz telefoni, pasporti, hisob raqami yo'q, ism to'liq (egasi qarori). Bir chaqiruvda 3 shartnomagacha.
+  - Juftlash va farq kodlari bot kodida. Agent faqat tushuntiradi. Blokni o'qish va kodlar: `tolov_tekshirish.md`.
 - Egasi yuborgan rasm (`photo` yoki `image/*` hujjat, jpg, png, webp, gif): `static/tg_uploads/` ga saqlanadi, yo'li topshiriq matnida `[Foydalanuvchi rasm yubordi. Uni Read tool bilan ko'r: <yo'l>]` qatorida keladi, Read bilan ko'riladi. Boshqa hujjat, video va ovozni bot qabul qilmaydi, agentga yetmaydi.
 - `git log`, `git show`: kim, qachon, nimani o'zgartirgan.
 
@@ -117,6 +123,7 @@ DM avval shu handlerlardan tartib bilan o'tadi (`leader_bot.py::on_text`, `_hand
 |---|---|---|
 | xotira | boshida `eslab qol`, `yodda tut`, `yodda saqla`, `xotiraga yoz` (forward emas, keyin mazmun bor) | `leader-runtime.md`ga to'g'ridan yozadi (`memory_blocks.py::write_runtime_memory`), LLM chaqirilmaydi. Sirga o'xshash qiymat bo'lsa yozmaydi |
 | `/start`, `/status`, `/health`, `/reset` | buyruq | salom / bugungi agent chaqiruvlari, Facts yoshi, kutilayotgan tasdiqlar, ochiq va'dalar, oxirgi xatolar, CLI holati / `checker_worker.run_all_checks_once` natijasi (`agent_health`ga yozilmaydi) / suhbat tarixi, kutilayotgan REJA va teacher tasdiqlari, kutilayotgan rasmni tozalash |
+| `/tolov` | buyruq (forward emas): `/tolov <shartnoma, ID, summa sana yoki mijoz ism>` | LLM'siz to'lov tekshiruvi (`payment_check.prefetch`, 4.2): `<pre>` ichida komponent qatorlari, to'lovlar jadvali 15 qatorgacha, farqlar 25 tagacha (ortig'i `(yana N farq: ...)` bilan jamlanadi). Xabar 4000 belgiga sig'masa kesish tartibi: avval jadval, keyin farq izohlari (80 -> 40), oxirida farq qatorlari; kesilgani `(kesildi: yana N qator; jamilar to'liq)` bilan belgilanadi. Komponent qatorlari kesilmaydi. Tarixga faqat qisqa qator: `To'lov tekshiruvi <shartnoma>: CRM ...; OplatyKv ...; bank ...; farq: ...`. Argument bo'sh yoki yaroqsiz bo'lsa foydalanish matni (`contract.py::MSG_TOLOV_FOYDALANISH`). Modul yuklanmasa "payment_check moduli yuklanmadi" |
 | ovoz | `voice`, `video_note`, `audio` | "Shefim, ovozli xabarni hozircha o'qiy olmayman. Matn bilan yozing." (`contract.py::MSG_OVOZ_YOQ`). STT yo'q, Leader chaqirilmaydi |
 | rasm | `photo` yoki `image/*` hujjat, izohsiz | 5 daqiqa saqlanadi, keyingi matn bilan birga Leader'ga ketadi. Bir turnda ko'pi bilan 3 ta, 20 MB gacha |
 | boshqa tur | sticker, video, animatsiya, rasm bo'lmagan hujjat, joylashuv, kontakt, so'rovnoma va h.k. | "Shefim, bu turdagi xabarni o'qiy olmayman. Matn yoki rasm yuboring." |
@@ -124,7 +131,7 @@ DM avval shu handlerlardan tartib bilan o'tadi (`leader_bot.py::on_text`, `_hand
 
 `/reset` `agents.agent_chat_log`, va'dalar va `agent_tasks`ni tozalamaydi, ishlayotgan REJA ijrosini to'xtatmaydi. Boshqa har qanday `/buyruq` (`/help`, `/send`, `/gid`, `/cancel`) bot buyrug'i emas: oddiy matn sifatida Leader'ga ketadi.
 
-Bot faqat egasining shaxsiy chatida ishlaydi. Guruh va kanalda jim: guruhga yuborish, guruhdan o'qish, `/gid` va Bug Intake yo'q. Loyihaga xos kalit-so'z handleri (hisobot, eksport) va Leader domen intent'i yo'q. Odamga xabar yuborish ham yo'q (`/send` yo'q, bot faqat egasiga yozadi; `leader.md` 20-bo'lim).
+Bot faqat egasining shaxsiy chatida ishlaydi. Guruh va kanalda jim: guruhga yuborish, guruhdan o'qish, `/gid` va Bug Intake yo'q. Loyihaga xos kalit-so'z handleri (hisobot, eksport) yo'q. Leader domen intent'i bitta: `payment_check`, faqat o'qish (4.2). Odamga xabar yuborish ham yo'q (`/send` yo'q, bot faqat egasiga yozadi; `leader.md` 20-bo'lim).
 
 Saboqlar (kalit-so'z handlerlari):
 - Qisqa kalit so'z boshqa so'z ichida ushlanadi ("shot" → "skrinshot", "hisob" → "hisobot"). So'z chegarasi bilan tekshiring.

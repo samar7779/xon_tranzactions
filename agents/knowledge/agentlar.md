@@ -1,6 +1,6 @@
 # Agentlar tizimi
 
-Holat (2026-09-28): promptlar, bilim fayllari va bot kodi commit qilingan (`d2f4d4e`). Bot serverga o'rnatilgan va ishlayapti (servis `xon-tranzactions-leader`). Bot kodi: `config.py`, `contract.py`, `db.py`, `db_migrations.py`, `runner.py`, `leader_bot.py`, `leader_logic.py`, `history.py`, `reja.py`, `memory_blocks.py`, `notify.py`, `support_facts.py`, `checker_worker.py`, `teacher_daily.py`, `bin/bash_guard.py`, `claude_settings.json`, `deploy/xon-tranzactions-leader.service`, `tests/`. Pastdagi `fayl::funksiya` havolalari shu kodga solishtirilgan (KOD 9.7). Kod hali yangilanib turibdi: o'zgarsa qayta solishtiriladi. Ziddiyat bo'lsa, kod to'g'ri.
+Holat (2026-09-28): promptlar, bilim fayllari va bot kodi commit qilingan (`d2f4d4e`). Bot serverga o'rnatilgan va ishlayapti (servis `xon-tranzactions-leader`). Bot kodi: `config.py`, `contract.py`, `db.py`, `db_migrations.py`, `runner.py`, `leader_bot.py`, `leader_logic.py`, `history.py`, `reja.py`, `memory_blocks.py`, `notify.py`, `support_facts.py`, `checker_worker.py`, `payment_check.py` (to'lov tekshiruvi, `d2f4d4e` dan keyin qo'shilgan), `teacher_daily.py`, `bin/bash_guard.py`, `claude_settings.json`, `deploy/xon-tranzactions-leader.service`, `tests/`. Pastdagi `fayl::funksiya` havolalari shu kodga solishtirilgan (KOD 9.7). Kod hali yangilanib turibdi: o'zgarsa qayta solishtiriladi. Ziddiyat bo'lsa, kod to'g'ri.
 
 Shablondan farqlar (2026-09-28, kod bilan moslangan):
 - Bot kalitlari `backend/.env` da (unit'da `AGENTS_ENV_FILE`), repo ildizi `.env` da emas. Bot ishlayapti, demak kalitlar qo'yilgan: yo'q bo'lsa `config.py::config_errors` botni to'xtatadi.
@@ -15,7 +15,7 @@ Bu tizim `backend/src/leader/` va `backend/agents/` bilan BOG'LIQ EMAS. Ular v1:
 
 Egasi bitta Telegram bot (@TRanSupport_bot) bilan gaplashadi. Bot ortida 4 agent ishlaydi: Leader, Support, Checker, Teacher.
 Agentlarda yozish asbobi yo'q. Kodni faqat bot o'zgartiradi, egasi [Ha] bosgandan keyin. Bot o'zgarishni `main` ga o'zi push qiladi: [Ha] egasining push ruxsati (egasi, 2026-09-28). Xotirani ham bot yozadi.
-Jonli ma'lumot faqat Facts'dan (`agents/state/support_facts.json`). Agentda shell va DB yo'q.
+Jonli ma'lumot Facts'dan (`agents/state/support_facts.json`) va bot Checker topshirig'iga qo'shadigan blokdan (health yoki to'lov tekshiruvi). Agentda shell, DB va CRM yo'q: ularni faqat bot jarayoni o'qiydi.
 
 ### Rollar
 
@@ -23,7 +23,7 @@ Jonli ma'lumot faqat Facts'dan (`agents/state/support_facts.json`). Agentda shel
 |---|---|---|---|---|
 | Leader | Egasi bilan yagona suhbat. JSON qaytaradi (`intent`, `delegate_to`, `task_for_agent`, `human_reply`), kerak bo'lsa sub-agentga topshiradi, natijani o'z ohangida aytadi | Read, Grep, Glob | Yo'q | 180 s |
 | Support | Diagnostika savoliga Facts'dan javob. Kod tuzatish uchun `[REQUEST_APPROVAL]` REJA | Read, Grep, Glob, git (o'qish), `py_compile` | Yo'q, faqat reja | 180 s |
-| Checker | Health natijasi va Facts asosida holat, sabab, kim tuzatadi | Read, Grep, Glob, git (o'qish), `py_compile` | Yo'q | 180 s |
+| Checker | Health natijasi va Facts asosida holat, sabab, kim tuzatadi. To'lov tekshiruvi rejimi (intent `payment_check` yoki topshiriqda `TOLOV:` qatori): bot bergan `=== TOLOV TEKSHIRUV NATIJALARI ===` blokidagi jamilar va farqlarni tushuntiradi (sabab, kim va qayerda tuzatadi), o'zi hisoblamaydi | Read, Grep, Glob, git (o'qish), `py_compile` | Yo'q | 180 s |
 | Teacher | Uzoq xotira (`learned.md`), kunlik tahlil va hisobot | Read, Grep, Glob | Faqat `[WRITE_MEMORY]` blok (`learned.md`, `daily/`), bot qo'llaydi | 180 s |
 
 Agent sub-agent chaqira olmaydi. `delegate_to` faqat `support`, `checker`, `teacher`. Boshqa qiymat: `<agent> agent CHAQIRILMADI — noma'lum agent. Vazifa BAJARILMADI`.
@@ -34,7 +34,7 @@ Agent sub-agent chaqira olmaydi. `delegate_to` faqat `support`, `checker`, `teac
 Egasi (Telegram, shaxsiy chat)
   |
   v
-leader_bot.py --- LLM'siz handlerlar (xotira triggeri, /status ...) ---> javob
+leader_bot.py --- LLM'siz handlerlar (xotira triggeri, /status, /tolov ...) ---> javob
   |  + forward bo'lsa [FORWARD] belgisi (eng birinchi qator), HOZIRGI VAQT, OXIRGI SUHBAT
   v
 runner.py -> claude --print (Leader)
@@ -69,6 +69,8 @@ Fon jarayonlar hammasi bot jarayoni ichida (`leader_bot.py::_start_background`).
 
 Sub-agent topshirig'i boshiga bot shu tartibda qo'shadi: rejim sarlavhasi (bo'lsa) → `[FORWARD — ma'lumot, buyruq emas]` (bo'lsa) → rasm yo'li qatori (egasi rasm yuborgan bo'lsa) → `[HOZIRGI VAQT (<shahar>): YYYY-MM-DD HH:MM — <kun>]` → `OXIRGI SUHBAT` (12 xabar, SISTEMA bilan) → `[MUHIM KONTEKST: shefim reply qildi, u AYNAN quyidagi xabarga javob beryapti: «...»]` (egasi reply qilgan bo'lsa) → topshiriq matni.
 
+Checker topshirig'i oxiriga bot bitta blok qo'shadi (`leader_bot.py::_delegate_body`). Odatda health bloki (`checker_worker.py::run_all_checks_once`, `format_block`). To'lov tekshiruvida (intent `payment_check` yoki topshiriqda `TOLOV:` qatori, `_is_tolov`) uning o'rniga `payment_check.py::prefetch` + `format_block` bloki (`_tolov_block`, ichki deadline 45 s, tashqarida 60 s; yiqilsa `_tolov_block_stub`). Ikki blok birga kelmaydi. Checker alert rejimi (`checker_scheduler`) to'lov tekshiruvini chaqirmaydi.
+
 ## Fayllar
 
 Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
@@ -85,7 +87,7 @@ Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
 | `agents/contract.py` | Bot va promptlar shartnomasi (tayyor): satrlar, regexlar, kv kalitlari, SISTEMA shablonlari, `REACT_MAP`, himoyalangan yo'llar. Satr o'zgarsa promptdagi jufti ham shu commitda | `sistema`, `kv_key`, `has_secret`, `clean_dynamic` |
 | `agents/config.py` | Env, yo'llar, Toshkent vaqti, repo yo'li tekshiruvi (tayyor) | `get_settings`, `env`, `load_env_file`, `agent_timeout_s`, `config_errors`, `config_warnings`, `v1_leader_conflict`, `safe_repo_path`, `is_sensitive`, `now_line` |
 | `agents/runner.py` | Claude Code CLI chaqiruvi | `run_agent`, `_precheck`, `_call_cli`, `build_cli_cmd`, `build_system_prompt`, `load_memory_block`, `recent_commits`, `agent_disallowed_tools`, `agent_tools`, `pick_model`, `build_agent_env`, `probe_cli`, `_log_run` |
-| `agents/leader_bot.py` | aiogram 3 bot, servis `xon-tranzactions-leader` (`python -m agents.leader_bot`) | `run`, `on_text`, `_is_owner_private`, `_is_forwarded`, `_memory_command`, `_leader_turn`, `delegate`, `_delegate_body`, `_synth`, `on_callback`, `_save_promise`, `_reminder_scheduler`, `_source_watcher`, `cmd_start`, `cmd_status`, `cmd_health`, `cmd_reset` |
+| `agents/leader_bot.py` | aiogram 3 bot, servis `xon-tranzactions-leader` (`python -m agents.leader_bot`) | `run`, `on_text`, `_is_owner_private`, `_is_forwarded`, `_memory_command`, `_leader_turn`, `delegate`, `_delegate_body`, `_synth`, `on_callback`, `_save_promise`, `_reminder_scheduler`, `_source_watcher`, `cmd_start`, `cmd_status`, `cmd_health`, `cmd_reset`, `cmd_tolov`, `_is_tolov`, `_tolov_block` |
 | `agents/leader_logic.py` | Leader javobini o'qish (sof funksiyalar) | `parse_leader_response`, `normalize_delegate`, `detect_memory_command`, `detect_promise`, `is_lie`, `extract_react`, `normalize_latin` |
 | `agents/history.py` | Suhbat tarixi va topshiriq matni | `add_history`, `add_system`, `history_context`, `build_leader_task`, `build_sub_task`, `build_synth_task` |
 | `agents/reja.py` | Support REJA: parse, preview, [Ha]/[Yo'q], qo'llash | `extract_request_approval`, `has_blockless_trigger`, `parse_plan`, `validate_plan`, `offer_plan`, `decide`, `execute_approved`, `apply_plan`, `_acquire_deploy_lock`, `_tsc_check`, `recover_interrupted` |
@@ -94,6 +96,7 @@ Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
 | `agents/notify.py` | Telegram'ga yuborish (bo'lish, HTML) | `Outbox`, `HttpOutbox`, `split_text`, `chunks_for_send` |
 | `agents/support_facts.py` | Facts: bot ichida `facts_scheduler` (har 300 s). Qo'lda: `python3 -m agents.support_facts` | `build_facts`, `_safe`, `save_facts`, `_dump_grep_friendly`, `_collect_<kalit>`, `collect_and_save`, `facts_scheduler` |
 | `agents/checker_worker.py` | Health tekshiruvi va alert | `CHECKS`, `run_all_checks_once`, `format_block`, `_record`, `_should_alert`, `_record_alert`, `_ask_claude`, `checker_scheduler` |
+| `agents/payment_check.py` | To'lov tekshiruvi: CRM payment-history ↔ `transactions` ↔ `oplata_kv`, faqat o'qish. Bot `/tolov` va Checker `payment_check` topshirig'ida LLM'dan oldin chaqiradi. DB bitta `db.tx("facts", readonly=True)` ichida; CRM faqat `GET {XONSAROY_CLIENT_BASE}/payment-history`, POST/PUT/DELETE kodi yo'q. Juftlash va farq kodlari shu yerda, agent faqat tushuntiradi. Bilim: `tolov_tekshirish.md` | `prefetch` (yagona kirish, exception chiqarmaydi), `parse_kirish`, `juftla`, `jamilar`, `format_block` (agentga blok), `format_owner` (`/tolov` HTML), `qisqa` (tarixga bir qator, PII'siz), `_db_collect`, `_crm_collect`, `_crm_get` (yagona tarmoq funksiyasi), `_kunlik_oshir` |
 | `agents/teacher_daily.py` | Kunlik tahlil scheduler | `teacher_daily_scheduler`, `run_daily_review`, `_run_review`, `build_inputs`, `collect_day` |
 | `agents/db_migrations.py` | Bot jadvallari (`agents` sxemasi) | `ensure_tables`, `missing_tables`, `cleanup_old` |
 | `agents/deploy/xon-tranzactions-leader.service` | systemd unit namunasi (`User=root`, `AGENTS_ENV_FILE` bilan, `EnvironmentFile` yo'q) | — |
@@ -111,9 +114,10 @@ Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
 ## API endpointlar
 
 Yo'q. Bot HTTP endpoint ochmaydi. Telegram'ga long-polling (`getUpdates`) bilan, faqat o'z tokeni bilan ulanadi.
-Agentlar va Facts backend HTTP endpointlarini chaqirmaydi. Masalan `/api/transactions/reconcile/today` bank API'ga chiqadi va DB'ga yozadi.
+Agentlar, Facts va to'lov tekshiruvi backend HTTP endpointlarini chaqirmaydi. Masalan `/api/transactions/reconcile/today` bank API'ga chiqadi va DB'ga yozadi.
+Yagona tashqi so'rov (Telegram'dan tashqari): to'lov tekshiruvida bot jarayoni (agent emas) XonSaroy CRM'ga faqat `GET {XONSAROY_CLIENT_BASE}/payment-history` yuboradi (`payment_check.py::_crm_get`). Metod, yo'l, host va parametrlar (`contract.py::TOLOV_CRM_PARAMLAR`) oq ro'yxatda, redirect taqiq, TLS tekshiruvi yoqilgan. CRM faqat o'qiladi (egasi qoidasi).
 
-Bot buyruqlari (LLM'siz): xotira triggeri (`eslab qol`, `yodda tut`, `yodda saqla`, `xotiraga yoz`), `/start`, `/status`, `/health`, `/reset`. To'liq va yagona ro'yxat: `imkoniyatlar.md` 5-bo'lim.
+Bot buyruqlari (LLM'siz): xotira triggeri (`eslab qol`, `yodda tut`, `yodda saqla`, `xotiraga yoz`), `/start`, `/status`, `/health`, `/reset`, `/tolov` (`/tolov <shartnoma | ID | summa sana | mijoz ism>`, `payment_check.py` natijasi `<pre>` jadval bo'lib keladi, tarixga faqat `qisqa` qatori). To'liq va yagona ro'yxat: `imkoniyatlar.md` 5-bo'lim.
 Boshqa `/buyruq` (masalan `/help`, `/send`) ro'yxatda yo'q: oddiy matn bo'lib Leader'ga ketadi. Forward qilingan buyruq bajarilmaydi (`leader_bot.py::_register`).
 
 ## Frontend sahifalar
@@ -128,7 +132,7 @@ Bot jadvallari `xon_tranzactions` bazasidagi alohida `agents` sxemasida. Yagona 
 
 | Jadval | Kim yozadi | Kim o'qiydi | Muhim ustunlar |
 |---|---|---|---|
-| `agents.kv_store` | bot, runner, schedulerlar (`db.py::kv_*`) | hammasi | `k` VARCHAR(64) PK, `value`, `updated_at`. Kalitlar (`contract.py::KV_*`): `leader_chat_history`, `agent_enabled_<nom>`, `agents_rate_limit_until`, `sup_appr_<token>`, `sup_run_<token>`, `sup_done_<token>`, `sup_exec_lock`, `sup_exec_active`, `tw_appr_<token>`, `tw_run_<token>`, `checker:last_full_run`, `checker_lease`, `teacher_daily_last_run`, `teacher_daily_lease`, `teacher_daily_progress_<sana>`, `facts_lease`, `facts_cache_<kalit>`, `recent_photo`, `leader_heartbeat`, `cleanup_last` |
+| `agents.kv_store` | bot, runner, schedulerlar (`db.py::kv_*`), to'lov tekshiruvi hisoblagichi (`payment_check.py::_kunlik_oshir`) | hammasi | `k` VARCHAR(64) PK, `value`, `updated_at`. Kalitlar (`contract.py::KV_*`): `leader_chat_history`, `agent_enabled_<nom>`, `agents_rate_limit_until`, `sup_appr_<token>`, `sup_run_<token>`, `sup_done_<token>`, `sup_exec_lock`, `sup_exec_active`, `tw_appr_<token>`, `tw_run_<token>`, `checker:last_full_run`, `checker_lease`, `teacher_daily_last_run`, `teacher_daily_lease`, `teacher_daily_progress_<sana>`, `facts_lease`, `facts_cache_<kalit>`, `recent_photo`, `leader_heartbeat`, `cleanup_last`, `tolov_crm_<YYYYMMDD>` (kunlik CRM so'rov hisoblagichi, Toshkent kuni, `KV_TOLOV_CRM_KUN`; restartda nolga tushmaydi) |
 | `agents.agent_runs` | `runner.py::_log_run` | `runner.py::_precheck` (kunlik cap), `teacher_daily.py`, `/status` (`leader_bot.py::_status_text`), Checker `agents` tekshiruvi | agent, status (`timeout` ham), vaqt, kirish va chiqish preview |
 | `agents.agent_tasks` | `leader_bot.py` (`_task_start`, `_task_finish`), `memory_blocks.py` (Teacher fon) | Facts `agent_tasks` | `in_progress` → `done` yoki `failed`, forward flag |
 | `agents.agent_memory` | `memory_blocks.py::apply_write_blocks`, `write_runtime_memory` | — | qo'llangan `[WRITE_MEMORY]` nusxasi |
@@ -137,7 +141,7 @@ Bot jadvallari `xon_tranzactions` bazasidagi alohida `agents` sxemasida. Yagona 
 | `agents.agent_alert_log` | `checker_worker.py::_record_alert` | `checker_worker.py::_should_alert` | komponent + status, 1 soat throttle |
 | `agents.agent_chat_log` | `history.py::add_history`, `add_system` | `teacher_daily.py::collect_day` | `id`, `ts`, `role`, `text`, `is_forward`. Shaxsiy ma'lumot bor: 30 kun saqlanadi (`db_migrations.py::cleanup_old`) |
 
-Facts `public` sxemani faqat o'qiydi (SELECT huquqli alohida rol, pastda "Facts manbalari").
+Facts `public` sxemani faqat o'qiydi (SELECT huquqli alohida rol, pastda "Facts manbalari"). `payment_check.py` ham shu `facts` ulanishida, `READ ONLY` tranzaksiyada o'qiydi; biznes jadvalga yozmaydi.
 v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_alerts`) `schema.prisma` da bor. Ular bu tizimniki emas, tegilmaydi. Facts `schedulers` faqat `leader_alerts` va `leader_runs` ni o'qiydi.
 
 ## Biznes qoidalar
@@ -150,7 +154,7 @@ v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_aler
 - Auth: egasi serverda `claude setup-token` bilan token oladi va `backend/.env` ga `ANTHROPIC_SETUP_TOKEN` qilib qo'yadi (qo'yilgan: bot 2026-09-28 dan ishlayapti). Runner uni agent env'iga `CLAUDE_CODE_OAUTH_TOKEN` nomi bilan beradi.
 - `ANTHROPIC_API_KEY` agentga HECH QACHON berilmaydi. U ham `backend/.env` da (backend AI modullari uchun). Ikki auth birga bo'lsa, setup token ishlatilmay qoladi yoki CLI osiladi. Egasi qarori (2026-09-28): agentlar API kalitga ulanmaydi.
 - Bot `backend/.env` ni o'z parseri bilan o'qiydi, `os.environ` ga yozmaydi, faqat nomi so'ralgan kalitni oladi (`config.py::env`). systemd unit'da `EnvironmentFile` bo'lmasligi kerak (fayl `AGENTS_ENV_FILE` bilan beriladi). Shu sabab backend sirlari bot jarayoni env'iga ham, agentga ham o'tmaydi.
-- Env noldan, oq ro'yxat bilan quriladi (`runner.py`, KOD 2.4, `contract.py::AGENT_ENV_*`): `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ`, `USER`, `CLAUDE_CODE_OAUTH_TOKEN` (= `ANTHROPIC_SETUP_TOKEN`), ixtiyoriy `ANTHROPIC_BASE_URL`. Boshqa hech narsa: `DATABASE_URL`, bot tokenlari, `LEADER_*` ham yo'q.
+- Env noldan, oq ro'yxat bilan quriladi (`runner.py`, KOD 2.4, `contract.py::AGENT_ENV_*`): `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ`, `USER`, `CLAUDE_CODE_OAUTH_TOKEN` (= `ANTHROPIC_SETUP_TOKEN`), ixtiyoriy `ANTHROPIC_BASE_URL`. Boshqa hech narsa: `DATABASE_URL`, bot tokenlari, `LEADER_*`, `XONSAROY_*` ham yo'q.
 - Setup token Claude obunasi (Pro, Max, Team yoki Enterprise) bilan ishlaydi. Limit egasining Claude Code ishi bilan umumiy bo'lishi mumkin (tekshirilmagan). Shu sabab `AGENT_DAILY_CAP` bor.
 - Agent CLI alohida imtiyozsiz OS foydalanuvchisida ishga tushadi (`AGENT_OS_USER`, `runner.py::_launch_spec`). Bot root bo'lsa Popen `user=`, aks holda `sudo -n -H -u <agent_user> --`. Serverda bot root, agent CLI `xonagent` ostida (sudo'siz). `AGENT_OS_USER` bo'sh bo'lsa CLI bot foydalanuvchisi ostida ishlaydi (logda ogohlantirish). Bot root va `AGENT_OS_USER` bo'sh bo'lsa CLI chaqirilmaydi: `root ostida bypass rejimi ishlamaydi, AGENT_OS_USER kerak`. Agent foydalanuvchisi `backend/.env` ni, uy papkasini, push kalitini va bot `/proc`ini o'qiy olmaydi. Repoga faqat o'qish (`.env*` mustasno). Uning git sozlamasida `safe.directory = /var/www/xon_tranzactions`.
 - Model (`runner.py::pick_model`): default `AGENTS_MODEL_STRONG`, `complexity: simple` bo'lsa `AGENTS_MODEL_FAST`. ID'lar `.env` da, bo'lmasa `config.py` dagi default (`claude-opus-5-5`, `claude-sonnet-5`). Tez model faqat Checker alertida.
@@ -172,6 +176,7 @@ v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_aler
 | Teacher | 22:30, lease 20 daqiqa, 30000+ belgi bo'lsa 4 mini + yakuniy | `teacher_daily.py` |
 | Rasm | `static/tg_uploads/`, 7 kun | `leader_bot.py` |
 | Facts | har 300 s, 15 daqiqadan eski = eski | `support_facts.py::facts_scheduler` (`contract.py::FACTS_INTERVAL_S`, `FACTS_ESKI_S`) |
+| To'lov tekshiruvi | prefetch 45 s (tashqarida 60 s), DB statement 15 s, CRM so'rov 20 s; bir chaqiruvda 3 shartnomagacha va 7 CRM so'rovigacha (parallellik 1), CRM kesh 10 daqiqa (faqat xotirada), kunlik 300 so'rov (`AGENTS_TOLOV_CRM_KUNLIK`); blok 9000 belgi, jadval 40 qator (`/tolov` da 15), farqlar 25 | `contract.py::TOLOV_*`, `payment_check.py::_CrmSessiya`, `leader_bot.py::_tolov_prefetch` |
 
 ### REJA qo'llash (TypeScript loyihasi)
 
@@ -215,6 +220,11 @@ Bot (`xon-tranzactions-leader`). Fayl `backend/.env`: egasi 2026-09-28 kalitlarn
 - `AGENTS_REPO` — repo ildizini almashtiradi, faqat testlar uchun.
 - DB (shablonda nomi yo'q): `AGENTS_DB_URL` (bot jadvallari, `agents` sxemasi) va `AGENTS_FACTS_DB_URL` (Facts, faqat SELECT huquqli rol), ikkalasi ixtiyoriy. Kodda zanjir: `AGENTS_FACTS_DB_URL` → `AGENTS_DB_URL` → `DATABASE_URL` (`config.py::get_settings`). Ular berilmasa Facts ham, bot jadvallari ham backend'ning to'liq huquqli `DATABASE_URL` i bilan ishlaydi, Facts'ni faqat `READ ONLY` tranzaksiya himoya qiladi. SELECT huquqli rol tavsiya qilinadi (egasi qarori). `DATABASE_URL` agent env'iga hech qachon o'tmaydi.
 - `ANTHROPIC_API_KEY` shu faylda bor, lekin bot uni agentga bermaydi.
+- To'lov tekshiruvi (`payment_check.py`, nomlar `contract.py::TOLOV_CRM_ENV_*`). Qiymatlar faqat bot jarayonida, har CRM so'rovida `config.env` bilan o'qiladi: global'da saqlanmaydi, agent env'iga, logga, blokka tushmaydi.
+  - `XONSAROY_API_KEY`, `XONSAROY_API_SECRET` — XonSaroy CRM client kaliti. Backend ham shu nom bilan shu faylda o'qiydi (`backend/src/crm/crm.service.ts`). `AGENTS_ENV_FILE` boshqa faylga ko'rsatsa, egasi ikkalasini o'sha faylga qo'shadi. Yo'q bo'lsa blokda `[crm] UNKNOWN: kalit yo'q`, qolgan tekshiruv ishlaydi.
+  - `XONSAROY_CLIENT_BASE` — ixtiyoriy, default `contract.py::TOLOV_CRM_BASE_DEFAULT` (backend default'i bilan bir xil). Faqat `https`, host shu qiymatga qadaladi. Yaroqsiz bo'lsa `[crm] UNKNOWN: manzil yaroqsiz`.
+  - `AGENTS_TOLOV_CRM` — `0` bo'lsa CRM chaqirilmaydi (`[crm] UNKNOWN: o'chirilgan`). Default yoqilgan.
+  - `AGENTS_TOLOV_CRM_KUNLIK` — kunlik CRM so'rov cheklovi (default 300). Hisoblagich `kv_store['tolov_crm_<YYYYMMDD>']`. Tugasa `[crm] UNKNOWN: kunlik cheklov tugadi`.
 
 v1 leader (`backend/.env`, boshqa arxitektura, bu tizimga tegishli emas): `LEADER_ENABLED`, `LEADER_BOT_TOKEN`, `LEADER_OWNER_TG_IDS`, `LEADER_MODEL`, `LEADER_MODEL_STRONG`, `LEADER_DAILY_TOKENS`, `LEADER_ALERTS`, `LEADER_TEACHER`, `LEADER_REPO_DIR`, `LEADER_AGENTS_DIR`, `LEADER_SECRET_LITERALS`.
 Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABLED` != '0' va `LEADER_OWNER_TG_IDS` bor bo'lsa ishlaydi (`leader-config.service.ts`). Unda backend keyingi restartida yangi bot tokeni bilan poll qiladi: Telegram 409 Conflict, egasi ikki botdan javob oladi. Yangi bot esa startda buni aniqlasa ishga tushmaydi (`config.py::v1_leader_conflict`, `leader_bot.py::run`: logda `sozlama xatosi: backend/.env dagi v1 leader shu tokenni ishlatadi`). Yechim `LEADER_ENABLED=0` (egasi qarori).
@@ -230,6 +240,8 @@ Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABL
 - `teacher.md` rejim sarlavhalari o'zgarsa → `contract.py::TEACHER_*_TPL` ham (`teacher_daily.py`, fon topshirig'i `memory_blocks.py::teacher_fon`).
 - `Teacher uchun:` qatori shakli (`support.md` 14, `checker.md`, INDEX 5) o'zgarsa → `contract.py::TEACHER_UCHUN_RE` ham (`memory_blocks.py::extract_teacher_lines`, uni `leader_bot.py`, `checker_worker.py`, `teacher_daily.py` chaqiradi).
 - `checker.md` `=== CHECKER_WORKER OLDINDAN OLINGAN NATIJALAR ===` sarlavhasi o'zgarsa → `contract.py::CHECKER_BLOK_BOSH` ham (`checker_worker.py::format_block`, `leader_bot.py::_delegate_body`).
+- To'lov tekshiruvi satrlari (`contract.py` 18-bo'lim: `INTENT_TOLOV`, `TOLOV_TOPSHIRIQ_RE`, `TOLOV_BLOK_BOSH`, `TOLOV_KOMPONENTLAR`, `TOLOV_STUB_*`, `MSG_TOLOV_FOYDALANISH`, `TOLOV_QISQA_*`) o'zgarsa → `checker.md` "To'lov tekshiruvi rejimi", `leader.md` 4, 5, 9, 13, 19-21, `imkoniyatlar.md` 4.2 va 5, `tolov_tekshirish.md` ham (harfma-harf). `TOLOV_FARQ_KODLARI` yoki `TOLOV_FARQ_TUZATISH` o'zgarsa → `tolov_tekshirish.md` 7-bo'lim jadvali ham (`tests/test_payment_check.py` sinxronligini tekshiradi).
+- `backend/src/crm/crm.service.ts` (`paymentsByContract`, kompozit ID), `crm-sverka.service.ts` (juftlash, split), `contract-parser.ts` (shartnoma raqami) qoidasi o'zgarsa → `payment_check.py` dagi Python nusxasi (`norm_contract`, `variantlar`, `parse_composite`, `composite_core`, `crm_kind`, `juftla`) ham. Kod bilan bog'lanmaydi, qo'lda moslanadi.
 - `leader.md` 16 `[REACT:<belgi>]` nomlari (`thumbsup`, `ok_hand`, `fire`, `clap`, `thinking`, `eyes`, `pray`, `handshake`, `writing_hand`) o'zgarsa → `agents/contract.py::REACT_MAP` dagi nom → emoji jadvali ham; `leader_logic.py::extract_react` shu jadvalni ishlatadi (shablondan farqi: belgi emoji emas, nom).
 - `runner.py::agent_disallowed_tools` (`contract.py::DISALLOWED_TOOLS`), `agents/claude_settings.json` yoki `agents/bin/bash_guard.py` o'zgarsa → `imkoniyatlar.md` 1-3 va INDEX "Asboblar chegarasi" ham.
 - `support_facts.py::build_facts` kaliti o'zgarsa → Facts kalitlari ro'yxati 4 joyda (INDEX "Qayerga qarash", `leader.md` 9, `support.md` 4, `checker.md` "Facts kalitlari"), `imkoniyatlar.md` 4.1 va shu fayldagi "Facts manbalari" ham.
@@ -255,6 +267,7 @@ Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABL
 - Agent foydalanuvchisi repoga yoza olmaydi: agent o'zi `py_compile` qilsa `__pycache__` ga yoza olmay xato oladi. `ORNATISH.md` bo'yicha bu kutilgan holat: REJA qo'llanganda bot o'zi `py_compile` va `tsc` qiladi. Boshqa yechim (`__pycache__` ga huquq yoki `PYTHONPYCACHEPREFIX`, oq ro'yxat o'zgaradi) egasi qarori.
 - `tsc` tekshiruvi `backend/node_modules` va `frontend/node_modules` ga tayanadi. Ularni deploy o'rnatadi (`npm install --include=dev`).
 - `scripts/deploy.sh` ichida hali ochiq fallback sir qiymatlari bor. Ularni iqtibos qilma, REJA'ga ko'chirma.
+- To'lov tekshiruvida bot jarayoni XonSaroy client kalitini ishlatadi (kodda faqat GET, kalitning o'z huquqi tekshirilmagan). `payment_check.py` ga POST, PUT, DELETE, yangi CRM yo'li yoki oq ro'yxatdan tashqari parametr qo'shilmaydi: `tests/test_payment_check.py` faqat GET (`data=None`), yo'l, host va parametr oq ro'yxatini tekshiradi, manba kodida POST, PUT, PATCH, DELETE metodi yo'qligini ham. CRM `contract` filtri LIKE natija beradi (kod aniq filtrlaydi), 500 qator chegarasida jami "to'liq" deyilmaydi. Batafsil: `tolov_tekshirish.md` "Xavfli joylar".
 
 ## Tez-tez qilinadigan o'zgarishlar — qayerda
 
@@ -268,6 +281,7 @@ Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABL
 | Va'da so'zi | `leader.md` 8 + `contract.py::VADA_TRIGGERS`, `leader_logic.py::detect_promise` |
 | Teacher vaqti yoki rejimi | `contract.py::TEACHER_DAILY_TIME`, `teacher_daily.py::teacher_daily_scheduler`; `teacher.md` |
 | Checker tekshiruvi | `checker_worker.py::CHECKS`; `checker.md` "Tez-tez uchraydigan sabablar" |
+| To'lov tekshiruvi: farq kodi, CRM parametri, chegara | `payment_check.py::juftla`, `_crm_collect`; `contract.py::TOLOV_FARQ_KODLARI`, `TOLOV_FARQ_TUZATISH`, `TOLOV_CRM_PARAMLAR`, `TOLOV_*` chegaralar; `tolov_tekshirish.md` 7-bo'lim, `checker.md` "To'lov tekshiruvi rejimi"; `tests/test_payment_check.py`. CRM'ga yozuvchi so'rov (POST, PUT, DELETE) qo'shilmaydi |
 | Leader doimiy qoidasi | `agents/memory/leader.md` (REJA orqali) |
 | Yangi modul bilim fayli | `knowledge/README.md` "Yangi modul qo'shilsa" (6 ta edit bitta REJA'da) |
 

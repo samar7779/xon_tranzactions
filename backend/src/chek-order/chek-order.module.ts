@@ -12,5 +12,6 @@ import { GoogleExportModule } from '../google-export/google-export.module';
   imports: [SyncModule, CrmModule, OplataKvModule, GoogleExportModule], // SettingsService + CrmService + OplataKvService + GoogleExportService (Chek payment sheet o'qish)
   controllers: [ChekOrderController, ChekTgController],
   providers: [ChekOrderService, ChekTgService],
+  exports: [ChekOrderService], // agent-bridge (payment-check) qayta ishlatadi
 })
 export class ChekOrderModule {}

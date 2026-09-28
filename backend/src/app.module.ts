@@ -44,6 +44,7 @@ import { BankPwdModule } from './bank-pwd/bank-pwd.module';
 import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
 import { LeaderModule } from './leader/leader.module';
 import { AgentTeamModule } from './agent-team/agent-team.module';
+import { AgentBridgeModule } from './agent-bridge/agent-bridge.module';
 
 @Module({
   imports: [
@@ -98,6 +99,7 @@ import { AgentTeamModule } from './agent-team/agent-team.module';
     AuditModule,
     LeaderModule,
     AgentTeamModule,
+    AgentBridgeModule,
   ],
   providers: [
     // FIX (A1): ThrottlerGuard'ni GLOBAL bog'laymiz — avval ThrottlerModule sozlangan-u,

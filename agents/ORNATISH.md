@@ -152,12 +152,17 @@ Format: `KALIT=qiymat`, har biri alohida qatorda. Qiymat qo'shtirnoqsiz yoki `'.
 | `CLAUDE_CMD` | tavsiya | `which claude` natijasi (absolyut yo'l). Default `claude` |
 | `DATABASE_URL` | ha | `backend/.env` da allaqachon bor. `?schema=public` ni bot o'zi olib tashlaydi |
 | `AGENTS_DB_URL` | yo'q | bot jadvallari uchun alohida URL. Default `DATABASE_URL` |
-| `AGENTS_FACTS_DB_URL` | yo'q | Facts uchun faqat SELECT huquqli rol (8-qadam) |
+| `AGENTS_FACTS_DB_URL` | tavsiya | Facts va `/tolov` uchun faqat SELECT huquqli rol (8-qadam). Default `DATABASE_URL` |
 | `AGENTS_MODEL_STRONG` | yo'q | default `claude-opus-5-5` |
 | `AGENTS_MODEL_FAST` | yo'q | default `claude-sonnet-5` |
 | `AGENT_DAILY_CAP` | yo'q | har agentga kunlik chaqiruv chegarasi, default `200` |
 | `AGENT_TIMEOUT_S` | yo'q | CLI timeout, default `180` s |
 | `AGENT_TIMEOUT_S_<AGENT>` | yo'q | agent bo'yicha, masalan `AGENT_TIMEOUT_S_SUPPORT=600` |
+| `XONSAROY_API_KEY` | `/tolov` uchun | CRM client kaliti. `backend/.env` da allaqachon bor. B variantda (6-qadam) bot env fayliga qo'shiladi. Yo'q bo'lsa CRM so'ralmaydi: `[crm] UNKNOWN: kalit yo'q` |
+| `XONSAROY_API_SECRET` | `/tolov` uchun | CRM client siri. Joyi `XONSAROY_API_KEY` bilan bir xil |
+| `XONSAROY_CLIENT_BASE` | yo'q | CRM client manzili, faqat `https`. Default `https://app-api.xonsaroy.uz/api/v4/client` (backend bilan bir xil). `backend/.env` da bo'lsa, B variantda ham qo'shiladi. Yaroqsiz bo'lsa `[crm] UNKNOWN: manzil yaroqsiz` |
+| `AGENTS_TOLOV_CRM` | yo'q | default `1` (yoqilgan). `0` CRM so'rovlarini o'chiradi: `[crm] UNKNOWN: o'chirilgan`, bank va OplatyKv tekshiruvi ishlayveradi |
+| `AGENTS_TOLOV_CRM_KUNLIK` | yo'q | bir kunda (Toshkent) CRM GET so'rovlari chegarasi, default `300`. Oshsa `[crm] UNKNOWN: kunlik cheklov tugadi` |
 | `ANTHROPIC_BASE_URL` | yo'q | faqat proxy kerak bo'lsa |
 | `DEPLOY_LOCK` | yo'q | default `/var/run/xon-tranzactions-deploy.lock` (`deploy.sh` bilan bir xil) |
 | `DEPLOY_LOG` | yo'q | default `/var/log/xon-tranzactions/deploy.log` |
@@ -165,6 +170,10 @@ Format: `KALIT=qiymat`, har biri alohida qatorda. Qiymat qo'shtirnoqsiz yoki `'.
 
 Shablon tavsiya qilgan timeout'lar: support 600, leader 300, checker 240, teacher 180 s.
 Kerak bo'lsa `AGENT_TIMEOUT_S_SUPPORT`, `AGENT_TIMEOUT_S_LEADER`, `AGENT_TIMEOUT_S_CHECKER` bilan bering.
+
+`XONSAROY_*` kalitlarini faqat bot jarayoni ishlatadi, faqat `GET {XONSAROY_CLIENT_BASE}/payment-history`
+uchun (CRM faqat o'qiladi). Agentga ular o'tmaydi: 14b dagi env ro'yxati o'zgarmaydi.
+Env fayl keshlanadi, kalit o'zgargach servisni restart qiling.
 
 Backend servisi ham `backend/.env` ni o'qiydi (`EnvironmentFile`). Yangi kalitlar backendga zarar
 qilmaydi, faqat 6-qadamdagi `LEADER_BOT_TOKEN` to'qnashuviga e'tibor bering.
@@ -186,11 +195,20 @@ Keyin `systemctl restart xon-tranzactions-backend`.
 
 ```bash
 install -m 600 -o root -g root /dev/null /etc/xon-tranzactions-leader.env
-nano /etc/xon-tranzactions-leader.env        # 5-qadam kalitlari + DATABASE_URL
+nano /etc/xon-tranzactions-leader.env        # 5-qadam kalitlari + DATABASE_URL + XONSAROY_*
 systemctl edit xon-tranzactions-leader
 # ochilgan faylga:
 # [Service]
 # Environment=AGENTS_ENV_FILE=/etc/xon-tranzactions-leader.env
+```
+
+B variantda bot `backend/.env` ni o'qimaydi. `/tolov` CRM'ni ko'rishi uchun `XONSAROY_API_KEY`,
+`XONSAROY_API_SECRET` (va bor bo'lsa `XONSAROY_CLIENT_BASE`) shu faylga ham kerak. Qiymatlarni
+ekranga chiqarmasdan ko'chirish (bir marta ishga tushiring, ikkinchi buyruq faqat nomlarni chiqaradi):
+
+```bash
+grep -E '^XONSAROY_(API_KEY|API_SECRET|CLIENT_BASE)=' /var/www/xon_tranzactions/backend/.env >> /etc/xon-tranzactions-leader.env
+grep -oE '^XONSAROY_[A-Z_]+' /etc/xon-tranzactions-leader.env
 ```
 
 B variantda qo'lda ishga tushiriladigan har buyruqdan oldin
@@ -260,8 +278,9 @@ sudo -u postgres psql -d xon_tranzactions -c '\dt agents.*'
   `sudo -u postgres psql -d xon_tranzactions -c 'GRANT CREATE ON DATABASE xon_tranzactions TO <rol>;'`
 - Eski yozuvlarni bot kuniga bir marta o'chiradi. Qo'lda: `$PY -m agents.db_migrations --cleanup`.
 
-Ixtiyoriy, qo'shimcha himoya: Facts uchun faqat o'qish roli. Facts kodi allaqachon
-`SET TRANSACTION READ ONLY` bilan ishlaydi, rol esa ikkinchi qatlam. `<backend_rol>` o'rniga
+Tavsiya etiladi: Facts va `/tolov` uchun faqat o'qish roli. Ikkalasi ham `db.tx("facts", readonly=True)`
+(`SET TRANSACTION READ ONLY`) bilan ishlaydi, rol esa ikkinchi qatlam. `/tolov` da kirish egasining
+erkin matnidan keladi, shuning uchun bu qatlam endi muhimroq. `<backend_rol>` o'rniga
 `DATABASE_URL` dagi rol nomini yozing:
 
 ```bash
@@ -466,6 +485,7 @@ Support javobini DB va Telegram'siz tekshirish: javobni faylga saqlang va
   - `$PY -m agents.checker_worker`: tekshiruv bloki.
   - `$PY -m agents.teacher_daily --inputs-only`: Teacher'ning bugungi kirishi.
   - `$PY -m agents.history`: OXIRGI SUHBAT bloki.
+  - `$PY -m agents.payment_check "<shartnoma yoki to'lov ID>"`: `/tolov` bloki. `--crm-yoq` bilan CRM'siz.
 - Agentni vaqtincha o'chirish (misol `checker`):
 
 ```bash
@@ -492,6 +512,10 @@ Qayta yoqish: shu buyruqda `'0'` o'rniga `'1'`.
 | `APPROVED BAJARILMADI — branch` | serverda `main` emas yoki fayl o'zgargan | `git status`, `git checkout main` |
 | `APPROVED BAJARILMADI — band (boshqa reja ishlayapti)` | boshqa reja yoki deploy ishlayapti | tugashini kutib, qayta so'rang |
 | Facts `updated_at` 15 daqiqadan eski | bot to'xtagan | `systemctl status xon-tranzactions-leader` |
+| `/tolov` blokida `[crm] UNKNOWN: kalit yo'q` | bot o'qiydigan env faylda `XONSAROY_API_KEY` yoki `XONSAROY_API_SECRET` yo'q (ko'pincha B variant) | 5, 6-qadam, keyin restart |
+| `[crm] UNKNOWN: manzil yaroqsiz` | `XONSAROY_CLIENT_BASE` `https` emas yoki buzuq | 5-qadam, keyin restart |
+| `[crm] UNKNOWN: o'chirilgan` | `AGENTS_TOLOV_CRM=0` | kalitni olib tashlang yoki `1` qiling, keyin restart |
+| `[crm] UNKNOWN: kunlik cheklov tugadi` | bugungi CRM so'rovlari `AGENTS_TOLOV_CRM_KUNLIK` ga yetdi | ertaga (Toshkent) o'zi tiklanadi yoki chegarani oshirib restart qiling |
 
 ## 18. Bot root EMAS bo'lsa (ixtiyoriy)
 

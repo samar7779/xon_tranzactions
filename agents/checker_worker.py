@@ -96,7 +96,7 @@ def _mask(text: str) -> str:
 def _clean_msg(text: Any, n: int = _MSG_MAX) -> str:
     """Bir qator, sirsiz, blok chegarasini soxtalashtirmaydi."""
     s = _mask(re.sub(r"\s+", " ", "" if text is None else str(text))).strip()
-    s = s.replace("===", "==")
+    s = re.sub(r"={3,}", "==", s)  # replace bir marta: "====" -> "===" bo'lardi (idempotent emas)
     return C.short(s, n)
 
 

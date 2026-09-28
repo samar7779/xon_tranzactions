@@ -27,6 +27,7 @@ INDEX "Modullar xaritasi" jadvalidagi har modul uchun bitta fayl:
 - `chek.md` — Shartnoma nazorati (`/chek`): shartnoma hujjatlari kontrolyor jurnali, CRM va HR ma'lumoti, Telegram xabari.
 - `eksport.md` — Google Sheets eksport, SHMITD hisoboti va autsourcing Excel'ini Telegram'ga yuborish.
 - `api.md` — tashqi tizimlar uchun API: kalitlar, OplatyKv delta-feed, Universal API, so'rov logi.
+- `tolov_tekshirish.md` — shartnoma va to'lov tekshiruvi (CRM ↔ `transactions` ↔ `oplata_kv`, `agents/payment_check.py`): manbalar, moslash kalitlari, `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` blokini o'qish, farq kodlari va kim tuzatadi. Tuzilmasi o'ziga xos (raqamli bo'limlar, 7-bo'lim kodlar jadvali testda tekshiriladi), oxirida Bog'liqliklar, Xavfli joylar va Tez-tez bo'limlari.
 
 ## Modul fayli tuzilmasi
 
@@ -148,7 +149,7 @@ Egasi xabarni "eslab qol", "yodda tut", "yodda saqla" yoki "xotiraga yoz" bilan 
 Bitta REJA ichida, har biri alohida edit:
 1. `agents/knowledge/<modul>.md` — yuqoridagi tuzilmada.
 2. Shu README'dagi "Modul fayllari" ro'yxatiga qator.
-3. `agents/memory/INDEX.md` "Modullar xaritasi" jadvaliga qator.
+3. `agents/memory/INDEX.md` "Modullar xaritasi" jadvaliga qator. INDEX 11950 belgidan oshmasin (12000 dan keyingisi jim kesiladi, test tekshiradi): kerak bo'lsa boshqa qatorni qisqartir.
 4. `db_schema.md`ga modul jadvallari.
 5. `CHANGELOG.md`ga qator.
 6. `agents/leader.md` 19-bo'lim jadvaliga qator (INDEX bilan bir xil).
