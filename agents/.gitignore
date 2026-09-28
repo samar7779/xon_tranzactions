@@ -1,0 +1,21 @@
+# Bot runtime fayllari: deploy (git reset --hard) ularga tegmaydi, commit ham bo'lmaydi.
+# Yo'llar shu papkaga (agents/) nisbatan. KOD 0, R8.
+
+# Facts JSON, REJA asl nusxalari, CLI vaqtinchalik fayllari (shaxsiy ma'lumot bor)
+/state/
+
+# Bot yozadigan xotira (Teacher bloklari va xotira triggeri)
+/memory/leader-runtime.md
+/memory/learned.md
+/memory/daily/
+
+# Python
+__pycache__/
+*.pyc
+
+# venv (tavsiya: repodan tashqarida, /opt/xon-tranzactions-leader/venv)
+.venv/
+venv/
+
+# static/tg_uploads/ ni bot o'zi yashiradi: static/tg_uploads/.gitignore = "*"
+# .env fayllari repo ildizidagi .gitignore da (**/.env)

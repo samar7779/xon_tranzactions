@@ -1,0 +1,6 @@
+# Leader agentlar boti (agents/) uchun Python bog'liqliklari. Python 3.10+.
+# O'rnatish: agents/ORNATISH.md 3-qadam (alohida venv).
+# aiogram faqat agents/leader_bot.py da, psycopg2 faqat agents/db.py da import qilinadi.
+# Testlar (agents/tests) ikkalasisiz ham ishlaydi.
+aiogram>=3.4,<4
+psycopg2-binary>=2.9,<3

@@ -1,0 +1,41 @@
+# Xon Tranzaksiyalar — Leader agentlar boti (@TRanSupport_bot), Python aiogram 3.
+# O'rnatish: agents/ORNATISH.md 11-qadam.
+#   cp agents/deploy/xon-tranzactions-leader.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now xon-tranzactions-leader
+#
+# Sirlar bu faylda YO'Q. Bot kalitlarni AGENTS_ENV_FILE dan NOMI bo'yicha o'qiydi
+# (oddiy parser, jarayon env'iga yozilmaydi). EnvironmentFile ataylab ishlatilmaydi:
+# backend sirlari bot va agent jarayonlari env'iga kirmasin.
+# deploy.sh bu servisni restart qilmaydi: agents/*.py o'zgarsa bot o'zi chiqadi (os._exit),
+# systemd qayta ko'taradi (Restart=always).
+
+[Unit]
+Description=Xon Tranzaksiyalar — Leader agentlar boti (Telegram, Claude Code CLI)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Repo va push kaliti root'da (backend kabi). Agent CLI imtiyozsiz AGENT_OS_USER ostida ishlaydi.
+User=root
+WorkingDirectory=/var/www/xon_tranzactions
+Environment=HOME=/root
+Environment=TZ=Asia/Tashkent
+Environment=LANG=C.UTF-8
+Environment=PYTHONUNBUFFERED=1
+Environment=AGENTS_ENV_FILE=/var/www/xon_tranzactions/backend/.env
+ExecStart=/opt/xon-tranzactions-leader/venv/bin/python -m agents.leader_bot
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+# Bot yozgan fayllar (Facts, CLI system prompt fayli, rasm) agent foydalanuvchisiga o'qiladigan bo'lsin
+UMask=0022
+# Bola jarayonlar (agent CLI) setuid orqali imtiyoz ololmaydi (sudo ham).
+# Bot root EMAS va agent sudo orqali ishga tushsa, bu qatorni olib tashlang (ORNATISH 14).
+NoNewPrivileges=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xon-tranzactions-leader
+
+[Install]
+WantedBy=multi-user.target
