@@ -1,7 +1,7 @@
 # CRM (XonSaroy)
 
 ## Vazifasi
-XonSaroy CRM bilan faqat o'qish integratsiyasi. Egasi qoidasi: CRM'ga hech qachon yozilmaydi. Oqim: izohdan shartnoma raqami ajratiladi → `crm_contracts` keshi yoki CRM `/show` → `found=true` bo'lsa mijoz, obyekt, status keshlanadi. Keshni XATO ta'rifi, OplatyKv ustunlari (`crm_status`, sotuv bo'limi, turi), split, XATO → CRM va CRM sverka ishlatadi.
+XonSaroy CRM bilan faqat o'qish integratsiyasi. Egasi qoidasi: CRM'ga hech qachon yozilmaydi. Oqim: izohdan shartnoma raqami ajratiladi → `crm_contracts` keshi yoki CRM `/show` → `found=true` bo'lsa mijoz, obyekt, status keshlanadi. Keshni XATO ta'rifi, OplatyKv ustunlari (`crm_status`, sotuv bo'limi, turi), split va XATO → CRM ishlatadi. CRM sverka keshni emas, CRM `/payment-history` ni to'g'ridan o'qiydi (`getPaymentHistoryAll`). Facts `crm_sverka.crm_kesh` faqat kesh hisoblagichi (topilgan, topilmagan, `branch_name` NULL), sverka natijasi emas.
 
 ## Fayllar
 Yo'llar `backend/src/` ichida.
@@ -34,7 +34,7 @@ Yo'llar `frontend/app/[locale]/(panel)/` ichida.
 ## DB jadvallar
 | Jadval | Kim yozadi | Kim o'qiydi | Muhim ustunlar |
 |---|---|---|---|
-| `crm_contracts` | `crm-contract-cache.service.ts` (lookup, backfill, `refreshVirtualStatus`), `crm.service.ts::search` (panel qidiruvi ham keshga yozadi), `oplata-kv.service.ts` (`fixClientNamesFromCrm`), `categorization.service.ts` (`deleteMany`). `crmStatusBackfillTick` o'zi yozmaydi, `refreshVirtualStatus` ni chaqiradi | XATO, `oplata_kv` ro'yxati, split | `contract_number` (PK), `found`, `customer_name`, `status`, `virtual_status`, `object_name`, `apartment_number`, `crm_order_id`, `branch_name`, `property_type` (parking, apartment), `raw_snapshot`, `last_verified_at`, `last_error` |
+| `crm_contracts` | `crm-contract-cache.service.ts` (lookup, backfill, `refreshVirtualStatus`), `crm.service.ts::search` (panel qidiruvi ham keshga yozadi), `oplata-kv.service.ts` (`fixClientNamesFromCrm`), `categorization.service.ts` (`deleteMany`). `crmStatusBackfillTick` o'zi yozmaydi, `refreshVirtualStatus` ni chaqiradi | XATO, `oplata_kv` ro'yxati, split, chek-order, `/api/v1`, Facts (`xato`, `crm_sverka.crm_kesh`) | `contract_number` (PK), `found`, `customer_name`, `status`, `virtual_status`, `object_name`, `apartment_number`, `crm_order_id`, `branch_name`, `property_type` (parking, apartment), `raw_snapshot`, `last_verified_at`, `last_error` |
 
 ## Biznes qoidalar
 - Kesh muddati `crm-contract-cache.service.ts::STALE_AFTER_MS`: `found=true` 24 soat (keyin fonda yangilanadi), `found=false` 4 soat (`NOT_FOUND_RETRY_AFTER_MS`, keyin qayta so'raladi).

@@ -161,6 +161,15 @@ def _hist(history: Optional[str]) -> str:
     return history_context() if history is None else history
 
 
+def muhim_kontekst(reply_quote: Optional[str]) -> Optional[str]:
+    """MUHIM KONTEKST qatori: egasi reply qilgan xabar matni tashqi matn (clean_external),
+    MUHIM_KONTEKST_MAX gacha. Iqtibos bo'sh bo'lsa None."""
+    if not reply_quote or not reply_quote.strip():
+        return None
+    quote = clean_external(reply_quote).strip()[:C.MUHIM_KONTEKST_MAX]
+    return C.MUHIM_KONTEKST_TPL.format(iqtibos=quote)
+
+
 def build_leader_task(text: str, *, is_fwd: bool, image_paths: Sequence[str] = (),
                       reply_quote: Optional[str] = None, now: Optional[datetime] = None,
                       history: Optional[str] = None) -> str:
@@ -172,20 +181,21 @@ def build_leader_task(text: str, *, is_fwd: bool, image_paths: Sequence[str] = (
         parts.append(C.RASM_QATOR_TPL.format(path=path))
     parts.append(config.now_line(now))
     parts.append(_hist(history) + "\n")
-    if reply_quote and reply_quote.strip():
-        quote = clean_external(reply_quote).strip()[:C.MUHIM_KONTEKST_MAX]
-        parts.append(C.MUHIM_KONTEKST_TPL.format(iqtibos=quote))
+    kontekst = muhim_kontekst(reply_quote)
+    if kontekst:
+        parts.append(kontekst)
     parts.append(clean_external(text) if is_fwd else neutralize(text))
     return "\n".join(parts)
 
 
 def build_sub_task(body: str, *, header: Optional[str] = None, is_fwd: bool = False,
-                   image_paths: Sequence[str] = (), now: Optional[datetime] = None,
-                   history: Optional[str] = None) -> str:
-    """Rejim sarlavhasi -> FORWARD -> rasm -> HOZIRGI VAQT -> OXIRGI SUHBAT (+bo'sh qator) -> topshiriq.
+                   image_paths: Sequence[str] = (), reply_quote: Optional[str] = None,
+                   now: Optional[datetime] = None, history: Optional[str] = None) -> str:
+    """Rejim sarlavhasi -> FORWARD -> rasm -> HOZIRGI VAQT -> OXIRGI SUHBAT (+bo'sh qator)
+    -> MUHIM KONTEKST (egasi reply qilgan bo'lsa) -> topshiriq.
 
     body o'zgartirilmaydi (Teacher kunlik kirishidagi haqiqiy [SISTEMA: ...] qatorlari saqlansin);
-    tashqi matnni chaqiruvchi tozalaydi.
+    tashqi matnni chaqiruvchi tozalaydi. reply_quote esa shu yerda tozalanadi (Leader'dagi kabi).
     """
     parts: List[str] = []
     if header:
@@ -196,6 +206,9 @@ def build_sub_task(body: str, *, header: Optional[str] = None, is_fwd: bool = Fa
         parts.append(C.RASM_QATOR_TPL.format(path=path))
     parts.append(config.now_line(now))
     parts.append(_hist(history) + "\n")
+    kontekst = muhim_kontekst(reply_quote)
+    if kontekst:
+        parts.append(kontekst)
     parts.append(body or "")
     return "\n".join(parts)
 

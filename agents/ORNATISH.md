@@ -4,9 +4,9 @@ Bu fayl egasi uchun. Hamma buyruq serverda, `root` sifatida bajariladi.
 Sirlar (token, parol, kalit) bu faylda ham, gitda ham, chatda ham YO'Q. Faqat env faylga yoziladi.
 Env kalitlarining faqat NOMLARI keltirilgan.
 
-**Tez yo'l.** 2-13 qadamlarning hammasini bitta skript bajaradi (qayta ishga tushirish xavfsiz):
-`bash /var/www/xon_tranzactions/agents/deploy/install.sh`. Qo'lda faqat 7-qadam (push kaliti)
-qoladi, skript oxirida uni tekshiradi. Quyidagi qadamlar skript nima qilishini batafsil aytadi.
+**Tez yo'l.** 2-13 qadamlarning ko'pini bitta skript bajaradi (qayta ishga tushirish xavfsiz):
+`bash /var/www/xon_tranzactions/agents/deploy/install.sh`. Qo'lda qoladi: 3-qadam (CLI o'rnatish,
+skript faqat tekshiradi), 7-qadam (push kaliti va git identity, skript oxirida tekshiradi), 10-qadam (nginx qatori). Quyidagi qadamlar skript nima qilishini batafsil aytadi.
 
 ## 0. Qisqacha
 
@@ -196,7 +196,7 @@ systemctl edit xon-tranzactions-leader
 B variantda qo'lda ishga tushiriladigan har buyruqdan oldin
 `export AGENTS_ENV_FILE=/etc/xon-tranzactions-leader.env` qiling.
 
-Tekshiruv: bot logida `v1 leader ham shu LEADER_BOT_TOKEN bilan poll qiladi` ogohlantirishi va
+Tekshiruv: bot logida `sozlama xatosi: backend/.env dagi v1 leader shu tokenni ishlatadi` xatosi va
 `Conflict` so'zi bo'lmasin (13-qadam).
 
 ## 7. Push kaliti va git identity

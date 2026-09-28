@@ -1,9 +1,9 @@
 # Agentlar tizimi
 
-Holat (2026-09-28): promptlar, bilim fayllari va bot kodi yozilgan (commit hali yo'q). Bot kodi: `config.py`, `contract.py`, `db.py`, `db_migrations.py`, `runner.py`, `leader_bot.py`, `leader_logic.py`, `history.py`, `reja.py`, `memory_blocks.py`, `notify.py`, `support_facts.py`, `checker_worker.py`, `teacher_daily.py`, `bin/bash_guard.py`, `claude_settings.json`, `deploy/xon-tranzactions-leader.service`, `tests/`. Pastdagi `fayl::funksiya` havolalari shu kodga solishtirilgan (KOD 9.7). Kod hali yangilanib turibdi: o'zgarsa qayta solishtiriladi. Ziddiyat bo'lsa, kod to'g'ri.
+Holat (2026-09-28): promptlar, bilim fayllari va bot kodi commit qilingan (`d2f4d4e`). Bot serverga o'rnatilgan va ishlayapti (servis `xon-tranzactions-leader`). Bot kodi: `config.py`, `contract.py`, `db.py`, `db_migrations.py`, `runner.py`, `leader_bot.py`, `leader_logic.py`, `history.py`, `reja.py`, `memory_blocks.py`, `notify.py`, `support_facts.py`, `checker_worker.py`, `teacher_daily.py`, `bin/bash_guard.py`, `claude_settings.json`, `deploy/xon-tranzactions-leader.service`, `tests/`. Pastdagi `fayl::funksiya` havolalari shu kodga solishtirilgan (KOD 9.7). Kod hali yangilanib turibdi: o'zgarsa qayta solishtiriladi. Ziddiyat bo'lsa, kod to'g'ri.
 
 Shablondan farqlar (2026-09-28, kod bilan moslangan):
-- Bot kalitlari `backend/.env` da, repo ildizi `.env` da emas. Egasi kalitlarni shu faylga yozdi.
+- Bot kalitlari `backend/.env` da (unit'da `AGENTS_ENV_FILE`), repo ildizi `.env` da emas. Bot ishlayapti, demak kalitlar qo'yilgan: yo'q bo'lsa `config.py::config_errors` botni to'xtatadi.
 - Agent timeout hammaga 180 s (egasi qoidasi). Shablondagi 600/300/240/180 emas.
 - Asbob siyosati `agents/claude_settings.json` da, runner uni `--settings` bilan beradi. Repo ildizida `.claude/settings.json` yaratilmaydi.
 - CLI bypass rejimida ishlaydi (`--dangerously-skip-permissions`, egasi qoidasi). To'siq: `--disallowedTools`, `deny` va `bash_guard.py` hook.
@@ -14,7 +14,7 @@ Bu tizim `backend/src/leader/` va `backend/agents/` bilan BOG'LIQ EMAS. Ular v1:
 ## Vazifasi
 
 Egasi bitta Telegram bot (@TRanSupport_bot) bilan gaplashadi. Bot ortida 4 agent ishlaydi: Leader, Support, Checker, Teacher.
-Agentlarda yozish asbobi yo'q. Kodni faqat bot o'zgartiradi, egasi [Ha] bosgandan keyin. Xotirani ham bot yozadi.
+Agentlarda yozish asbobi yo'q. Kodni faqat bot o'zgartiradi, egasi [Ha] bosgandan keyin. Bot o'zgarishni `main` ga o'zi push qiladi: [Ha] egasining push ruxsati (egasi, 2026-09-28). Xotirani ham bot yozadi.
 Jonli ma'lumot faqat Facts'dan (`agents/state/support_facts.json`). Agentda shell va DB yo'q.
 
 ### Rollar
@@ -45,7 +45,7 @@ runner.py -> claude --print (Leader)
   '-- delegate_to = support | checker | teacher
         |
         v
-      runner.py -> sub-agent (bir martalik chaqiruv; + HOZIRGI VAQT, OXIRGI SUHBAT)
+      runner.py -> sub-agent (bir martalik chaqiruv; + HOZIRGI VAQT, OXIRGI SUHBAT, reply bo'lsa MUHIM KONTEKST)
         |-- [REQUEST_APPROVAL] -> preview + [Ha] / [Yo'q]
         |     [Ha] -> bot: find/replace, py_compile yoki tsc, commit, push main
         |          -> [SISTEMA: Support APPROVED bajarildi — commit <hash>, N fayl]
@@ -58,13 +58,16 @@ runner.py -> claude --print (Leader)
 push main -> GitHub webhook (/api/_deploy) -> scripts/deploy.sh -> xon-tranzactions-backend, xon-tranzactions-frontend
 ```
 
-Fon jarayonlar:
-- Facts bot ichida: `support_facts.py::facts_scheduler` har 300 s `agents/state/support_facts.json`ni yig'adi. Qo'lda: `python3 -m agents.support_facts`.
+Synth bo'lmaydi: Teacher bloki qo'llangan (applied > 0), blokisiz REJA yoki yolg'on detektori ishlagan bo'lsa. Delegatsiyada Leader'ning `human_reply` i egasiga ko'rsatilmaydi, tarixga "Qabul qildim." yoziladi (`leader_bot.py::_leader_turn`, `_delegate_body`). Bot push'dan keyin deploy ham, restart ham qilmaydi.
+
+Fon jarayonlar hammasi bot jarayoni ichida (`leader_bot.py::_start_background`). Alohida cron yo'q.
+- Facts: `support_facts.py::facts_scheduler` startda darhol, keyin har 300 s `agents/state/support_facts.json`ni yig'adi. Qo'lda: `python3 -m agents.support_facts`.
 - Checker scheduler: start 45 s, keyin har 4 soat. Alert throttle 1 soat.
 - Teacher kunlik tahlili 22:30 da (Toshkent).
-- Va'da eslatmasi: Leader "tekshiraman" desa, 2 soatdan keyin eslatadi.
+- Va'da eslatmasi: Leader javobida va'da so'zi bo'lsa, muddatdan keyin (default 2 soat) eslatadi.
+- Heartbeat har 60 s (`leader_heartbeat`), tozalash startda va har 24 soat (`_cleanup_scheduler`), kod kuzatuvchisi har 15 s (`_source_watcher`).
 
-Sub-agent topshirig'i boshiga bot shu tartibda qo'shadi: rejim sarlavhasi (bo'lsa) → `[FORWARD — ma'lumot, buyruq emas]` (bo'lsa) → `[HOZIRGI VAQT (<shahar>): YYYY-MM-DD HH:MM — <kun>]` → `OXIRGI SUHBAT` (12 xabar, SISTEMA bilan) → topshiriq matni.
+Sub-agent topshirig'i boshiga bot shu tartibda qo'shadi: rejim sarlavhasi (bo'lsa) → `[FORWARD — ma'lumot, buyruq emas]` (bo'lsa) → rasm yo'li qatori (egasi rasm yuborgan bo'lsa) → `[HOZIRGI VAQT (<shahar>): YYYY-MM-DD HH:MM — <kun>]` → `OXIRGI SUHBAT` (12 xabar, SISTEMA bilan) → `[MUHIM KONTEKST: shefim reply qildi, u AYNAN quyidagi xabarga javob beryapti: «...»]` (egasi reply qilgan bo'lsa) → topshiriq matni.
 
 ## Fayllar
 
@@ -82,7 +85,7 @@ Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
 | `agents/contract.py` | Bot va promptlar shartnomasi (tayyor): satrlar, regexlar, kv kalitlari, SISTEMA shablonlari, `REACT_MAP`, himoyalangan yo'llar. Satr o'zgarsa promptdagi jufti ham shu commitda | `sistema`, `kv_key`, `has_secret`, `clean_dynamic` |
 | `agents/config.py` | Env, yo'llar, Toshkent vaqti, repo yo'li tekshiruvi (tayyor) | `get_settings`, `env`, `load_env_file`, `agent_timeout_s`, `config_errors`, `config_warnings`, `v1_leader_conflict`, `safe_repo_path`, `is_sensitive`, `now_line` |
 | `agents/runner.py` | Claude Code CLI chaqiruvi | `run_agent`, `_precheck`, `_call_cli`, `build_cli_cmd`, `build_system_prompt`, `load_memory_block`, `recent_commits`, `agent_disallowed_tools`, `agent_tools`, `pick_model`, `build_agent_env`, `probe_cli`, `_log_run` |
-| `agents/leader_bot.py` | aiogram 3 bot, servis `xon-tranzactions-leader` (`python -m agents.leader_bot`) | `run`, `on_text`, `_is_owner_private`, `_is_forwarded`, `_memory_command`, `_leader_turn`, `delegate`, `_delegate_body`, `_synth`, `on_callback`, `_save_promise`, `_reminder_scheduler`, `_source_watcher`, `cmd_status`, `cmd_health`, `cmd_reset` |
+| `agents/leader_bot.py` | aiogram 3 bot, servis `xon-tranzactions-leader` (`python -m agents.leader_bot`) | `run`, `on_text`, `_is_owner_private`, `_is_forwarded`, `_memory_command`, `_leader_turn`, `delegate`, `_delegate_body`, `_synth`, `on_callback`, `_save_promise`, `_reminder_scheduler`, `_source_watcher`, `cmd_start`, `cmd_status`, `cmd_health`, `cmd_reset` |
 | `agents/leader_logic.py` | Leader javobini o'qish (sof funksiyalar) | `parse_leader_response`, `normalize_delegate`, `detect_memory_command`, `detect_promise`, `is_lie`, `extract_react`, `normalize_latin` |
 | `agents/history.py` | Suhbat tarixi va topshiriq matni | `add_history`, `add_system`, `history_context`, `build_leader_task`, `build_sub_task`, `build_synth_task` |
 | `agents/reja.py` | Support REJA: parse, preview, [Ha]/[Yo'q], qo'llash | `extract_request_approval`, `has_blockless_trigger`, `parse_plan`, `validate_plan`, `offer_plan`, `decide`, `execute_approved`, `apply_plan`, `_acquire_deploy_lock`, `_tsc_check`, `recover_interrupted` |
@@ -93,7 +96,8 @@ Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
 | `agents/checker_worker.py` | Health tekshiruvi va alert | `CHECKS`, `run_all_checks_once`, `format_block`, `_record`, `_should_alert`, `_record_alert`, `_ask_claude`, `checker_scheduler` |
 | `agents/teacher_daily.py` | Kunlik tahlil scheduler | `teacher_daily_scheduler`, `run_daily_review`, `_run_review`, `build_inputs`, `collect_day` |
 | `agents/db_migrations.py` | Bot jadvallari (`agents` sxemasi) | `ensure_tables`, `missing_tables`, `cleanup_old` |
-| `agents/deploy/xon-tranzactions-leader.service` | systemd unit namunasi (`AGENTS_ENV_FILE` bilan, `EnvironmentFile` yo'q) | — |
+| `agents/deploy/xon-tranzactions-leader.service` | systemd unit namunasi (`User=root`, `AGENTS_ENV_FILE` bilan, `EnvironmentFile` yo'q) | — |
+| `agents/deploy/install.sh` | Serverga bir martalik o'rnatish (root, qayta ishga tushirish xavfsiz). Push kaliti qo'lda (`ORNATISH.md` 7-qadam) | — |
 | `agents/tests/` | Unit testlar (aiogram va psycopg2 siz ishlaydi) | `test_<modul>.py` |
 | `agents/requirements.txt`, `agents/ORNATISH.md` | Python bog'liqliklari (`aiogram`, `psycopg2-binary`) va serverga o'rnatish yo'riqnomasi (egasi uchun) | — |
 | `agents/.gitignore` | Runtime fayllarni gitdan yopadi (pastda "Xavfli joylar") | — |
@@ -109,7 +113,8 @@ Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
 Yo'q. Bot HTTP endpoint ochmaydi. Telegram'ga long-polling (`getUpdates`) bilan, faqat o'z tokeni bilan ulanadi.
 Agentlar va Facts backend HTTP endpointlarini chaqirmaydi. Masalan `/api/transactions/reconcile/today` bank API'ga chiqadi va DB'ga yozadi.
 
-Bot buyruqlari (LLM'siz): xotira triggeri (`eslab qol`, `yodda tut`, `yodda saqla`, `xotiraga yoz`), `/status`, `/health`, `/reset`. To'liq va yagona ro'yxat: `imkoniyatlar.md` 5-bo'lim.
+Bot buyruqlari (LLM'siz): xotira triggeri (`eslab qol`, `yodda tut`, `yodda saqla`, `xotiraga yoz`), `/start`, `/status`, `/health`, `/reset`. To'liq va yagona ro'yxat: `imkoniyatlar.md` 5-bo'lim.
+Boshqa `/buyruq` (masalan `/help`, `/send`) ro'yxatda yo'q: oddiy matn bo'lib Leader'ga ketadi. Forward qilingan buyruq bajarilmaydi (`leader_bot.py::_register`).
 
 ## Frontend sahifalar
 
@@ -124,7 +129,7 @@ Bot jadvallari `xon_tranzactions` bazasidagi alohida `agents` sxemasida. Yagona 
 | Jadval | Kim yozadi | Kim o'qiydi | Muhim ustunlar |
 |---|---|---|---|
 | `agents.kv_store` | bot, runner, schedulerlar (`db.py::kv_*`) | hammasi | `k` VARCHAR(64) PK, `value`, `updated_at`. Kalitlar (`contract.py::KV_*`): `leader_chat_history`, `agent_enabled_<nom>`, `agents_rate_limit_until`, `sup_appr_<token>`, `sup_run_<token>`, `sup_done_<token>`, `sup_exec_lock`, `sup_exec_active`, `tw_appr_<token>`, `tw_run_<token>`, `checker:last_full_run`, `checker_lease`, `teacher_daily_last_run`, `teacher_daily_lease`, `teacher_daily_progress_<sana>`, `facts_lease`, `facts_cache_<kalit>`, `recent_photo`, `leader_heartbeat`, `cleanup_last` |
-| `agents.agent_runs` | `runner.py::_log_run` | `runner.py::_precheck` (kunlik cap), `teacher_daily.py` | agent, status (`timeout` ham), vaqt, kirish va chiqish preview |
+| `agents.agent_runs` | `runner.py::_log_run` | `runner.py::_precheck` (kunlik cap), `teacher_daily.py`, `/status` (`leader_bot.py::_status_text`), Checker `agents` tekshiruvi | agent, status (`timeout` ham), vaqt, kirish va chiqish preview |
 | `agents.agent_tasks` | `leader_bot.py` (`_task_start`, `_task_finish`), `memory_blocks.py` (Teacher fon) | Facts `agent_tasks` | `in_progress` → `done` yoki `failed`, forward flag |
 | `agents.agent_memory` | `memory_blocks.py::apply_write_blocks`, `write_runtime_memory` | — | qo'llangan `[WRITE_MEMORY]` nusxasi |
 | `agents.agent_health` | `checker_worker.py::_record` | Facts, Checker | komponent, status `ok`, `warn`, `error`, `unknown` |
@@ -133,7 +138,7 @@ Bot jadvallari `xon_tranzactions` bazasidagi alohida `agents` sxemasida. Yagona 
 | `agents.agent_chat_log` | `history.py::add_history`, `add_system` | `teacher_daily.py::collect_day` | `id`, `ts`, `role`, `text`, `is_forward`. Shaxsiy ma'lumot bor: 30 kun saqlanadi (`db_migrations.py::cleanup_old`) |
 
 Facts `public` sxemani faqat o'qiydi (SELECT huquqli alohida rol, pastda "Facts manbalari").
-v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_alerts`) `schema.prisma` da bor. Ular bu tizimniki emas, tegilmaydi.
+v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_alerts`) `schema.prisma` da bor. Ular bu tizimniki emas, tegilmaydi. Facts `schedulers` faqat `leader_alerts` va `leader_runs` ni o'qiydi.
 
 ## Biznes qoidalar
 
@@ -142,13 +147,13 @@ v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_aler
 - Chaqiruv (egasi qoidasi, 2026-09-28): `claude --print --dangerously-skip-permissions --model <id> --disallowedTools "<ro'yxat>" --settings agents/claude_settings.json --append-system-prompt "<agents/<nom>.md> + <memory>" -- "<task>"` (`runner.py::_call_cli`, `build_cli_cmd`). CLI qo'llasa (`probe_cli`) yana `--tools`, `--append-system-prompt-file`, `--no-session-persistence`, `--strict-mcp-config` qo'shiladi. `--disallowedTools` qiymati BITTA argument (`contract.py::DISALLOWED_TOOLS`). cwd = repo ildizi, `stdin=DEVNULL`, `stderr=STDOUT` (egasi qoidasi: alohida pipe CLI'ni osiltirishi mumkin).
 - Bypass rejimida `settings` dagi `allow` cheklamaydi. Himoya faqat `--disallowedTools`, `deny` va `bash_guard.py` PreToolUse hook (KOD 2.2, 2.3).
 - `AGENTS_USE_CLI=1` majburiy. Bo'lmasa bot ishga tushmaydi (`config.py::config_errors`; `LEADER_BOT_TOKEN`, `ANTHROPIC_SETUP_TOKEN` yo'q yoki `LEADER_TG_ID` egasi ID siga mos emas bo'lsa ham). Messages API yoki SDK yo'li yo'q.
-- Auth: egasi serverda `claude setup-token` bilan token oladi va `backend/.env` ga `ANTHROPIC_SETUP_TOKEN` qilib qo'yadi (2026-09-28 qo'yilgan). Runner uni agent env'iga `CLAUDE_CODE_OAUTH_TOKEN` nomi bilan beradi.
+- Auth: egasi serverda `claude setup-token` bilan token oladi va `backend/.env` ga `ANTHROPIC_SETUP_TOKEN` qilib qo'yadi (qo'yilgan: bot 2026-09-28 dan ishlayapti). Runner uni agent env'iga `CLAUDE_CODE_OAUTH_TOKEN` nomi bilan beradi.
 - `ANTHROPIC_API_KEY` agentga HECH QACHON berilmaydi. U ham `backend/.env` da (backend AI modullari uchun). Ikki auth birga bo'lsa, setup token ishlatilmay qoladi yoki CLI osiladi. Egasi qarori (2026-09-28): agentlar API kalitga ulanmaydi.
 - Bot `backend/.env` ni o'z parseri bilan o'qiydi, `os.environ` ga yozmaydi, faqat nomi so'ralgan kalitni oladi (`config.py::env`). systemd unit'da `EnvironmentFile` bo'lmasligi kerak (fayl `AGENTS_ENV_FILE` bilan beriladi). Shu sabab backend sirlari bot jarayoni env'iga ham, agentga ham o'tmaydi.
 - Env noldan, oq ro'yxat bilan quriladi (`runner.py`, KOD 2.4, `contract.py::AGENT_ENV_*`): `PATH`, `HOME`, `LANG`, `LC_ALL`, `TZ`, `USER`, `CLAUDE_CODE_OAUTH_TOKEN` (= `ANTHROPIC_SETUP_TOKEN`), ixtiyoriy `ANTHROPIC_BASE_URL`. Boshqa hech narsa: `DATABASE_URL`, bot tokenlari, `LEADER_*` ham yo'q.
 - Setup token Claude obunasi (Pro, Max, Team yoki Enterprise) bilan ishlaydi. Limit egasining Claude Code ishi bilan umumiy bo'lishi mumkin (tekshirilmagan). Shu sabab `AGENT_DAILY_CAP` bor.
-- Agent CLI alohida imtiyozsiz OS foydalanuvchisida ishga tushadi (`AGENT_OS_USER`). Bot root bo'lsa Popen `user=`, aks holda `sudo -n -u <agent_user>`. `AGENT_OS_USER` bo'sh bo'lsa CLI bot foydalanuvchisi ostida ishlaydi (logda ogohlantirish). Bot root va `AGENT_OS_USER` bo'sh bo'lsa CLI chaqirilmaydi: `root ostida bypass rejimi ishlamaydi, AGENT_OS_USER kerak`. Agent foydalanuvchisi `backend/.env` ni, uy papkasini, push kalitini va bot `/proc`ini o'qiy olmaydi. Repoga faqat o'qish (`.env*` mustasno). Uning git sozlamasida `safe.directory = /var/www/xon_tranzactions`.
-- Model (`runner.py::pick_model`): default `AGENTS_MODEL_STRONG`, `complexity: simple` bo'lsa `AGENTS_MODEL_FAST`. ID'lar `.env` da, bo'lmasa `config.py` dagi default.
+- Agent CLI alohida imtiyozsiz OS foydalanuvchisida ishga tushadi (`AGENT_OS_USER`, `runner.py::_launch_spec`). Bot root bo'lsa Popen `user=`, aks holda `sudo -n -H -u <agent_user> --`. Serverda bot root, agent CLI `xonagent` ostida (sudo'siz). `AGENT_OS_USER` bo'sh bo'lsa CLI bot foydalanuvchisi ostida ishlaydi (logda ogohlantirish). Bot root va `AGENT_OS_USER` bo'sh bo'lsa CLI chaqirilmaydi: `root ostida bypass rejimi ishlamaydi, AGENT_OS_USER kerak`. Agent foydalanuvchisi `backend/.env` ni, uy papkasini, push kalitini va bot `/proc`ini o'qiy olmaydi. Repoga faqat o'qish (`.env*` mustasno). Uning git sozlamasida `safe.directory = /var/www/xon_tranzactions`.
+- Model (`runner.py::pick_model`): default `AGENTS_MODEL_STRONG`, `complexity: simple` bo'lsa `AGENTS_MODEL_FAST`. ID'lar `.env` da, bo'lmasa `config.py` dagi default (`claude-opus-5-5`, `claude-sonnet-5`). Tez model faqat Checker alertida.
 - Asboblar (`runner.py::agent_disallowed_tools`, `contract.py::DISALLOWED_TOOLS`): leader va teacher `Bash Edit Write NotebookEdit WebFetch WebSearch`; support va checker `Edit Write NotebookEdit WebFetch WebSearch`. Edit/Write hech bir agentda yo'q.
 
 ### Chegaralar
@@ -171,12 +176,14 @@ v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_aler
 ### REJA qo'llash (TypeScript loyihasi)
 
 - `.py` fayl: vaqtinchalik nusxada `py_compile` (bot interpreteri, `sys.executable`).
-- `backend/**/*.ts` o'zgarsa: vaqtinchalik nusxada `npx tsc --noEmit -p backend/tsconfig.json`.
-- `frontend/**/*.ts(x)` o'zgarsa: `npx tsc --noEmit -p frontend/tsconfig.json`.
+- `backend/**/*.ts` o'zgarsa: vaqtinchalik nusxada `tsc --noEmit --pretty false -p backend/tsconfig.json` (`node_modules/.bin/tsc`, bo'lmasa `npx --no-install tsc`; `reja.py::_tsc_check`, `contract.py::TSC_LOYIHALAR`).
+- `frontend/**/*.ts(x)` o'zgarsa: shunday, `-p frontend/tsconfig.json`.
 - Faqat `.md` bo'lsa tekshiruv yo'q.
 - Xato sababi SISTEMA'da: `Support APPROVED BAJARILMADI — <sabab: find topilmadi | find N marta | fayl o'zgargan | py_compile | tsc | commit | push | muddat o'tgan | restart | branch | band (boshqa reja ishlayapti)>`. Shu ro'yxat `leader.md` 7, `support.md` 13, `imkoniyatlar.md` 8 da bir xil.
 - Support REJA kodini sinamaydi. Test logida: "reja kodi sinalmagan, bot qo'llashda tsc qiladi" (`.ts`) yoki "reja kodi sinalmagan, bot qo'llashda py_compile qiladi" (`.py`).
 - Commit: har fayl alohida `git add -- <fayl>` (hech qachon `-A`), `feat(support): <summary, 60 belgi>`, `git push origin main`.
+- Push qarori (egasi, 2026-09-28): [Ha] egasining push ruxsati. Bot `main` ga o'zi push qiladi, serverdagi push kaliti bilan (faqat shu repo). Agent foydalanuvchisi kalitni o'qiy olmaydi. Deploy'ni push'dan keyin webhook boshlaydi.
+- Shartlar (`reja.py::_preconditions`): branch `main`, index toza, fayllar `git status --porcelain` da toza (aks holda `branch`); xesh preview'dagidek (aks holda `fayl o'zgargan`); lokal HEAD = origin/main (`git ls-remote`). HEAD origin'dan farq qilsa `branch`: bot tasdiqsiz commitni push qilmaydi.
 - Deploy lock: `/var/run/xon-tranzactions-deploy.lock` (shablondagi `.deploy.lock` emas). Deploy log `/var/log/xon-tranzactions/deploy.log`. Ikkalasi env `DEPLOY_LOCK`, `DEPLOY_LOG` bilan almashadi (`config.py`), nomlari `scripts/deploy.sh` bilan bir xil.
 
 ### Facts: umumiy kalitlar
@@ -210,7 +217,7 @@ Bot (`xon-tranzactions-leader`). Fayl `backend/.env`: egasi 2026-09-28 kalitlarn
 - `ANTHROPIC_API_KEY` shu faylda bor, lekin bot uni agentga bermaydi.
 
 v1 leader (`backend/.env`, boshqa arxitektura, bu tizimga tegishli emas): `LEADER_ENABLED`, `LEADER_BOT_TOKEN`, `LEADER_OWNER_TG_IDS`, `LEADER_MODEL`, `LEADER_MODEL_STRONG`, `LEADER_DAILY_TOKENS`, `LEADER_ALERTS`, `LEADER_TEACHER`, `LEADER_REPO_DIR`, `LEADER_AGENTS_DIR`, `LEADER_SECRET_LITERALS`.
-Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABLED` != '0' va `LEADER_OWNER_TG_IDS` bor bo'lsa ishlaydi (`leader-config.service.ts`). Unda backend keyingi restartida yangi bot tokeni bilan poll qiladi: Telegram 409 Conflict, egasi ikki botdan javob oladi. `config.py::v1_leader_conflict` buni logda ogohlantiradi. Yechim `LEADER_ENABLED=0` (egasi qarori).
+Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABLED` != '0' va `LEADER_OWNER_TG_IDS` bor bo'lsa ishlaydi (`leader-config.service.ts`). Unda backend keyingi restartida yangi bot tokeni bilan poll qiladi: Telegram 409 Conflict, egasi ikki botdan javob oladi. Yangi bot esa startda buni aniqlasa ishga tushmaydi (`config.py::v1_leader_conflict`, `leader_bot.py::run`: logda `sozlama xatosi: backend/.env dagi v1 leader shu tokenni ishlatadi`). Yechim `LEADER_ENABLED=0` (egasi qarori).
 
 ## Bog'liqliklar — "X ni o'zgartirsang, Y ta'sirlanadi"
 
@@ -235,17 +242,17 @@ Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABL
 ## Xavfli joylar va tuzoqlar
 
 - `prisma db push --accept-data-loss` har backend deploy'da: `public` sxemadagi, `schema.prisma` da yo'q jadval ogohlantirishsiz o'chadi. Bot jadvallari faqat `agents` sxemasida.
-- `scripts/deploy.sh` `flock -w 60` bilan kutadi. Lock 60 s dan ko'p band bo'lsa deploy "tashlab ketildi" deb chiqadi va webhook deploy'i yo'qoladi. Bot REJA ijrosi shu lock'ni `reja.py::_acquire_deploy_lock` bilan oladi (900 s gacha kutadi, `contract.py::DEPLOY_LOCK_WAIT_S`), push'dan keyin darhol bo'shatadi (`execute_approved`). deploy.sh 60 s kutadi.
+- `scripts/deploy.sh` `flock -w 60` bilan kutadi. Lock 60 s dan ko'p band bo'lsa deploy "tashlab ketildi" deb chiqadi va webhook deploy'i yo'qoladi. Bot REJA ijrosi shu lock'ni `reja.py::_acquire_deploy_lock` bilan oladi (900 s gacha kutadi, `contract.py::DEPLOY_LOCK_WAIT_S`), push'dan keyin darhol bo'shatadi (`execute_approved`). Lock faqat yozish bosqichida (`_write_apply`: yozish, commit, push), `tsc` paytida olinmaydi. deploy.sh 60 s kutadi.
 - `deploy.sh` `agents/state/deploy_log.json` yozmaydi (KOD ishi). Unga qadar Facts `deploy.log` oxiridan o'qiydi (`support_facts.py::_collect_deploy`). `error` faqat ikkalasi ham o'qilmasa.
 - `agents/*.py` commiti deploy uchun "root fayl": `servicesToRestart` frontend va backend'ni to'liq qayta quradi (5-8 daqiqa). `.md` commiti restartsiz o'tadi.
-- `xon-tranzactions-leader` ni `deploy.sh` restart qilmaydi. `agents/*.py` o'zgarsa `leader_bot.py::_source_watcher` `os._exit(0)` qiladi, systemd ko'taradi. REJA ijrosi paytida (`sup_exec_active`) chiqish kechiktiriladi. Qo'lda `git reset --hard` bo'lsa servisni qo'lda restart qil.
+- `xon-tranzactions-leader` ni `deploy.sh` restart qilmaydi. `agents/*.py` o'zgarsa `leader_bot.py::_source_watcher` `os._exit(0)` qiladi, systemd ko'taradi. REJA ijrosi paytida (`sup_exec_active`) chiqish kechiktiriladi, egasi suhbati tugashini ko'pi bilan 900 s kutadi. Qo'lda `git reset --hard` bo'lsa servisni qo'lda restart qil.
 - `agents/.gitignore` runtime fayllarni yopadi: `/state/`, `/memory/leader-runtime.md`, `/memory/learned.md`, `/memory/daily/`, `__pycache__/`, `*.pyc`, `venv/`, `.venv/`. `static/tg_uploads/` ni bot `config.py::ensure_dirs` da o'z `.gitignore` i (`*`) bilan yopadi: bot bir marta ishga tushmaguncha u ochiq. `.gitignore` o'zgarsa yoki `git add -A` qilinsa Facts va xotira commit bo'lishi mumkin.
 - Asbob siyosati `agents/claude_settings.json` da, runner uni `claude --settings` bilan beradi. Repo ildizida `.claude/settings.json` yaratma: `.claude/` root `.gitignore` da, commit qilinsa ham egasining lokal Claude Code sessiyasi agent hook'ini yuklaydi. Yangi fayl REJA uchun himoyalangan (`contract.py::HIMOYA_PREFIKSLAR`).
 - `backend/.env` da `ANTHROPIC_API_KEY` bor va bot ham shu faylni o'qiydi. Runner env'ni bot jarayonidan meros olsa yoki fayl `EnvironmentFile` bilan yuklansa, setup token ishlamay qoladi va sir agentga o'tadi. Env faqat oq ro'yxat bilan.
-- Bitta tokenda faqat bitta `getUpdates`. Backend ichida sverka boti, correction-bot va v1 leader long-polling qiladi. v1 leader ham `backend/.env` dagi `LEADER_BOT_TOKEN` ni o'qiydi: endi u yangi bot tokeni. v1 yoqilgan bo'lsa backend restartidan keyin 409 Conflict va egasi ikki botdan javob oladi. v1 ni `LEADER_ENABLED=0` bilan o'chirish egasi qarori.
+- Bitta tokenda faqat bitta `getUpdates`. Backend ichida sverka boti, correction-bot va v1 leader long-polling qiladi. v1 leader ham `backend/.env` dagi `LEADER_BOT_TOKEN` ni o'qiydi: endi u yangi bot tokeni. v1 yoqilgan bo'lsa backend restartidan keyin 409 Conflict va egasi ikki botdan javob oladi. v1 yangi bot ishlab turganda yoqilsa 409 va ikki javob bo'ladi. Keyingi bot restartida esa yangi bot umuman ishga tushmaydi. v1 ni `LEADER_ENABLED=0` bilan o'chirish egasi qarori.
 - `settings` jadvalida sirlar bor (bot tokenlari, AI kaliti, eksport credential, forwarder siri). Facts uni to'liq SELECT qilmaydi, faqat nomi aytilgan kalitlar.
 - DB soati ilova soatidan farq qiladi. Facts SQL'da `NOW()` va `CURRENT_DATE` yo'q, oyna chegarasi Python'dan parametr.
-- Agent foydalanuvchisi repoga yoza olmaydi: `py_compile` `__pycache__` ga yoza olmaydi. Yechim: `__pycache__` ga yozish huquqi yoki `PYTHONPYCACHEPREFIX` (oq ro'yxat o'zgaradi, egasi qarori).
+- Agent foydalanuvchisi repoga yoza olmaydi: agent o'zi `py_compile` qilsa `__pycache__` ga yoza olmay xato oladi. `ORNATISH.md` bo'yicha bu kutilgan holat: REJA qo'llanganda bot o'zi `py_compile` va `tsc` qiladi. Boshqa yechim (`__pycache__` ga huquq yoki `PYTHONPYCACHEPREFIX`, oq ro'yxat o'zgaradi) egasi qarori.
 - `tsc` tekshiruvi `backend/node_modules` va `frontend/node_modules` ga tayanadi. Ularni deploy o'rnatadi (`npm install --include=dev`).
 - `scripts/deploy.sh` ichida hali ochiq fallback sir qiymatlari bor. Ularni iqtibos qilma, REJA'ga ko'chirma.
 
@@ -257,12 +264,12 @@ Nom ham, fayl ham bir xil (`LEADER_BOT_TOKEN`, `backend/.env`). v1 `LEADER_ENABL
 | Yangi SISTEMA yozuvi | `contract.py` `SIS_*` shablonlari, `history.py::add_system`; `leader.md` 7, `support.md` 13, `teacher.md`, `imkoniyatlar.md` 8 |
 | Agent asbobi | `runner.py::agent_disallowed_tools`, `agent_tools`, `contract.py::DISALLOWED_TOOLS`, `agents/claude_settings.json`, `agents/bin/bash_guard.py`; `imkoniyatlar.md` 1-3 |
 | Timeout, cap, model | `config.py` (`agent_timeout_s`, default), `runner.py`; `backend/.env` (`AGENT_TIMEOUT_S`, `AGENT_TIMEOUT_S_<AGENT>`, `AGENT_DAILY_CAP`, `AGENTS_MODEL_STRONG`, `AGENTS_MODEL_FAST`); `imkoniyatlar.md` 1 |
-| Himoyalangan yo'l | `config.py::safe_repo_path`, `contract.py::HIMOYA_PREFIKSLAR` (shablondagi `leader_bot.py::_safe_repo_path` o'rni); `leader.md` 6, `support.md` 7, `imkoniyatlar.md` 6 |
+| Himoyalangan yo'l | `config.py::safe_repo_path`, `config.py::is_sensitive`, `contract.py::HIMOYA_PREFIKSLAR`; `leader.md` 6, `support.md` 7, `imkoniyatlar.md` 6 |
 | Va'da so'zi | `leader.md` 8 + `contract.py::VADA_TRIGGERS`, `leader_logic.py::detect_promise` |
-| Teacher vaqti yoki rejimi | `teacher_daily.py::teacher_daily_scheduler`; `teacher.md` |
+| Teacher vaqti yoki rejimi | `contract.py::TEACHER_DAILY_TIME`, `teacher_daily.py::teacher_daily_scheduler`; `teacher.md` |
 | Checker tekshiruvi | `checker_worker.py::CHECKS`; `checker.md` "Tez-tez uchraydigan sabablar" |
 | Leader doimiy qoidasi | `agents/memory/leader.md` (REJA orqali) |
-| Yangi modul bilim fayli | `knowledge/README.md` "Yangi modul qo'shilsa" (5 ta edit bitta REJA'da) |
+| Yangi modul bilim fayli | `knowledge/README.md` "Yangi modul qo'shilsa" (6 ta edit bitta REJA'da) |
 
 ## Facts manbalari
 
@@ -335,7 +342,8 @@ Backend cron'lari hammasi `xon-tranzactions-backend` jarayonida. "iz" = oxirgi i
 | `LeaderAlertService.tick` (v1) | `*/15 * * * *` | `leader_alerts` jadvali |
 | `LeaderOrchestratorService.teacherDaily` (v1) | 22:30 | `leader_runs` jadvali |
 | `LeaderBotService.pollLoop` (v1) | doimiy long-polling | iz yo'q |
-| Facts (yangi, bot ichida `support_facts.py::facts_scheduler`) | har 300 s (bot start'ida darhol) | `updated_at` |
-| Checker scheduler (yangi) | start 45 s, keyin har 4 soat | `kv_store['checker:last_full_run']` |
-| Teacher kunlik (yangi) | 22:30 | `kv_store['teacher_daily_last_run']` |
-| Va'da eslatmasi (yangi) | Leader "tekshiraman" desa 2 soatdan keyin | `agent_promises` |
+| Facts (yangi, bot ichida `support_facts.py::facts_scheduler`). Facts'da nomi "Facts cron", lekin alohida cron yo'q | har 300 s (bot start'ida darhol) | `updated_at` |
+| Leader bot heartbeat (yangi, bot ichida `leader_bot.py::_heartbeat`) | har 60 s | `kv_store['leader_heartbeat']` |
+| Checker scheduler (yangi, bot ichida) | start 45 s, keyin har 4 soat | `kv_store['checker:last_full_run']` |
+| Teacher kunlik (yangi, bot ichida) | 22:30 | `kv_store['teacher_daily_last_run']` |
+| Va'da eslatmasi (yangi, bot ichida) | tick 60 s; muddat o'tgach har 25 daqiqada, ko'pi bilan 3 marta | `agent_promises` |

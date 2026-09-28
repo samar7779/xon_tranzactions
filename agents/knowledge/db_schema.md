@@ -12,8 +12,9 @@ Manba: `backend/prisma/schema.prisma`. Zid bo'lsa, `schema.prisma` to'g'ri.
 - Enum ustun qiymati katta harf (`'COMPLETED'`, `'IN'`). Matn holat kichik harf (`'pending'`, `'success'`, `'ok'`).
 - Vaqt: `DateTime` tz'siz, qiymati UTC. Toshkent = UTC+5, yozgi vaqt yo'q. Toshkent kuni: `(txn_date + interval '5 hours')::date`.
 - `NOW()`, `CURRENT_DATE` ishlatma: DB soati farq qiladi, vaqtni ilovadan parametr qilib ber (`oplata-kv.service.ts::clampFutureUpdatedAt`).
-- `@db.Date` (vaqtsiz Toshkent sanasi, literal `'YYYY-MM-DD'`): `oplata_kv.date`, `transactions.value_date`, `xonpay_transactions.date_paid`, `sync_exclusion_ranges.date_from`/`date_to`, `perereboska_group.date`, `chek_dog.data`, `chek_order.order_date`.
-- Migratsiya yo'q. Deploy har safar `npx prisma db push --accept-data-loss`: `public` dagi schema.prisma'da yo'q jadval yoki ustun ogohlantirishsiz o'chadi.
+- `@db.Date` (vaqtsiz Toshkent sanasi, literal `'YYYY-MM-DD'`): `oplata_kv.date`, `transactions.value_date`, `xonpay_transactions.date_paid`, `sync_exclusion_ranges.date_from`/`date_to`, `perereboska_group.date`, `chek_dog.data`, `chek_order.order_date`, `xonpay_transactions.matched_date`, `vznos_contract.contract_date`, `counterparties.registration_date`, `contract_schedules.due_date`.
+- Migratsiya yo'q. Backend o'zgargan har deploy `npx prisma db push --accept-data-loss` qiladi (`scripts/deploy.sh`): `public` dagi schema.prisma'da yo'q jadval yoki ustun ogohlantirishsiz o'chadi.
+- `schema.prisma` REJA'si: egasi [Ha] bossa bot `main` ga o'zi push qiladi, webhook deploy bazani darhol o'zgartiradi. Bot bu faylni sezgir deb biladi (risk `yuqori`). Ustun o'chirish yoki nomini o'zgartirish ma'lumotni yo'qotadi: REJA'da buni ochiq yoz.
 - Retention yo'q, so'rovda sana sharti majburiy: `sync_logs`, `audit_logs`, `api_request_logs`, `transaction_change_logs`, `oplata_kv_history`, `export_cron_logs`.
 
 ### Summa birliklari
@@ -47,7 +48,7 @@ Manba: `backend/prisma/schema.prisma`. Zid bo'lsa, `schema.prisma` to'g'ri.
 ### Bank sync
 | Jadval | Muhim ustunlar | Kim yozadi | Kim o'qiydi |
 |---|---|---|---|
-| `banks` | `code` (KAPITALBANK, IPAK_YULI, HAMKORBANK), `api_kind`, `is_active`, `sync_interval_minutes` (0 = avto-sync o'chiq) | `banks.service.ts` | sync |
+| `banks` | `code` (faol va integratsiyali: KAPITALBANK, IPAK_YULI, HAMKORBANK; yana 25 ta nofaol bank, `is_active = false`, `api_kind` KAPITALBANK_V3), `api_kind`, `is_active`, `sync_interval_minutes` (0 = avto-sync o'chiq) | `banks.service.ts` (`onModuleInit` har start'da `DEFAULT_BANKS` ni qo'shadi), `prisma/seed.ts` | sync |
 | `bank_credentials` | `label`, `auth_mode`, `use_proxy`, `is_active`, `last_verified_at`, `last_error`. Sir: `password_enc`, `login_name`, `sid` | bank-credentials, bank-pwd, sync | sync |
 | `bank_accounts` | `account_no`, `branch` (MFO), `owner_name`, `currency`, `balance`, `sync_enabled`, `last_synced_at` | bank-accounts, sync, transactions | hamma |
 | `sync_logs` | `account_id`, `source` (matn), `status` (RUNNING, SUCCESS, FAILED, PARTIAL), `fetched`, `saved`, `errors`, `error_message`, `started_at` | `sync.service.ts` | Facts `bank_sync` |
@@ -73,7 +74,7 @@ Obyekt hisoboti `vznos_contract` ni o'qimaydi. U `tx_type ILIKE '%от имен�
 |---|---|---|---|
 | `xato_correction_requests` | `tx_id`, `oplata_kv_id`, `status` (pending, approved, rejected), `reviewed_by_type` (agent, user), `agent_state` (processing, needs_review, done), `submitted_at`, `snap_*` | `correction.service.ts`, `agent-ai.service.ts` | Facts `xato` |
 | `agent_chat_messages` | `role` (user, assistant), `content`, `has_image`, `created_at` | `agent-ai.service.ts` | Admin > Agent sahifasi chat tarixi |
-| `crm_contracts` | PK `contract_number`, `found`, `status`, `virtual_status`, `object_name`, `branch_name`, `crm_order_id`, `last_verified_at`. Shaxsiy: `customer_name`, `phone`, `raw_snapshot` | crm, crm-contract-cache, categorization, oplata-kv | XATO, OplatyKv, sverka |
+| `crm_contracts` | PK `contract_number`, `found`, `status`, `virtual_status`, `object_name`, `branch_name`, `crm_order_id`, `last_verified_at`. Shaxsiy: `customer_name`, `phone`, `raw_snapshot` | crm, crm-contract-cache, categorization, oplata-kv | XATO, OplatyKv, chek-order, `/api/v1`, Facts `xato`, `crm_sverka` (CRM sverka moduli o'qimaydi) |
 | `xonpay_transactions` | PK `external_id`, `xonpay_uuid`, `contract`, `amount`, `date_paid`, `is_matched`, `matched_tx_id`, `updated_at_local` | `xonpay.service.ts` | Billing tabi |
 | `xonpay_sync_logs` | `trigger`, `status` (running, success, failed, cancelled), `started_at`, `error_message` | `xonpay.service.ts` | Facts `xonpay` |
 
@@ -94,8 +95,8 @@ Sverka jadvali yo'q: holat `settings` da (`sverka.telegram.notifiedToday`, `crmS
 Deyarli ishlatilmaydi: eski billing (`customers`, `contracts`, `contract_stages`, `payments`); `contract_schedules` (yozuvchi yo'q).
 
 ### Agentlar
-- v1 leader (boshqa sessiya, tegilmaydi): `leader_messages`, `leader_memories`, `leader_runs`, `leader_alerts`.
-- Yangi bot, `agents` sxema (`db_migrations.py::ensure_tables`): `kv_store`, `agent_runs`, `agent_tasks`, `agent_memory`, `agent_health`, `agent_promises`, `agent_alert_log`, `agent_chat_log`. `public` da bo'lsa keyingi deploy o'chiradi.
+- v1 leader (boshqa sessiya, tegilmaydi): `leader_messages`, `leader_memories`, `leader_runs`, `leader_alerts`. Yangi bot ulardan faqat `leader_alerts`, `leader_runs` ni o'qiydi (Facts `schedulers`).
+- Yangi bot, `agents` sxema (`db_migrations.py::ensure_tables`): `kv_store`, `agent_runs`, `agent_tasks`, `agent_memory`, `agent_health`, `agent_promises`, `agent_alert_log`, `agent_chat_log`. `public` da bo'lsa keyingi deploy o'chiradi. Retention bor: `db_migrations.py::cleanup_old` (`contract.py::RETENTION_DAYS`: `agent_chat_log` 30, `agent_runs` 90, `agent_memory` 180 kun).
 - `agent_chat_messages` (`public`, backend jadvali): XATO AI agentining admin bilan suhbat tarixi. Yangi botning `agents.agent_chat_log` jadvali emas.
 
 ## 3. Tez-tez adashtiriladigan ustunlar

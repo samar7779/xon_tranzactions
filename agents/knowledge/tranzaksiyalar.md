@@ -51,7 +51,7 @@ Komponentlar (`frontend/components/`): `transactions-tabs.tsx`, `id-inspector-di
 - `amount` so'm, Decimal(18,2), ishorasiz; yo'nalish `direction` (IN, OUT). `txn_date` UTC, Toshkent kuni +05:00 (`buildWhere`).
 - `stats`, `daily` statusni filtrlamaydi: PENDING, CANCELLED ham kiradi.
 - `runRules` tartibi: shartnoma topilsa CLIENT (CRM statusi reinvestitsiya yoki fiktiv bo'lsa emas, `isExcludedClientStatus`); MINFIN faqat `BUDGET_NAME_PARTS` yoki `BUDGET_PURPOSE_CODES` (08101, 08102, 08108, 08201, 09510, 00602); 00667 yoki izohda CORPORATE/TARIF (`KEYWORDS_BANK`) → BANK; SALARY; LOAN; o'z hisoblar orasida → TRANSFER.
-- Shartnoma: raqam + `OBJECT_CODES` + dum; O va 0 bir xil. Saqlanadigani CRM kanonik raqami.
+- Shartnoma: raqam + `OBJECT_CODES` + dum; lotin O, raqam 0 va kirill O bir xil. CRM topsa uning kanonik raqami saqlanadi, topmasa izohdagi birinchi nomzod (`candidates[0]`, u XATO bo'ladi).
 - Ta'minot: CLIENT emas; summa butun so'mda teng; sana farqi 2 kungacha (`MAX_DAY`); shartnoma tokeni (4+ belgi) yoki yetkazib beruvchi nomi. Natija faqat `erp_*`. ERP bazasi faqat o'qiladi.
 - Kontragent: DIDOX asosiy, Chamber zaxira. Nostandart INN → `is_manual`. Cron `'0 8-22 * * *'` va `'*/5 * * * *'`, Asia/Tashkent.
 - Vipiska faqat `KAPITALBANK_V3`, 92 kungacha. ID inspektor Kapital va Hamkor, ±2 kun.

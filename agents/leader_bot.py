@@ -23,7 +23,7 @@ import secrets
 import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Awaitable, Callable, Collection, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
@@ -293,11 +293,12 @@ async def _sys(inner: str) -> None:
 
 async def _say(text: str, *, escape: bool = False, latin: bool = True, keyboard: Optional[notify.Keyboard] = None,
                record: bool = True, hist: Optional[str] = None,
-               outbox: Optional[notify.Outbox] = None) -> Optional[int]:
-    """Egasiga LLM'siz yoki tayyor matn. Kirill lotinga, kerak bo'lsa HTML escape, tarixga yoziladi."""
+               outbox: Optional[notify.Outbox] = None, reply_to: Optional[int] = None) -> Optional[int]:
+    """Egasiga LLM'siz yoki tayyor matn. Kirill lotinga, kerak bo'lsa HTML escape, tarixga yoziladi.
+    reply_to: egasi xabariga javob (faqat suhbat oqimida; fon xabarlari reply emas)."""
     t = L.normalize_latin(text) if latin else text
     shown = html.escape(t, quote=False) if escape else t
-    mid = await (outbox or _outbox()).send_text(shown, html=True, keyboard=keyboard)
+    mid = await (outbox or _outbox()).send_text(shown, html=True, keyboard=keyboard, reply_to=reply_to)
     if record:
         await _hist(C.ROLE_LEADER, hist if hist is not None else t)
     return mid
@@ -439,22 +440,51 @@ def _claim_due_promises() -> List[str]:
     return out
 
 
-def _recent_photo_add(path: str, is_fwd: bool) -> None:
-    """Izohsiz rasm 5 daqiqa kutadi (KV_RECENT_PHOTO, ko'pi bilan PHOTO_MAX)."""
-    cur = db.kv_get_json(C.KV_RECENT_PHOTO) or {}
-    paths: List[str] = []
-    fwd = False
-    ts = config.parse_iso(str(cur.get("ts") or "")) if isinstance(cur, dict) else None
-    if ts is not None and (config.now_utc() - ts).total_seconds() <= C.PHOTO_WAIT_S:
-        paths = [str(p) for p in (cur.get("paths") or [])]
-        fwd = bool(cur.get("fwd"))
+def _fresh_recent(cur: Any) -> Tuple[List[str], List[str], bool]:
+    """KV_RECENT_PHOTO qiymatidan: 5 daqiqadan yangi bo'lsa (yo'llar, file_unique_id lar, forward).
+    uids yo'llar bilan bir tartibda; eski yozuvda uids yo'q, '' bilan to'ldiriladi."""
+    if not isinstance(cur, dict):
+        return [], [], False
+    ts = config.parse_iso(str(cur.get("ts") or ""))
+    if ts is None or (config.now_utc() - ts).total_seconds() > C.PHOTO_WAIT_S:
+        return [], [], False
+    paths = [str(p) for p in (cur.get("paths") or [])]
+    raw = cur.get("uids")
+    uids = [str(u or "") for u in raw] if isinstance(raw, list) else []
+    uids = (uids + [""] * len(paths))[:len(paths)]
+    return paths, uids, bool(cur.get("fwd"))
+
+
+def _recent_photo_add(path: str, is_fwd: bool, uid: str = "") -> None:
+    """Izohsiz rasm 5 daqiqa kutadi (KV_RECENT_PHOTO, ko'pi bilan PHOTO_MAX).
+    uid: Telegram file_unique_id (shu rasmga reply qilinsa qayta yuklanmaydi). Shu uid allaqachon
+    kutayotgan bo'lsa eski o'rni o'chadi va rasm oxiriga o'tadi (kesishda eng eskisi tushadi)."""
+    paths, uids, fwd = _fresh_recent(db.kv_get_json(C.KV_RECENT_PHOTO) or {})
+    if uid and uid in uids:
+        i = uids.index(uid)
+        del paths[i]
+        del uids[i]
     paths = (paths + [path])[-C.PHOTO_MAX:]
-    db.kv_set_json(C.KV_RECENT_PHOTO, {"paths": paths, "fwd": fwd or bool(is_fwd), "ts": config.iso_utc()})
+    uids = (uids + [uid or ""])[-C.PHOTO_MAX:]
+    db.kv_set_json(C.KV_RECENT_PHOTO, {"paths": paths, "uids": uids, "fwd": fwd or bool(is_fwd),
+                                       "ts": config.iso_utc()})
 
 
-def _recent_photo_add_many(paths: Sequence[str], is_fwd: bool) -> None:
-    for path in paths:
-        _recent_photo_add(path, is_fwd)
+def _recent_photo_add_many(paths: Sequence[str], is_fwd: bool, uids: Sequence[str] = ()) -> None:
+    for i, path in enumerate(paths):
+        _recent_photo_add(path, is_fwd, uids[i] if i < len(uids) else "")
+
+
+def _recent_photo_pending() -> Tuple[List[str], List[str]]:
+    """Kutayotgan izohsiz rasmlar: (yo'llar, file_unique_id lar), faqat uid li va fayli borlari.
+    Kalit o'chirilmaydi. Xatoda ([], [])."""
+    try:
+        paths, uids, _ = _fresh_recent(db.kv_get_json(C.KV_RECENT_PHOTO))
+    except Exception as exc:
+        log.warning("recent_photo o'qilmadi: %s", exc.__class__.__name__)
+        return [], []
+    keep = [i for i, p in enumerate(paths) if uids[i] and _valid_upload(p)]
+    return [paths[i] for i in keep], [uids[i] for i in keep]
 
 
 def _valid_upload(path: str) -> bool:
@@ -466,23 +496,19 @@ def _valid_upload(path: str) -> bool:
         return False
 
 
-def _recent_photo_take() -> Tuple[List[str], bool]:
-    """5 daqiqadan yangi izohsiz rasmlar (va forward flagi); kalit o'chiriladi."""
+def _recent_photo_take() -> Tuple[List[str], bool, List[str]]:
+    """5 daqiqadan yangi izohsiz rasmlar, forward flagi va file_unique_id lari; kalit o'chiriladi."""
     try:
         cur = db.kv_get_json(C.KV_RECENT_PHOTO)
         if not cur:
-            return [], False
+            return [], False, []
         db.kv_del(C.KV_RECENT_PHOTO)
     except Exception as exc:
         log.warning("recent_photo o'qilmadi: %s", exc.__class__.__name__)
-        return [], False
-    if not isinstance(cur, dict):
-        return [], False
-    ts = config.parse_iso(str(cur.get("ts") or ""))
-    if ts is None or (config.now_utc() - ts).total_seconds() > C.PHOTO_WAIT_S:
-        return [], False
-    paths = [str(p) for p in (cur.get("paths") or []) if _valid_upload(str(p))]
-    return paths, bool(cur.get("fwd"))
+        return [], False, []
+    paths, uids, fwd = _fresh_recent(cur)
+    keep = [i for i, p in enumerate(paths) if _valid_upload(p)]
+    return [paths[i] for i in keep], fwd, [uids[i] for i in keep]
 
 
 # ---------------------------------------------------------------------------
@@ -528,10 +554,16 @@ async def _download_image(fobj: Any, ext: str) -> Optional[str]:
     return str(path)
 
 
-async def _collect_images(msgs: Sequence[Any]) -> Tuple[List[str], List[str], int]:
+def _image_uid(fobj: Any) -> str:
+    """Telegram file_unique_id (bir rasm ikki marta yuklanmasin). Yo'q bo'lsa ''."""
+    return str(getattr(fobj, "file_unique_id", "") or "")
+
+
+async def _collect_images(msgs: Sequence[Any]) -> Tuple[List[str], List[str], List[str], int]:
     """Xabar(lar)dagi rasmlarni yuklaydi, ko'pi bilan PHOTO_MAX.
-    (yo'llar, xato matnlari, chegaradan ortgan rasmlar soni)."""
+    (yo'llar, file_unique_id lar (yo'llar tartibida), xato matnlari, chegaradan ortgan rasmlar soni)."""
     paths: List[str] = []
+    uids: List[str] = []
     errs: List[str] = []
     skipped = 0
     for m in msgs:
@@ -552,7 +584,69 @@ async def _collect_images(msgs: Sequence[Any]) -> Tuple[List[str], List[str], in
             errs.append(_MSG_RASM_XATO)
             continue
         paths.append(path)
-    return paths, errs, skipped
+        uids.append(_image_uid(fobj))
+    return paths, uids, errs, skipped
+
+
+# ---------------------------------------------------------------------------
+# Reply: egasi reply qilgan xabar (matni MUHIM KONTEKST, rasmi image_paths ga)
+# ---------------------------------------------------------------------------
+def _replied_of(msgs: Sequence[Any]) -> Any:
+    """Egasi reply qilgan xabar (albomda reply belgisi bor birinchi qismdan) yoki None."""
+    for m in msgs:
+        replied = getattr(m, "reply_to_message", None)
+        if replied is not None:
+            return replied
+    return None
+
+
+def _reply_quote(replied: Any) -> Optional[str]:
+    """Reply qilingan xabar matni yoki izohi, sirlar maskalangan. Tashqi matn: forward bo'lsa ham
+    history.muhim_kontekst uni clean_external bilan tozalaydi. Matn bo'lmasa None."""
+    if replied is None:
+        return None
+    return _mask_secrets(getattr(replied, "text", None) or getattr(replied, "caption", None) or "") or None
+
+
+def _pending_index(replied: Any, uids: Sequence[str], own_uids: Collection[str] = ()) -> Optional[int]:
+    """Reply qilingan rasm kutayotgan izohsiz rasmlar (uids) ichida bo'lsa uning indeksi, aks holda None.
+    Egasining o'z rasmlari (own_uids) ichida bo'lsa ham None: u allaqachon bor."""
+    if replied is None:
+        return None
+    fobj = _image_of(replied)[0]
+    uid = _image_uid(fobj) if fobj is not None else ""
+    if not uid or uid in own_uids or uid not in uids:
+        return None
+    return list(uids).index(uid)
+
+
+async def _reply_images(replied: Any, *, room: int, skip_uids: Collection[str] = ()) -> Tuple[List[str], List[str]]:
+    """Reply qilingan xabardagi rasm (photo yoki rasm document) o'sha R7 oqimi bilan yuklanadi.
+    room: rasm chegarasida (PHOTO_MAX) qolgan joy. skip_uids: allaqachon olingan rasmlar.
+    Yuklab bo'lmasa egasiga xabar yo'q, faqat log: oqim rasmsiz davom etadi. (yo'llar, uids)."""
+    if replied is None:
+        return [], []
+    mid = getattr(replied, "message_id", "?")
+    fobj, ext, size, err = _image_of(replied)
+    if err:
+        log.warning("reply rasmi olinmadi (message_id %s): format o'qilmadi", mid)
+        return [], []
+    if fobj is None:
+        return [], []
+    uid = _image_uid(fobj)
+    if uid and uid in skip_uids:
+        return [], []  # shu rasm allaqachon bor (masalan kutayotgan izohsiz rasm)
+    if room <= 0:
+        log.warning("reply rasmi olinmadi (message_id %s): %d ta rasm chegarasi to'lgan", mid, C.PHOTO_MAX)
+        return [], []
+    if size > _MAX_DOWNLOAD:
+        log.warning("reply rasmi olinmadi (message_id %s): juda katta (%d bayt)", mid, size)
+        return [], []
+    path = await _download_image(fobj, ext)
+    if path is None:
+        log.warning("reply rasmi yuklanmadi (message_id %s)", mid)
+        return [], []
+    return [path], [uid]
 
 
 # ---------------------------------------------------------------------------
@@ -627,11 +721,13 @@ async def _clean_reply(text: str) -> Tuple[str, Optional[str]]:
     return text.strip(), emoji
 
 
-async def _leader_format_error(raw: str, data: Dict[str, Any], outbox: Optional[notify.Outbox] = None) -> bool:
+async def _leader_format_error(raw: str, data: Dict[str, Any], outbox: Optional[notify.Outbox] = None,
+                               reply_to: Optional[int] = None) -> bool:
     """JSON o'qilmagan va xom matn JSON'ga o'xshasa: xom JSON egasiga chiqmaydi."""
     if data.get("parse_error") and L.looks_like_json(raw):
         await _sys(C.sistema(C.SIS_AGENT_XATO, agent="leader", xato=_SABAB_FORMAT))
-        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_FORMAT), escape=True, outbox=outbox)
+        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_FORMAT), escape=True, outbox=outbox,
+                   reply_to=reply_to)
         return True
     return False
 
@@ -663,7 +759,7 @@ async def on_text(msg: Message) -> None:
             await _handle_owner_message(msgs, is_fwd, state)
         except Exception:
             log.exception("on_text yiqildi")
-            await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_ICHKI), escape=True)
+            await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_ICHKI), escape=True, reply_to=primary.message_id)
         finally:
             _REACT_SINK.reset(token)
             if state["reacted"] or state["react"]:
@@ -691,11 +787,12 @@ async def _handle_owner_message(msgs: Sequence[Message], is_fwd: bool, state: Di
         await _hist(C.ROLE_OWNER, text or _HIST_OVOZ, is_forward=is_fwd)
         await _say(C.MSG_OVOZ_YOQ)
         return
-    image_paths, img_errs, skipped = await _collect_images(msgs)
+    image_paths, image_uids, img_errs, skipped = await _collect_images(msgs)
     if img_errs and not image_paths:
         await _hist(C.ROLE_OWNER, text or _HIST_RASM, is_forward=is_fwd)
         await _say(img_errs[0])
         return
+    replied = _replied_of(msgs)
     if image_paths:
         # albomning bir qismi o'qilmadi yoki chegaradan ortdi: egasi bilsin, qolgani bilan davom
         if img_errs:
@@ -703,7 +800,22 @@ async def _handle_owner_message(msgs: Sequence[Message], is_fwd: bool, state: Di
         if skipped:
             await _say(_MSG_RASM_KOP_TPL.format(n=C.PHOTO_MAX), record=False)
         if not text.strip():
-            await asyncio.to_thread(_recent_photo_add_many, image_paths, is_fwd)
+            # izohsiz rasm savolni kutadi; reply qilingan rasm ham u bilan birga (egasining rasmi ustun)
+            add_fwd = is_fwd
+            if replied is not None:
+                pend_paths, pend_uids = await asyncio.to_thread(_recent_photo_pending)
+                idx = _pending_index(replied, pend_uids, image_uids)
+                if idx is not None:
+                    # kutayotgan rasmga reply: qayta yuklanmaydi, egasining rasmidan oldinga ko'chadi
+                    # (_recent_photo_add eski o'rnini o'chiradi, kesishda aynan u tushib qolmaydi)
+                    r_paths, r_uids = [pend_paths[idx]], [pend_uids[idx]]
+                else:
+                    r_paths, r_uids = await _reply_images(replied, room=C.PHOTO_MAX - len(image_paths),
+                                                          skip_uids=set(pend_uids) | set(image_uids))
+                image_paths, image_uids = r_paths + image_paths, r_uids + image_uids
+                # forward xabardagi rasm kutayotganlarga qo'shildi: ular ham forward (Q11)
+                add_fwd = is_fwd or (bool(r_paths) and _is_forwarded(replied))
+            await asyncio.to_thread(_recent_photo_add_many, image_paths, add_fwd, image_uids)
             await _hist(C.ROLE_OWNER, _HIST_RASM, is_forward=is_fwd)
             await _say(C.MSG_RASM_QABUL)
             return
@@ -715,18 +827,28 @@ async def _handle_owner_message(msgs: Sequence[Message], is_fwd: bool, state: Di
             await _say(_MSG_TUR_YOQ)
         return  # xizmat xabarlari jim
 
-    recent, recent_fwd = await asyncio.to_thread(_recent_photo_take)
+    recent, recent_fwd, recent_uids = await asyncio.to_thread(_recent_photo_take)
     if recent:
-        image_paths = (recent + image_paths)[-C.PHOTO_MAX:]
         is_fwd = is_fwd or recent_fwd
+    # Reply qilingan rasm egasining o'z rasmlaridan keyin qolgan joyga.
+    # Tartib: kutayotgan -> reply -> o'z rasmi; chegara oshsa eng eskisi tushadi.
+    idx = _pending_index(replied, recent_uids, image_uids)
+    if idx is not None:
+        # kutayotgan rasmga reply: qayta yuklanmaydi, lekin reply o'rniga o'tadi (kesishda tushib qolmasin)
+        r_paths = [recent.pop(idx)]
+        recent_uids.pop(idx)
+    else:
+        r_paths, _ = await _reply_images(replied, room=C.PHOTO_MAX - len(image_paths),
+                                         skip_uids=set(recent_uids) | set(image_uids))
+    image_paths = (recent + r_paths + image_paths)[-C.PHOTO_MAX:]
 
-    # 3. Ack: reaksiya + "Ko'rib chiqyapman", finally'da olinadi
+    # 3. Ack: reaksiya + "Ko'rib chiqyapman" (egasi xabariga reply), finally'da olinadi
     ack_id: Optional[int] = None
     try:
         await outbox.set_reaction(msg.message_id, C.ACK_REAKSIYA)
         state["reacted"] = True
-        ack_id = await outbox.send_text(C.ACK_MATN, html=False)
-        await _leader_turn(msg, text, is_fwd, image_paths, state)
+        ack_id = await outbox.send_text(C.ACK_MATN, html=False, reply_to=msg.message_id)
+        await _leader_turn(msg, text, is_fwd, image_paths, state, replied=replied)
     finally:
         if ack_id:
             await outbox.delete(ack_id)
@@ -752,12 +874,18 @@ async def _memory_command(raw_text: str, content: str) -> None:
 
 
 async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[str],
-                       state: Dict[str, Any]) -> None:
+                       state: Dict[str, Any], *, replied: Any = None) -> None:
+    """Javoblar (yakuniy, synth, xato) egasi xabariga reply: reply_to = msg.message_id.
+    is_fwd: egasi xabarining o'zi forward (topshiriq, delegatsiya, synth va tarix shu bilan).
+    Reply qilingan xabar forward bo'lsa: uning matni MUHIM KONTEKST (tashqi matn, tozalangan),
+    egasining o'z buyrug'i oddiy buyruq bo'lib qoladi; faqat Teacher bloki [Ha] bilan (teacher_fwd)."""
+    reply_to = msg.message_id
     # 4. Topshiriq (tarixga qo'shishdan OLDIN, aks holda OXIRGI SUHBAT'da takrorlanadi)
-    reply_quote: Optional[str] = None
-    replied = getattr(msg, "reply_to_message", None)
-    if replied is not None:
-        reply_quote = _mask_secrets(replied.text or replied.caption or "") or None
+    if replied is None:
+        replied = getattr(msg, "reply_to_message", None)
+    reply_quote = _reply_quote(replied)
+    # forward xabarga reply: iqtibos tashqi matn (MUHIM KONTEKST), Teacher bloki faqat [Ha] bilan
+    quote_fwd = replied is not None and _is_forwarded(replied)
     task = await asyncio.to_thread(history.build_leader_task, text, is_fwd=is_fwd,
                                    image_paths=image_paths, reply_quote=reply_quote)
     hist_text = text
@@ -769,12 +897,12 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
     res = await runner.run_agent_async("leader", task, {"complexity": "strong", "source": "dm"})
     if not res.ok:
         await _sys(runner.sistema_for(res))
-        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_sabab_for(res)), escape=True)
+        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_sabab_for(res)), escape=True, reply_to=reply_to)
         return
 
     # 6. JSON, WRITE_MEMORY (Leader bloki qo'llanmaydi), REACT
     data = L.parse_leader_response(res.text)
-    if await _leader_format_error(res.text, data):
+    if await _leader_format_error(res.text, data, reply_to=reply_to):
         return
     human_reply, emoji = await _clean_reply(data["human_reply"])
 
@@ -783,7 +911,7 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
     if agent and agent not in C.DELEGATE_AGENTS:
         name = agent[:_AGENT_NAME_MAX]
         await _sys(C.sistema(C.SIS_AGENT_CHAQIRILMADI, agent=name, sabab=C.CHQ_NOMALUM))
-        await _say(C.MSG_SUB_XATO_TPL.format(agent=name, sabab=C.CHQ_NOMALUM), escape=True)
+        await _say(C.MSG_SUB_XATO_TPL.format(agent=name, sabab=C.CHQ_NOMALUM), escape=True, reply_to=reply_to)
         return
 
     # 8-9. Delegatsiya: human_reply egasiga ko'rsatilmaydi, tarixga "Qabul qildim." (soxta va'da yo'q)
@@ -792,16 +920,17 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
         state["react"] = emoji
         body = data.get("task_for_agent") or text
         await delegate(agent, body, intent=str(data.get("intent") or ""), is_fwd=is_fwd,
-                       image_paths=image_paths, outbox=_outbox())
+                       teacher_fwd=quote_fwd, image_paths=image_paths, outbox=_outbox(),
+                       reply_to=reply_to, reply_quote=reply_quote)
         return
 
     if not human_reply:
-        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_BOSH), escape=True)
+        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_BOSH), escape=True, reply_to=reply_to)
         return
     reply = L.normalize_latin(human_reply)
     await _hist(C.ROLE_LEADER, reply)
     await asyncio.to_thread(_save_promise, reply)
-    await _outbox().send_text(reply, html=True)
+    await _outbox().send_text(reply, html=True, reply_to=reply_to)
     state["react"] = emoji
 
 
@@ -809,17 +938,22 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
 # Delegatsiya (KOD 1.3)
 # ---------------------------------------------------------------------------
 async def delegate(agent: str, task_for_agent: str, *, intent: str, is_fwd: bool,
-                   image_paths: List[str], outbox: notify.Outbox) -> None:
+                   image_paths: List[str], outbox: notify.Outbox, reply_to: Optional[int] = None,
+                   reply_quote: Optional[str] = None, teacher_fwd: bool = False) -> None:
+    """reply_to: synth javobi (yoki xatosi) shu egasi xabariga reply bo'ladi.
+    reply_quote: egasi reply qilgan xabar matni, sub-agentga MUHIM KONTEKST bo'lib boradi."""
     task_id = await asyncio.to_thread(_task_start, agent, intent, is_fwd, task_for_agent)
     status, preview, run_id = "failed", "", None
     try:
         status, preview, run_id = await _delegate_body(
-            agent, task_for_agent, is_fwd=is_fwd, image_paths=image_paths, outbox=outbox)
+            agent, task_for_agent, is_fwd=is_fwd, image_paths=image_paths, outbox=outbox,
+            reply_to=reply_to, reply_quote=reply_quote, teacher_fwd=teacher_fwd)
     except Exception as exc:
         log.exception("delegatsiya yiqildi: %s", agent)
         preview = exc.__class__.__name__
         await _sys(C.sistema(C.SIS_AGENT_XATO, agent=agent, xato=_SABAB_ICHKI))
-        await _say(C.MSG_SUB_XATO_TPL.format(agent=agent, sabab=_SABAB_ICHKI), escape=True, outbox=outbox)
+        await _say(C.MSG_SUB_XATO_TPL.format(agent=agent, sabab=_SABAB_ICHKI), escape=True, outbox=outbox,
+                   reply_to=reply_to)
     finally:
         await asyncio.to_thread(_task_finish, task_id, status, preview, run_id)
 
@@ -829,8 +963,11 @@ def _checker_block_stub(izoh: str) -> str:
 
 
 async def _delegate_body(agent: str, task_for_agent: str, *, is_fwd: bool, image_paths: Sequence[str],
-                         outbox: notify.Outbox) -> Tuple[str, str, Optional[int]]:
-    """(agent_tasks status, result_preview, run_id)."""
+                         outbox: notify.Outbox, reply_to: Optional[int] = None,
+                         reply_quote: Optional[str] = None,
+                         teacher_fwd: bool = False) -> Tuple[str, str, Optional[int]]:
+    """(agent_tasks status, result_preview, run_id). Egasiga javob (synth, xato, blokisiz REJA,
+    yolg'on almashtirish, yozib qo'ydim) reply_to ga reply; REJA/xotira tasdiq so'rovlari reply emas."""
     body = history.neutralize(task_for_agent or "")
     if agent == "checker":
         cw = _mod("checker_worker")
@@ -844,11 +981,14 @@ async def _delegate_body(agent: str, task_for_agent: str, *, is_fwd: bool, image
                 log.exception("run_all_checks_once yiqildi")
                 body += "\n\n" + _checker_block_stub("(tekshiruv yiqildi: %s)" % exc.__class__.__name__)
 
-    task = await asyncio.to_thread(history.build_sub_task, body, is_fwd=is_fwd, image_paths=list(image_paths))
+    # reply qilingan rasm image_paths ichida (egasining rasmlari bilan birga), matni MUHIM KONTEKST
+    task = await asyncio.to_thread(history.build_sub_task, body, is_fwd=is_fwd, image_paths=list(image_paths),
+                                   reply_quote=reply_quote)
     res = await runner.run_agent_async(agent, task, {"source": "deleg"})
     if not res.ok:
         await _sys(runner.sistema_for(res))
-        await _say(C.MSG_SUB_XATO_TPL.format(agent=agent, sabab=_sabab_for(res)), escape=True, outbox=outbox)
+        await _say(C.MSG_SUB_XATO_TPL.format(agent=agent, sabab=_sabab_for(res)), escape=True, outbox=outbox,
+                   reply_to=reply_to)
         return "failed", res.error or res.status, res.run_id
 
     raw = res.text or ""
@@ -882,7 +1022,7 @@ async def _delegate_body(agent: str, task_for_agent: str, *, is_fwd: bool, image
     else:
         rest, blocks = mb.extract_write_blocks(rest)
         if blocks and agent == "teacher":
-            if is_fwd:
+            if is_fwd or teacher_fwd:  # forward xabar yoki forward xabarga reply: faqat [Ha] bilan
                 # preview + [Ha]/[Yo'q]; applied = 0 qoladi (Q8: kutilayotgan blok qo'llanmagan)
                 await mb.request_teacher_approval(blocks, manba="teacher", sabab_turi="forward", outbox=outbox)
             else:
@@ -903,20 +1043,20 @@ async def _delegate_body(agent: str, task_for_agent: str, *, is_fwd: bool, image
     status = "done"
     if rj_blockless is not None and rj_blockless.has_blockless_trigger(rest):
         shown = C.MSG_BLOKSIZ_TPL.format(izoh=C.BLOKSIZ_IZOH, matn=html.escape(rest, quote=False))
-        await outbox.send_text(shown, html=True)
+        await outbox.send_text(shown, html=True, reply_to=reply_to)
         await _hist(C.ROLE_LEADER, C.MSG_BLOKSIZ_TPL.format(izoh=C.BLOKSIZ_IZOH, matn=C.short(rest, 1500)))
         await _sys(C.sistema(C.SIS_AGENT_OK, agent=agent, qisqa=C.short(rest, 200)))
     elif L.is_lie(rest, applied):
         matn = C.YOLGON_ALMASHTIRISH_TPL.format(agent=agent)
         await _sys(C.sistema(C.SIS_AGENT_OK, agent=agent, qisqa=C.short(matn, 200)))
-        await _say(matn, escape=True, outbox=outbox)
+        await _say(matn, escape=True, outbox=outbox, reply_to=reply_to)
         status = "failed"
     elif applied > 0:
         natija = "; ".join("%s: %s" % (r.path, r.natija) for r in results if getattr(r, "ok", False))
-        await _say(C.YOZIB_QOYDIM_TPL.format(natija=natija), escape=True, outbox=outbox)
+        await _say(C.YOZIB_QOYDIM_TPL.format(natija=natija), escape=True, outbox=outbox, reply_to=reply_to)
     else:
         await _sys(C.sistema(C.SIS_AGENT_OK, agent=agent, qisqa=C.short(rest, 200)))
-        status = await _synth(agent, rest, is_fwd=is_fwd, outbox=outbox)
+        status = await _synth(agent, rest, is_fwd=is_fwd, outbox=outbox, reply_to=reply_to)
 
     # 9. Teacher fon topshiriqlari (javobdan keyin, ketma-ket)
     if lines:
@@ -924,25 +1064,29 @@ async def _delegate_body(agent: str, task_for_agent: str, *, is_fwd: bool, image
     return status, C.short(rest or raw, _PREVIEW_MAX), res.run_id
 
 
-async def _synth(agent: str, rest: str, *, is_fwd: bool, outbox: notify.Outbox) -> str:
-    """Leader synth: faqat human_reply (delegate_to e'tiborsiz). Natija: 'done' | 'failed'."""
+async def _synth(agent: str, rest: str, *, is_fwd: bool, outbox: notify.Outbox,
+                 reply_to: Optional[int] = None) -> str:
+    """Leader synth: faqat human_reply (delegate_to e'tiborsiz). Natija: 'done' | 'failed'.
+    reply_to: egasining asl xabari (javob unga reply bo'ladi)."""
     task = await asyncio.to_thread(history.build_synth_task, agent, rest, is_fwd=is_fwd)
     sres = await runner.run_agent_async("leader", task, {"source": "synth", "complexity": "strong"})
     if not sres.ok:
         await _sys(runner.sistema_for(sres))
-        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_sabab_for(sres)), escape=True, outbox=outbox)
+        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_sabab_for(sres)), escape=True, outbox=outbox,
+                   reply_to=reply_to)
         return "failed"
     data = L.parse_leader_response(sres.text)
-    if await _leader_format_error(sres.text, data, outbox=outbox):
+    if await _leader_format_error(sres.text, data, outbox=outbox, reply_to=reply_to):
         return "failed"
     reply, emoji = await _clean_reply(data["human_reply"])
     if not reply:
-        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_BOSH), escape=True, outbox=outbox)
+        await _say(C.MSG_LEADER_XATO_TPL.format(sabab=_SABAB_BOSH), escape=True, outbox=outbox,
+                   reply_to=reply_to)
         return "failed"
     reply = L.normalize_latin(reply)
     await _hist(C.ROLE_LEADER, reply)
     await asyncio.to_thread(_save_promise, reply)
-    await outbox.send_text(reply, html=True)
+    await outbox.send_text(reply, html=True, reply_to=reply_to)
     sink = _REACT_SINK.get()
     if sink is not None and emoji:
         sink["react"] = emoji

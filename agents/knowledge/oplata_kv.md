@@ -29,7 +29,7 @@ Sahifalar `frontend/app/[locale]/(panel)/`, `.tsx` komponentlar `frontend/compon
 |---|---|---|
 | `oplatykv/page.tsx`, `oplatykv/layout.tsx` | `/oplata-kv/...` | `OPLATAKV_VIEW` |
 | `vznos/page.tsx` (sub-tab: `transactions-tabs.tsx`) | `/vznos/...` | `VZNOS_VIEW` |
-| `daily-summary-widget.tsx` (dashboard) | `/oplata-kv/daily-summary` | `DASHBOARD_OBJECTS` |
+| `daily-summary-widget.tsx` (dashboard) | `/oplata-kv/daily-summary` | `DASHBOARD_OBJECTS` (widget); API `OPLATAKV_VIEW` |
 | `ai-perereboska-module.tsx` | `/oplata-kv/perereboska/...` | `OPLATAKV_CREATE` |
 | `plan-viewer-dialog.tsx` | `/oplata-kv/contract-plan` | `OPLATAKV_VIEW` |
 
@@ -44,7 +44,7 @@ Sahifalar `frontend/app/[locale]/(panel)/`, `.tsx` komponentlar `frontend/compon
 ## Biznes qoidalar
 - Summa so'm, ishorali: `+` to'lov, `-` qaytarish yoki perereboska manbai. `date` vaqtsiz; kun ichidagi vaqt faqat `created_at` da.
 - `syncFromTransactions`: CLIENT kategoriya, `contract_number` bor, IN va OUT (OUT manfiy). Kalit `source_tx_id` = `external_id` yoki `id`, unique. `tx_type` = tranzaksiya subkategoriyasi nomi. XATO shartnoma ham qo'shiladi.
-- `autoSyncTick`: kunduz 08:00-22:00 har `oplatykv.txAutoSyncMinutes` daqiqa, limit 1000 (0 yoki bo'sh = o'chiq); tun 01:00-07:50 kuniga 1 marta to'liq. `created_by_name`: `cron · day`, `cron · night-batch`. Avto-XATO o'chirish ataylab yo'q.
+- `autoSyncTick`: kunduz `oplatykv.dayStart`..`dayEnd` (default 08:00-22:00) har `oplatykv.txAutoSyncMinutes` daqiqa, limit 1000 (0 yoki bo'sh = o'chiq); tun `oplatykv.nightStart`..`nightEnd` (default 01:00-07:50) kuniga 1 marta to'liq. `created_by_name`: `cron · day`, `cron · night-batch`. Avto-XATO o'chirish ataylab yo'q.
 - Split faqat `installment-split.ts` waterfall: CRM grafigi sana tartibida, boshlang'ich va oylik aralash; auto va qo'lda bitta funksiya. XATO shartnomada split yo'q. CRM aniq split bersa `assignFromCrm`, `applyCrmSplit` qiymati.
 - Schetchik: `tx_type = 'За счетчик'` (schetchik) qatorlar oylikka (`schotchikToMonthly`, `schotchik.*`), panelda parol bilan. `categorization.backfillSchotchik` boshqa narsa.
 - Perereboska: manba va maqsad bir obyektda (CRM obyekt nomi), maqsadlar jami = manba summasi, qoldiq yetarli (lock ostida), hujjat majburiy. Qaytarishda qatorlar o'chadi, guruh `cancelled` qoladi.
@@ -56,11 +56,12 @@ Sahifalar `frontend/app/[locale]/(panel)/`, `.tsx` komponentlar `frontend/compon
 - `installment-split.ts` → auto va qo'lda split, `installment-split.spec.ts`.
 - `updated_at` → `/api/v1` delta kursori (api.md). Raw SQL'da `NOW()` yozma, app vaqti parametr; `clampFutureUpdatedAt` har daqiqa tuzatadi.
 - `tx_type` matni → obyekt hisoboti, kunlik xulosa, Facts `client_income`.
+- `oplatykv.*` sozlama kalitlari (`txAutoSyncMinutes`, `txMinDate`, `dayStart`, `dayEnd`, `nightStart`, `nightEnd`) → Facts `oplatykv_sync.sozlamalar` va Checker `[oplatykv_sync]` (`checker_worker.py::_check_oplatykv_sync`, tekshiruv oynasi `dayStart` + 120 daq .. `dayEnd`). Kalit nomi o'zgarsa `support_facts.py` va `checker_worker.py` ham tuzatiladi.
 - `source_tx_id` → sana ko'chishi va `relinkOplataKv` (sync.md).
 
 ## Xavfli joylar va tuzoqlar
 - Sana ko'chishi dublikati 2026-09-24 da tuzatildi, 46 yetim qator o'chirilgan. Yetim = `source_tx_id` IS NOT NULL va unga mos `transactions.external_id` ham, `transactions.id` ham yo'q (`findOrphanTxRows`).
-- `findOrphanTxRows`, `getRowsForExport` og'ir: agent chaqirmaydi.
+- `findOrphanTxRows`, `getRowsForExport` og'ir: agent chaqirmaydi. Yetim soni va summasi Facts `oplatykv_sync.yetim` da (oxirgi 30 kun).
 - `dailySummary` server soatiga bog'liq.
 - Memorial order faqat o'qiydi; bankdan faqat Kapital va Ipak hisoblari.
 - `syncFromTransactions` mavjud qatorda `tx_type` ni tranzaksiya subkategoriyasi nomiga, `contract_no` ni `transactions.contract_number` ga tenglaydi. Shu sabab `recategorizePayments` qo'ygan `Взнос от имени клиента` (vznos ot imeni klienta) va `cancel` qo'ygan yangi `contract_no` keyingi sync'da qaytib ketadi (tranzaksiya subkategoriyasi boshqa bo'lsa; `recategorizePayments` subkategoriyaga tegmaydi). Bu `oplatykv.txMinDate` dan keyingi qatorlarga tegishli: kunduzgi rejimda oxirgi 1000 CLIENT tx, tungi batch'da hammasi (tasdiqlangan).

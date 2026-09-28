@@ -381,8 +381,10 @@ class PrintOutbox:
         last: Optional[int] = None
         for i, chunk in enumerate(chunks):
             kb = keyboard if i == len(chunks) - 1 else None
-            last = self._record("text", text=chunk, html=html, keyboard=kb)
-            print("[notify #%d]%s\n%s" % (last, " (html)" if html else "", chunk))
+            rt = reply_to if i == 0 else None  # reply faqat birinchi bo'lakka (Http/Aiogram kabi)
+            last = self._record("text", text=chunk, html=html, keyboard=kb, reply_to=rt)
+            print("[notify #%d]%s%s\n%s" % (last, " (html)" if html else "",
+                                            " (reply #%d)" % rt if rt else "", chunk))
             if kb:
                 print("[tugmalar] " + " | ".join("%s=%s" % (t, d) for row in kb for t, d in row))
         return last

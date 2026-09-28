@@ -19,12 +19,14 @@ Yangi qator faqat Support REJAsi orqali qo'shiladi. Har modulda eng yangisi tepa
 - 2026-06 — bank tomonda o'zgargan to'lovlar va OplatyKv kaskadi (`a4bd1a2`), tashqi REST API (`a17433f`), sverka Telegram tugmalari (`affaa53`).
 - 2026-07 — Shartnoma nazorati `/chek` (`778e931`), Kunlik xulosa (`2c24ebb`), XATO tuzatish arizasi (`682b5ae`), AI agent (`6b3d559`), memorial order PDF (`9b68f41`), CRM lookup parity (`5b9daf0`), sirlar `.env` ga (`4b7db6e`), tuzatish boti (`534479e`).
 - 2026-08 — SHMITD (`b67bad7`), vznos reestri (`042b725`), bank parol moduli (`362b7ab`), Chek order (`40bbd8a`), API delta-feed (`c680f65`), sverka AI agenti (`9ecf92e`), CRM sverka (`7ea20b3`), sverka digest (`8c642eb`), split waterfall (`f5a257f`), XATO → CRM (`127bad9`), MOVED turi (`3c0684f`), audit log (`2f9ef87`).
-- 2026-09 — Hamkorbank (`169ee08`), Chek payment (`ead790c`), ta'minot ERP moslash (`2d51c5b`), Minfin tuzatish (`f4993f8`), Hamkor vipiska importi (`78ccc6d`), Universal API (`5a1422f`), OplatyKv sana dublikati (`2043be4`), v1 Leader (`f562a66`), shablon asosidagi agentlar (`agents/`, commit hali yo'q).
+- 2026-09 — Hamkorbank (`169ee08`), Chek payment (`ead790c`), ta'minot ERP moslash (`2d51c5b`), Minfin tuzatish (`f4993f8`), Hamkor vipiska importi (`78ccc6d`), Universal API (`5a1422f`), OplatyKv sana dublikati (`2043be4`), v1 Leader (`f562a66`), @TRanSupport_bot agentlar jamoasi (`agents/`, `d2f4d4e`, serverda ishlayapti).
 
 ## 1. Modullar bo'yicha tarix
 
 ### Agentlar
-- 2026-09-28 — `agents/` promptlari va bilim fayllari shablon asosida tayyorlangan: Leader, Support, Checker, Teacher — egasi qarori: Claude Code CLI + setup token, API kalit yo'q — `agents/` (commit hali yo'q; bot kodi `agents/*.py` da yozilgan, `agents/bin/bash_guard.py`, `agents/claude_settings.json`, `agents/deploy/xon-tranzactions-leader.service`, `agents/tests/`)
+- 2026-09-28 — push qarori: Support REJA'da egasi [Ha] bossa bot `main` ga o'zi push qiladi, deploy'ni webhook boshlaydi — [Ha] egasining push ruxsati; lokal Claude Code sessiyasi push'ni egasi aytgandagina qiladi — `agents/reja.py::execute_approved`, `qoidalar.md` 1.1
+- 2026-09-28 — bot serverga o'rnatilgan va ishlayapti: bot root ostida, agent CLI imtiyozsiz `xonagent` ostida, push kaliti faqat shu repo'ga; Facts, Checker, Teacher bot jarayoni ichida (alohida cron yo'q) — ishga tushirish — `agents/deploy/install.sh`, `agents/deploy/xon-tranzactions-leader.service`
+- 2026-09-28 — @TRanSupport_bot agentlar jamoasi: Leader, Support, Checker, Teacher promptlari, bilim fayllari va bot kodi — egasi qarori: Claude Code CLI + setup token, API kalit yo'q — `agents/*.py`, `agents/bin/bash_guard.py`, `agents/claude_settings.json`, `agents/deploy/`, `agents/tests/` (`d2f4d4e`)
 - 2026-09-28 — v1 Leader: NestJS moduli, Messages API, faqat ko'rish va tahlil — boshqa sessiya ishi, bu tizim bilan bog'liq emas — `backend/src/leader/`, `backend/agents/` (`f562a66`)
 
 ### Tranzaksiyalar (kategoriyalash, kontragent, ta'minot, import)
@@ -46,7 +48,7 @@ Yangi qator faqat Support REJAsi orqali qo'shiladi. Har modulda eng yangisi tepa
 - 2026-09-23 — Hamkor vipiska import moduli; import `external_id` byacc uslubidagi kompozit, avto-kategoriyalash — o'tgan davr API orqali kelmaydi — `import.service.ts`, `hamkor-dedup.util.ts` (`78ccc6d`, `ab77ead`)
 - 2026-09-22 — Hamkor `txn_date` = `Время транзакции` (tranzaksiya vaqti) — settlement kunining shishishini yo'qotish uchun; ikki kundan keyin rad etilgan (`7d89575`) — `sync.service.ts` (`1403fcc`)
 - 2026-09-22 — `[HB-DIAG]` vaqtinchalik log: so'rov manzili, requestId, javob kodi — bankka dalil berish uchun — `hamkorbank.client.ts` (`d00d104`)
-- 2026-09-21 — Hamkor to'lov vaqti sanadan ajratiladi, xom javob tashxis uchun saqlanadi — vaqt ko'rinmasdi — `hamkorbank.client.ts`, `sync.service.ts` (`9e9428c`, `f34a2f3`)
+- 2026-09-21..22 — Hamkor to'lov vaqti sanadan ajratiladi, xom javob tashxis uchun saqlanadi — vaqt ko'rinmasdi — `hamkorbank.client.ts`, `sync.service.ts` (`9e9428c`, `f34a2f3`)
 - 2026-09-21 — "Ulanish" ro'yxati banklar bo'yicha yig'iladigan guruhlarga bo'lingan — ko'p hisobda chalkashlik — `setup/accounts/page.tsx` (`7f7d9c2`)
 - 2026-09-17 — hisob nomini inline tahrirlash, o'chirilgan hisob tranzaksiyalarini relink — hisob qayta qo'shilsa bog'lanish uzilmasin — `sync.service.ts`, `setup/accounts/page.tsx` (`75f1dfb`)
 - 2026-09-17 — Hamkor `external_id` prefiksi `HB_` (Ipak `IP_` kabi), parserlar umumiy — banklar ID'lari to'qnashmasin — `sync.service.ts`, `inspector.service.ts`, `reconcile.service.ts`, `crm.service.ts` (`ba54299`)
@@ -111,6 +113,7 @@ Yangi qator faqat Support REJAsi orqali qo'shiladi. Har modulda eng yangisi tepa
 
 Format: `sana — nima taklif qilingan yoki qilingan — egasining qarori va sababi — fayl yoki commit`.
 
+- 2026-09-28 — push kim qiladi — egasi: push faqat uning ruxsati bilan. Support REJA'da [Ha] = push ruxsati, bot `main` ga o'zi push qiladi, deploy'ni webhook boshlaydi. Lokal Claude Code sessiyasi push'ni egasi aytgandagina qiladi. "Push'ni faqat egasi o'zi qiladi" degan oldingi yozuv shunga aniqlashtirilgan — `agents/reja.py::execute_approved`, `qoidalar.md` 1.1
 - 2026-09-28 — agentlarni `ANTHROPIC_API_KEY` (Messages API) bilan ulash — RAD: egasi agentlarni API kalitga ulamaslikni aytgan. Agentlar faqat Claude Code CLI + setup token, tokenni egasi o'zi oladi — `agents/`
 - 2026-09-24 — Hamkor tranzaksiya sanasi = karta vaqti (`Время транзакции`, tranzaksiya vaqti) — RAD: egasi aniqlagan, kerak sana pul hisobga tushgan kun — `1403fcc` → `7d89575`
 - 2026-09-24 — becfil-exclusion: import davrini sync olmaydi — BEKOR: kunlik sync'ni sindirgan. Dublikatni `@@unique([accountId, hbDedupKey])` to'xtatadi — `280d12a` → `d19dc52`
@@ -122,15 +125,15 @@ Format: `sana — nima taklif qilingan yoki qilingan — egasining qarori va sab
 - 2026-09-08 — Shaxmatka (xonadonlar ko'rinishi) — KEYINGA QOLDIRILGAN: egasi "keyin qilamiz". CRM client kaliti inventar bermaydi, admin API ruxsat bermaydi. Probe kodi olib tashlangan — `bfc2c07`. Qaytganda: faqat o'qiydigan integratsiya akkaunti yoki Excel import. O'z login bilan kirish tavsiya etilmaydi.
 - 2026-08-22 — split "waterfall clamp" — QAYTARILGAN: egasi sababni so'ragan edi, tuzatishni emas — `868d78f` → `16f4677`
 - 2026-08-18 — delta-feed'da bo'sh tombstone filtri — RAD: o'chirishlar iste'molchiga yetmay qolgan. Feed'dan o'chirish hech qachon filtrlanmaydi — `3075556`
-- 2026-08-18 — AI perereboska — egasi qarorlari: cron yo'q, agent faqat ariza yuklanganda chaqiriladi. Orqaga qaytarishda pul qatorlari o'chadi, guruh `cancelled` bo'lib tarixda qoladi — `oplata-kv.service.ts`
 - 2026-08-10 — vznos ot imeni klienta — egasi: obyekt tushum hisobotlaridan chiqariladi, tushum emas — `backend/src/vznos/`
+- 2026-08-04 — AI perereboska — egasi qarorlari: cron yo'q, agent faqat ariza yuklanganda chaqiriladi. Orqaga qaytarishda pul qatorlari o'chadi, guruh `cancelled` bo'lib tarixda qoladi — `oplata-kv.service.ts` (`4275c66`)
 - 2026-07-30 — sirlar kodda — egasi: faqat server `.env`, u aytsa ham kodga qo'yilmaydi — `4b7db6e`
 - 2026-07-28 — "XATO ro'yxatiga qaytar" tugmasi — KERAK EMAS: OplatyKv XATO ro'yxati qo'lda XATO'ni ham ko'rsatadi — `dfd8d99`
 - 2026-07-21 — "Plan bo'yicha to'lov" widgeti (CRM grafik) — OLIB TASHLANGAN: egasi "mavjud narsani takrorlaydi". O'rniga Kunlik xulosa. `contract_schedules` jadvali dormant — `2c24ebb`
 - 2026-07-20 — obyekt bo'yicha ruxsat (row-level) — KECHIKTIRILGAN: egasi "hozircha kerak emas". Kod yozilmagan.
 - 2026-07-13 — Planirovka rasmi — KUTILMOQDA: CRM client API plan rasmini bermaydi, admin API kerak — `frontend/components/plan-viewer-dialog.tsx`
 - 2026-06 (sana taxminiy) — kvartira to'lovini dekorativ 3D bino bilan ko'rsatish — RAD: egasi "juda oddiy" degan. 2D arxitektura planirovkasi ma'qul — frontend
-- 2026-05-12 — push — egasi: push faqat uning ruxsati bilan. Commit mumkin, push "ha" dan keyin.
+- 2026-05-12 — push — egasi: push faqat uning ruxsati bilan. Commit mumkin, push "ha" dan keyin. Keyin aniqlashtirilgan: 2026-09-28 qatori (bot [Ha] dan keyin o'zi push qiladi, lokal sessiya egasi aytganda).
 
 ## 3. Takrorlangan xatolar
 

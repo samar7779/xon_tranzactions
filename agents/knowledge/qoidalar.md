@@ -12,11 +12,11 @@ Bo'limlar: 1 — egasi bilan ishlash, 2 — kod yozish, 3 — biznes qoidalar, 4
 
 1. CRM (XonSaroy) faqat o'qiladi, hech qachon yozilmaydi (2026-09-08: "crmdan faqat ma'lumot olamiz").
 2. Sirlar git'ga chiqmaydi, faqat server `.env` da turadi (2026-07-30). Egasi "tokenni kodga qo'y" desa ham ogohlantir va rad et.
-3. Push va deploy'ni egasi o'zi qiladi. Agent push qilmaydi. Bot REJA'ni faqat egasi [Ha] bosgach push qiladi: [Ha] egasining push qarori.
+3. Push faqat egasining ruxsati bilan (2026-09-28). Support REJA'da egasi [Ha] bossa, bot `main` ga o'zi push qiladi: [Ha] egasining push ruxsati. Lokal Claude Code sessiyasi push'ni egasi aytgandagina qiladi. Agent push ham, deploy ham qilmaydi. Deploy'ni push'dan keyin GitHub webhook boshlaydi.
 4. Javob toza lotin o'zbekcha, kirill aralashmaydi.
 5. Sabab so'ralganda faqat tushuntiriladi. So'ralmagan tuzatish qilinmaydi.
 6. Boshqa banklarni buzmaslik: bitta bank tuzatishi boshqalarga ta'sir qilmasin.
-7. Push'dan oldin lokal `npm run build`.
+7. Lokal Claude Code sessiyasida push'dan oldin lokal `npm run build`. Bot REJA'da build qilmaydi, `tsc`/`py_compile` qiladi (2.2).
 
 ### 1.2 Egasi kim
 
@@ -120,11 +120,11 @@ Bo'limlar: 1 — egasi bilan ishlash, 2 — kod yozish, 3 — biznes qoidalar, 4
 
 ### 2.2 Compile tekshiruvi
 
-- Push'dan oldin lokal `npm run build`: backend (~25 s) va frontend (~2 daqiqa, shoshilinchda `npx tsc --noEmit`). "Kichik" o'zgarishda ham.
+- Lokal Claude Code sessiyasida push'dan oldin `npm run build`: backend (~25 s) va frontend (~2 daqiqa, shoshilinchda `npx tsc --noEmit`). "Kichik" o'zgarishda ham.
 - `schema.prisma` o'zgarsa avval `npx prisma generate`.
 - Faqat hujjat yoki TS bo'lmagan fayl bo'lsa build shart emas.
 - Sabab: TS xatosi deploy build'ini yiqitadi, xabar kech keladi. 2026-05-21 da bir kunda ~10 marta bo'lgan.
-- Bot REJA qo'llashda o'zi tekshiradi: `.py` → `py_compile`; backend `.ts` → `npx tsc --noEmit -p backend/tsconfig.json`; frontend `.ts(x)` → `npx tsc --noEmit -p frontend/tsconfig.json`.
+- Bot REJA qo'llashda vaqtinchalik nusxada o'zi tekshiradi (`reja.py::_run_checks`): `.py` → `py_compile`; backend `.ts` → `tsc --noEmit -p backend/tsconfig.json`; frontend `.ts(x)` → `tsc --noEmit -p frontend/tsconfig.json`.
 - Sof funksiyaning testi bor joyda (`installment-split.spec.ts`, `digest.spec.ts`) testni ham moslashtir.
 
 ### 2.3 Sirlar
@@ -166,8 +166,8 @@ Bo'limlar: 1 — egasi bilan ishlash, 2 — kod yozish, 3 — biznes qoidalar, 4
 
 - Branch `main`. Commit sarlavhasi: `tur(modul): o'zbekcha qisqa tavsif`. Turlar: `feat`, `fix`, `perf`, `style`, `docs`, `chore`, `diag`, `security`.
 - Har fayl aniq `git add -- <fayl>`. `git add -A` yo'q: repoda boshqa sessiyaning commit qilinmagan fayllari bor.
-- Lokal sessiya: commit mumkin, push faqat egasi "ha" degach. Push oldidan `git fetch` va `git rebase origin/main` (parallel sessiya).
-- Bot: har REJA bitta commit `feat(support): ...`, egasi [Ha] bosgach push.
+- Lokal Claude Code sessiyasi: commit mumkin, push faqat egasi aytganda (egasi, 2026-09-28). Push oldidan `git fetch` va `git rebase origin/main` (parallel sessiya).
+- Bot: har REJA bitta commit `feat(support): ...`. Egasi [Ha] bossa bot `main` ga o'zi push qiladi ([Ha] = push ruxsati). Serverda HEAD origin/main dan farq qilsa REJA `branch` bilan to'xtaydi: bot tasdiqsiz commitni push qilmaydi (`reja.py::_preconditions`).
 - Vaqtinchalik diagnostika (`diag(...)`) masala hal bo'lgach olib tashlanadi. Hozir turibdi: `/_deploy/hamkor-diag` (`a76156c`), `[HB-DIAG]` log (`d00d104`).
 
 ### 2.8 Deploy va restart
@@ -178,13 +178,13 @@ Bo'limlar: 1 — egasi bilan ishlash, 2 — kod yozish, 3 — biznes qoidalar, 4
 - Backend deploy: `npm install`, `prisma generate`, `prisma db push --accept-data-loss`, `npm run seed`, `npm run build`, restart. Restart fazasi 5-8 daqiqa turishi odatiy.
 - Frontend `.next-build` ga quriladi va atomik almashtiriladi: build paytida sayt ishlab turadi. Deploy'dan keyin brauzerda hard refresh (Ctrl+Shift+R).
 - Lock `/var/run/xon-tranzactions-deploy.lock`, `flock -w 60`. Eski deploy qotsa yangisi 60 s kutib chiqib ketadi. Unda egasi serverda `deploy.sh` ni qo'lda ishga tushiradi (FE va BE ikkalasi quriladi).
-- `xon-tranzactions-leader` ni deploy restart qilmaydi (`agentlar.md`).
+- `xon-tranzactions-leader` ni deploy restart qilmaydi (`agentlar.md`). `agents/*.py` o'zgarsa bot 15 s ichida o'zi chiqadi, systemd qayta ko'taradi (`leader_bot.py::_source_watcher`). Bot o'zi restart va deploy qilmaydi.
 
 ### 2.9 Yangi agent va Facts bo'limi
 
 - Facts bo'limi faqat egasi "qo'sh" yoki "tuzat" desa. `support_facts.py::_collect_<kalit>`: READ ONLY, `statement_timeout 15s`, birinchi maydon statik `izoh`, maxfiy maydon yo'q. Manba jadvali: `agentlar.md` "Facts manbalari".
 - Facts'da moliyadan faqat JAMI summalar va o'z hisoblarimiz qoldig'i. Mijoz ismi, telefon, to'lov izohi, kontragent rekvizitlari yo'q.
-- Yangi agent faqat egasi qarori bilan: prompt, `runner.py` asboblari va `imkoniyatlar.md` bitta REJA'da.
+- Yangi agent faqat egasi qarori bilan: prompt, `contract.py` (`DELEGATE_AGENTS`, `DISALLOWED_TOOLS`), `runner.py` asboblari va `imkoniyatlar.md` bitta REJA'da.
 
 ## 3. Biznes qoidalar
 
@@ -268,10 +268,12 @@ Bo'limlar: 1 — egasi bilan ishlash, 2 — kod yozish, 3 — biznes qoidalar, 4
 ## 4. Infratuzilma faktlari
 
 - Serverda repo `/var/www/xon_tranzactions`. Panel `transactions.xonapps.uz`.
-- Servislar: `xon-tranzactions-backend` (NestJS, port 3001), `xon-tranzactions-frontend` (Next.js, port 3000), `xon-tranzactions-leader` (agent boti, yangi), `postgresql`, `nginx`. Batafsil: `agentlar.md`, `platforma.md`.
+- Servislar: `xon-tranzactions-backend` (NestJS, port 3001), `xon-tranzactions-frontend` (Next.js, port 3000), `xon-tranzactions-leader` (agent boti, 2026-09-28 dan ishlayapti), `postgresql`, `nginx`. Batafsil: `agentlar.md`, `platforma.md`.
 - nginx: `/api/` va `/docs/` → 3001, `/` → 3000. Body 200M, `/api` timeout 1800 s. `static/tg_uploads/` berilmasin.
 - Deploy log `/var/log/xon-tranzactions/deploy.log`, lock `/var/run/xon-tranzactions-deploy.lock`.
-- `deploy.sh` servislarni `sudo -n systemctl restart` bilan qayta ishga tushiradi. Agent boti sudoers'da yo'q.
+- `deploy.sh` servislarni `sudo -n systemctl restart` bilan qayta ishga tushiradi. Agent boti root ostida ishlaydi. Agent CLI imtiyozsiz `xonagent` foydalanuvchisida, sudo'siz.
+- Facts, Checker va Teacher bot jarayoni ichida ishlaydi. Alohida cron yo'q.
+- Push kaliti serverda root'da, faqat shu repo'ga. Bot REJA push'ini shu kalit bilan qiladi. Agent foydalanuvchisi kalitni o'qiy olmaydi.
 - Baza `xon_tranzactions`, faqat localhost. Shu serverda ta'minot ERP'ning alohida `xontaminot` bazasi ham bor.
 - Bank IP whitelist uchun tashqi forwarder (`scripts/xt-forwarder.php`). Manzil va sir DB setting'da, panel orqali o'zgaradi.
 - Bot jadvallari va `kv_store` kalitlari: `agentlar.md` "DB jadvallar". Backend cron'lari: `agentlar.md` "Schedulerlar izi".
@@ -285,7 +287,7 @@ Bo'limlar: 1 — egasi bilan ishlash, 2 — kod yozish, 3 — biznes qoidalar, 4
 - CRM'ga yozuvchi REJA yoki kod.
 - Sir (token, parol, PIN, darvoza kodi, API kalit, ulanish satri, server IP, SSH login, guruh chat ID) javobga, kodga, REJA'ga, xotiraga.
 - `.env*` ni o'qish yoki o'zgartirish. `.git/`, `.claude/`, `agents/state/`, `static/tg_uploads/` ga REJA.
-- `git add -A`, egasining [Ha]'isiz push, lokalda qolgan commit.
+- `git add -A`. Egasi ruxsatisiz push: bot uchun [Ha]'siz, lokal sessiya uchun egasi aytmasdan. Serverda push qilinmay qolgan bot commiti.
 - Raw SQL'da `NOW()` bilan vaqt yozish.
 - `crm_contracts` ga NULL o'rniga `''` yozish.
 - Sync feed'idan o'chirishni filtrlash.
@@ -314,5 +316,5 @@ Bo'limlar: 1 — egasi bilan ishlash, 2 — kod yozish, 3 — biznes qoidalar, 4
 | Reconcile sana matni server soati bo'yicha (`getDate()`) | `Intl` + `Asia/Tashkent` (`8c642eb`, 2026-08-20) |
 | Shablon deploy lock repo ildizidagi `.deploy.lock` | `/var/run/xon-tranzactions-deploy.lock` |
 | Agentlar Messages API va `ANTHROPIC_API_KEY` bilan ishlaydi (v1, `backend/src/leader/`) | Bu tizim: Claude Code CLI + setup token, API kalit yo'q (egasi, 2026-09-28) |
-| Lokal Claude sessiyasi "xa" dan keyin `main` ga o'zi push qiladi | Push va deploy'ni egasi o'zi qiladi. Agentlar tizimida push faqat [Ha] dan keyin bot orqali |
+| Push va deploy'ni faqat egasi o'zi qiladi, bot ham, lokal sessiya ham push qilmaydi | Egasi qarori (2026-09-28): push faqat uning ruxsati bilan. Bot REJA'ni [Ha] dan keyin `main` ga o'zi push qiladi ([Ha] = push ruxsati). Lokal Claude Code sessiyasi push'ni egasi aytgandagina qiladi. Deploy'ni push'dan keyin webhook boshlaydi |
 | Sirlar kodda qattiq yozilgan (JWT, CRM kaliti, sverka bot tokeni, admin amal paroli) | `.env` ga ko'chirilgan (`4b7db6e`, 2026-07-30). `deploy.sh` fallback'lari hali qolgan |

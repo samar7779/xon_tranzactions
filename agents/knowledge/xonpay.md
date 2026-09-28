@@ -41,24 +41,24 @@ XonSaroy CRM to'lov tarixidan (faqat o'qish) `payment_method` "Xon Pay" bo'lgan 
 - `date_paid` UTC 12:00 bilan yoziladi (`parseDateOnly`), sana siljimasin deb.
 - `trigger`: manual yoki cron.
 - `tryMatchOne`: UUID `transactions.description` ichida, eng yangi `txn_date`. Summa solishtirilmaydi. Bank filtri yo'q: izohida UUID bor Hamkor to'lovi ham bog'lanadi.
-- `status`: running, success, failed, cancelled. 'Server restart%' xatoli failed = orfan (`onModuleInit`), nosozlik emas.
+- `status`: running, success, failed, cancelled. 'Server restart%' xatoli failed = orfan (`onModuleInit`), nosozlik emas. Facts'da belgisi `xonpay.oxirgi_synclar[].orfan`.
 - Bugungi va kechagi moslanmagan to'lov hali bankka tushmagan bo'lishi mumkin.
 
 ## Bog'liqliklar — "X ni o'zgartirsang, Y ta'sirlanadi"
 - `xonpay_transactions` tozalansa → `crm.service.ts::applyXonpayMatches` (XATO → CRM tabi, `oplata-kv.service.ts::bulkCrmFix`) XonPay shartnomasini topmaydi.
 - `crm.service.ts::getPaymentHistory` o'zgarsa → sync va cleanup. Sverka CRM alohida `getPaymentHistoryAll` ishlatadi.
 - `XONPAY_UUID_RE` o'zgarsa → `applyXonpayMatches` dagi regex ham.
-- `xonpay.cron.*` kalit nomlari → `leader-health.service.ts::checkXonpay` (v1) va Facts `xonpay`.
+- `xonpay.cron.*` kalit nomlari → `leader-health.service.ts::checkXonpay` (v1), Facts `xonpay` (`support_facts.py::_collect_xonpay`) va Checker `[xonpay]` (`checker_worker.py::_check_xonpay`).
 
 ## Xavfli joylar va tuzoqlar
 - `fixDateShift`: hamma `date_paid` ga +1 kun, guard yo'q. Bir martalik edi (commit 8894e74, 2026-05-18). Qayta chaqirilsa sanalar buziladi.
 - `truncateAll`: `TRUNCATE ... CASCADE`, qaytmas; bank tranzaksiyalariga tegmaydi.
 - cleanup `dryRun=false`: CRM fetch uzilsa (`!r.ok` → break) ko'p qator orfan chiqadi. Avval dryRun.
-- `runSyncInBackground`: CRM sahifasi o'qilmasa (`!r.ok` → break) istisno otilmaydi. `status` `success` bo'lib qoladi, `errors` > 0 va `error_message` to'la bo'ladi. 1-sahifada CRM javob bermasa ham log `success` (`fetched` = 0), `checkXonpay` (v1) uni sog' sync deb oladi. Qator upsert xatosi ham faqat `errors++`, `error_message` bo'sh qoladi. `success` to'liq sync degani emas: `errors`, `fetched` va `error_message` ni ham ayting.
+- `runSyncInBackground`: CRM sahifasi o'qilmasa (`!r.ok` → break) istisno otilmaydi. `status` `success` bo'lib qoladi, `errors` > 0 va `error_message` to'la bo'ladi. 1-sahifada CRM javob bermasa ham log `success` (`fetched` = 0), `checkXonpay` (v1), Facts `xonpay.oxirgi_muvaffaqiyatli` va Checker `[xonpay]` uni sog' sync deb oladi. Qator upsert xatosi ham faqat `errors++`, `error_message` bo'sh qoladi. `success` to'liq sync degani emas: `errors`, `fetched` va `error_message` ni ham ayting.
 - Frontend `lib/permissions.ts` da `XONPAY_MANAGE` yo'q: tozalash tugmasi `crm:view` ga ham ko'rinadi, backend 403 beradi.
 - `dashboard:xonpay` bor, `crm:view` yo'q rolda vidjet 403 oladi.
 - Tranzaksiya o'chirilsa `matched_tx_id` NULL (SetNull), `is_matched = true` qoladi.
-- `checkXonpay` (v1): ketma-ket 2 haqiqiy failed = critical, oxirgi success 3 x intervaldan eski = warn. Soat oynasini bilmaydi: ertalab 07:00 dan keyin soxta warn berishi mumkin.
+- `checkXonpay` (v1): ketma-ket 2 haqiqiy failed = critical, oxirgi success 3 x intervaldan eski = warn. Soat oynasini bilmaydi: tunda (kechki oxirgi sync + 3 x interval dan keyin) 07:00 dagi birinchi sync tugaguncha soxta warn beradi. Bot Checker `[xonpay]` faqat 07-23 da baholaydi, chegara max(3 x interval, 180) daq.
 - Moslash har qatorda `transactions.description` bo'yicha qidiradi: katta `match-all` og'ir.
 - Cron va sync holati xotirada: restartda yo'qoladi.
 - `full_name`, `purpose`, `crm_uuid` Facts'ga berilmaydi.
