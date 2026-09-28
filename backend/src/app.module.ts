@@ -43,6 +43,7 @@ import { TaminotModule } from './taminot/taminot.module';
 import { BankPwdModule } from './bank-pwd/bank-pwd.module';
 import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
 import { LeaderModule } from './leader/leader.module';
+import { AgentTeamModule } from './agent-team/agent-team.module';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { LeaderModule } from './leader/leader.module';
     CorrectionModule,
     AuditModule,
     LeaderModule,
+    AgentTeamModule,
   ],
   providers: [
     // FIX (A1): ThrottlerGuard'ni GLOBAL bog'laymiz — avval ThrottlerModule sozlangan-u,

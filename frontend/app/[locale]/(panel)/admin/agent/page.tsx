@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   Bot, Loader2, Save, Play, Lock, CalendarDays, Clock, KeyRound, Building2, Info, Send, Users, Plus,
   Sparkles, BrainCircuit, CheckCircle2, XCircle, UserCog, ChevronDown, Settings2, Activity, Cpu,
   History, MessageSquare, X, Search, Download, Pencil, ChevronLeft, ChevronRight,
   Paperclip, Trash2, ImageIcon,
-  BarChart3, FileSearch, AlertTriangle, HelpCircle,
+  BarChart3, FileSearch, AlertTriangle, HelpCircle, Network,
 } from 'lucide-react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,9 +18,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useHasPermission } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import { AgentSupportPanel } from '@/components/agent-team/agent-support-panel';
+import { StatusDot, liveTone, type Tone } from '@/components/agent-team/ui';
+import { agentTeamApi, agentTeamKeys } from '@/lib/agent-team-api';
 
 interface WlEntry { id: string; name: string }
 interface AgentConfig {
@@ -143,7 +148,128 @@ const MD_COMPONENTS: Components = {
   tr: ({ children }) => <tr className="even:bg-slate-50/60 dark:even:bg-slate-800/30">{children}</tr>,
 };
 
+type AgentPageTab = 'ai' | 'support';
+
+/**
+ * Agent bo'limi — 2 sub-tab:
+ *  - "AI Agent" (default) — arizalarni tekshiruvchi agent (AiAgentPanel, mazmuni o'zgarmagan);
+ *  - "Agent Support" (?tab=support) — @TRanSupport_bot jamoasi kuzatuvi (components/agent-team).
+ * AI Agent'ga qaytganda URL'dan tab va view olib tashlanadi.
+ * AiAgentPanel bir marta ochilgach doim mount holida (yashirinadi); AgentSupportPanel lazy.
+ */
 export default function AdminAgentPage() {
+  const t = useTranslations('adminAgentTeam');
+  const sp = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const canManageTeam = useHasPermission(PERMS.AGENT_MANAGE);
+
+  // URL manba; lokal holat bosilganda darhol almashadi (router.replace tranzitsiyasini kutmaydi)
+  const urlTab: AgentPageTab = sp.get('tab') === 'support' ? 'support' : 'ai';
+  const [tab, setTab] = useState<AgentPageTab>(urlTab);
+  useEffect(() => { setTab(urlTab); }, [urlTab]);
+
+  // AI Agent paneli birinchi ochilgach UNMOUNT qilinmaydi, faqat yashiriladi: unda faqat
+  // "Saqlash" bilan serverga ketadigan lokal forma holati ko'p (interval, whitelist, token, model...).
+  // Sub-tab almashganda bu kiritilganlar yo'qolmasin. To'g'ridan-to'g'ri ?tab=support bilan
+  // ochilsa, AI Agent so'rovlari foydalanuvchi u tabga o'tmaguncha boshlanmaydi.
+  const [aiVisited, setAiVisited] = useState(false);
+  useEffect(() => { if (tab === 'ai') setAiVisited(true); }, [tab]);
+  const aiMounted = aiVisited || tab === 'ai';
+
+  const selectTab = (next: AgentPageTab) => {
+    if (next === tab) return;
+    setTab(next);
+    const p = new URLSearchParams(sp.toString());
+    if (next === 'support') {
+      p.set('tab', 'support');
+    } else {
+      p.delete('tab');
+      p.delete('view');
+    }
+    const q = p.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  };
+
+  // Sub-tab holat nuqtasi: bot tirikligi (30 s). Overview kaliti Agent Support paneli bilan umumiy.
+  const teamQ = useQuery({
+    queryKey: agentTeamKeys.overview(),
+    queryFn: () => agentTeamApi.overview(),
+    refetchInterval: 30_000,
+  });
+  const ov = teamQ.data;
+  const dotTone: Tone = ov?.installed ? liveTone(ov.bot.liveStatus) : 'slate';
+  const dotPulse = !!ov?.installed && ov.bot.liveStatus === 'live';
+  const dotTitle = ov ? (ov.installed ? t(`live.${ov.bot.liveStatus}`) : t('install.badge')) : undefined;
+  const pendingPlans = ov?.installed ? ov.pending.plans : 0;
+
+  return (
+    <>
+      <div className="px-6 lg:px-8 pt-4">
+        <div className="flex items-end gap-1 border-b border-slate-200 dark:border-slate-800">
+          <AgentPageSubTab
+            active={tab === 'ai'}
+            onClick={() => selectTab('ai')}
+            icon={<BrainCircuit className="h-4 w-4" />}
+            label={t('tabs.aiAgent')}
+          />
+          <AgentPageSubTab
+            active={tab === 'support'}
+            onClick={() => selectTab('support')}
+            icon={<Network className="h-4 w-4" />}
+            label={t('tabs.support')}
+            trailing={
+              <>
+                <span title={dotTitle} className="inline-flex">
+                  <StatusDot tone={dotTone} pulse={dotPulse} />
+                </span>
+                {pendingPlans > 0 && (
+                  <span
+                    title={t('hero.pending.plans')}
+                    className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold grid place-items-center tabular-nums shadow-sm shadow-amber-500/30"
+                  >
+                    {pendingPlans}
+                  </span>
+                )}
+              </>
+            }
+          />
+        </div>
+      </div>
+      {aiMounted && (
+        // flex-1 flex-col: panel ildizidagi flex-1 avvalgidek <main> balandligini egallasin
+        <div className={cn('flex-1 flex-col', tab === 'ai' ? 'flex' : 'hidden')}>
+          <AiAgentPanel />
+        </div>
+      )}
+      {tab === 'support' && <AgentSupportPanel canManage={canManageTeam} />}
+    </>
+  );
+}
+
+/** chek-order SubTab uslubi (indigo border-b-2) — admin tab bar bilan bir tizim */
+function AgentPageSubTab({
+  active, onClick, icon, label, trailing,
+}: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; trailing?: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'relative flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold border-b-2 -mb-px whitespace-nowrap transition-colors',
+        active
+          ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300'
+          : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+      )}
+    >
+      {icon} {label}
+      {trailing}
+    </button>
+  );
+}
+
+function AiAgentPanel() {
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
   const canManage = !!user?.permissions?.includes(PERMS.AGENT_MANAGE);
