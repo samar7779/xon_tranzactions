@@ -1451,3 +1451,60 @@ model ExportCronLog {
   @@index([sheetId])
   @@map("export_cron_logs")
 }
+
+// ─────────────────────────────────────────────────────────────────
+// LEADER AGENTLAR — egasi bilan Telegram suhbati (v1: faqat ko'rish va tahlil)
+// Kod: src/leader/. Biznes jadvallarga YOZMAYDI — faqat shu 4 jadvalga.
+// ─────────────────────────────────────────────────────────────────
+model LeaderMessage {
+  id        String   @id @default(cuid())
+  chatId    String   @map("chat_id") @db.VarChar(32)
+  role      String   @db.VarChar(16) // user | assistant | system
+  content   String   @db.Text
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([chatId, createdAt])
+  @@map("leader_messages")
+}
+
+model LeaderMemory {
+  id        String   @id @default(cuid())
+  kind      String   @db.VarChar(16) // odam | qoida | qaror | fakt | tuzatish
+  text      String   @db.Text
+  source    String   @db.VarChar(32) // owner | leader | teacher_daily
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([active, createdAt])
+  @@map("leader_memories")
+}
+
+model LeaderRun {
+  id              String   @id @default(cuid())
+  agent           String   @db.VarChar(16) // leader | support | checker | teacher
+  model           String   @db.VarChar(64)
+  status          String   @db.VarChar(16) // ok | error | capped | max_iter
+  inputTokens     Int      @default(0) @map("input_tokens")
+  outputTokens    Int      @default(0) @map("output_tokens")
+  cacheReadTokens Int      @default(0) @map("cache_read_tokens")
+  toolCalls       Int      @default(0) @map("tool_calls")
+  durationMs      Int      @default(0) @map("duration_ms")
+  error           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("leader_runs")
+}
+
+model LeaderAlert {
+  id        String   @id @default(cuid())
+  checkKey  String   @map("check_key") @db.VarChar(64)
+  level     String   @db.VarChar(16) // ok | warn | critical | unknown
+  message   String   @db.Text
+  sent      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([checkKey, createdAt])
+  @@map("leader_alerts")
+}

@@ -42,6 +42,7 @@ import { ShmitdModule } from './shmitd/shmitd.module';
 import { TaminotModule } from './taminot/taminot.module';
 import { BankPwdModule } from './bank-pwd/bank-pwd.module';
 import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
+import { LeaderModule } from './leader/leader.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
     ChekModule,
     CorrectionModule,
     AuditModule,
+    LeaderModule,
   ],
   providers: [
     // FIX (A1): ThrottlerGuard'ni GLOBAL bog'laymiz — avval ThrottlerModule sozlangan-u,
