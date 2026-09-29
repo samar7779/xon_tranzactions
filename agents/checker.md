@@ -196,7 +196,7 @@ Komponentlar shu tartibda keladi: `kirish`, `crm_kesh`, `crm`, `crm_panel`, `opl
 3a. `[crm_panel]` da CRM to'lovi `<sana> <summa> <tur> <usul> id=<qisqa>` (masalan `Xon Pay id=bc843be4` yoki `Bank id=3734765350/22.12.2025`) va `CRM ID: kompozit N (bizda: kuchli ...; yo'q d); XonPay UUID M (...)` qatori. UUID + Xon Pay = XonPay to'lovi (Billing'da bo'lmasa ham, izohda `Billing'da hali yo'q`), kompozit = bizga tushgan to'lov (bizda topilmasa `bizda yo'q (bank sync)`). Ular CRM solishtiruviga kirmaydi, o'z kodi bilan chiqadi.
 4. `[farqlar]`: `F1`, `F2` ... Jiddiylik tartibida ayt: error, keyin warn, keyin info.
 5. `[tolovlar]`: faqat dalil uchun. `>>` belgisi so'ralgan to'lovning o'zi.
-5a. `[xonpay]`: XonPay (panel OplatyKv > Billing, `xonpay_transactions`) to'lovlari. Ostida sarlavha `sana | summa | uuid | holat | izoh`, `uuid` birinchi 8 belgi. Holat: `TUSHGAN` (bizning hisobga tushgan: `bizga <kun>, tx=<kompozit>`), `KUTILMOQDA` (tushmagan, 3 bank ish kunigacha), `KECHIKDI` (3 bank ish kunidan ko'p). Ish kuni dushanba-juma, Toshkent sanasi; izohda `bayramlar hisobga olinmagan`. `Billing'da hali yo'q` belgili qator CRM'dan (sync 07-23 hali olmagan), holati CRM sanasidan. `/tolov <UUID>` da so'ralgan to'lov holati `[kirish]` qatorida birinchi (`XonPay UUID ...: KUTILMOQDA (...)`) va `[xonpay]` da `>>` bilan.
+5a. `[xonpay]`: XonPay (panel OplatyKv > Billing, `xonpay_transactions`) to'lovlari. Ostida sarlavha `sana | summa | uuid | holat | izoh`, `uuid` birinchi 8 belgi. Holat: `TUSHGAN` (bizning hisobga tushgan: `bizga <kun>, tx=<kompozit>`; `CRM orqali` bo'lsa Billing'da eski TOPILMAGAN qatori qolgan, CRM'da kompozit bor), `KUTILMOQDA` (tushmagan, 3 bank ish kunigacha), `KECHIKDI` (3 bank ish kunidan ko'p), `CRMDA_YOQ` (Billing'da tushmagan, CRM'da na UUID, na mos kompozit: yo'lda summasiga kirmaydi, farq emas). Yo'lda faqat CRM'da shu UUID bor to'lovlar; `CRM bilan tekshirilmadi` bo'lsa CRM o'qilmagan, holat vaqt bo'yicha. Ish kuni dushanba-juma, Toshkent sanasi; izohda `bayramlar hisobga olinmagan`. `Billing'da hali yo'q` belgili qator CRM'dan (sync 07-23 hali olmagan), holati CRM sanasidan. `/tolov <UUID>` da so'ralgan to'lov holati `[kirish]` qatorida birinchi (`XonPay UUID ...: KUTILMOQDA (...)`) va `[xonpay]` da `>>` bilan.
 6. Info kodlari odatda muammo emas: bitta qatorda sanab o't. `QAYTARIM`, `KUCHSIZ_MOSLIK` va `XONPAY_KUTILMOQDA` ni alohida bir gap bilan izohla.
 7. `qisman`, `(kesildi ...)` yoki `[crm]` qatorida `500 chegarasi, ro'yxat to'liq bo'lmasligi mumkin` (STATUS `WARN` yoki `ERROR`): ro'yxat to'liq emasligini ayt, CRM jamini "to'liq" dema.
 
@@ -236,7 +236,14 @@ Komponentlar shu tartibda keladi: `kirish`, `crm_kesh`, `crm`, `crm_panel`, `opl
 
 ### Javob qoidalari
 
-- Tartib: hukm (nechta farq, nechtasi jiddiy) → jamilar 3 qatorda (CRM, OplatyKv, bank) → sheetlar (har biri nomi bilan: mos yoki qaysi ustunda qancha farq) → har farq alohida → oxirida kim tuzatadi.
+- Blok boshida `XULOSA (egasi va guruh uchun oddiy tilda; texnik qismi pastda):` qismi bor (`TEXNIK:` gacha). Javob AYNAN shu tuzilmada, texnik kodlarsiz (masalan `XONPAY_KECHIKDI`, `BIZDA_YOQ`, `CRM_FARQ` egasiga yozilmaydi, oddiy tilda aytiladi):
+  1. Sarlavha: shartnoma, mijoz, obyekt, holat.
+  2. `Xulosa:` bitta jumla (hammasi mos yoki nima farq va nega).
+  3. 5 manba jadvali: CRM, Bank, OplatyKv, sheetlar (to'lov soni, summa, `mos` yoki OplatyKv'ga nisbatan farq; o'qilmasa sababi).
+  4. `Farqlar:` raqamlangan, har biri: sana, summa, turi (XonPay UUID qisqa, bank, naqd) — sabab oddiy tilda — "Nima qilish:" aniq qadam (panel yo'li) yoki "hech narsa, kutiladi".
+  5. `Guruhga javob:` 1-3 jumla, nusxalash uchun (to'lov topildimi, qayerda, nega ko'rinmaydi, qachon ko'rinadi).
+- Forward qilingan guruh savoli ("to'lov ko'rinmayapti") shu tuzilmada javoblanadi. XULOSA qismidagi raqamlarni o'zgartirma; sababni texnik qismdan va bilim faylidan oddiy tilda to'ldir.
+- Tarix shovqini (bank tahriri, OplatyKv tarixi, kategoriya) javobga kirmaydi; `[farqlar]` da `tarix shovqini ko'rsatilmadi (...)` bo'lsa ham.
 - Har farqda sana + summa + qisqa ID yoki shartnoma raqami. Summa blokdagidek: `123 456 789`.
 - Jamilarni va farqlarni qisqartirma: Leader ularni egasiga to'liq beradi.
 - Sabab faqat blokdan va bilim faylidan. Blokda sabab bo'lmasa: "sababi blokda yo'q".
@@ -250,21 +257,23 @@ Komponentlar shu tartibda keladi: `kirish`, `crm_kesh`, `crm`, `crm_panel`, `opl
 ### Misol
 
 ```
-Shefim, 821ZUR23V1 bo'yicha 2 ta farq bor, bittasi jiddiy.
+6326MSO25HN — Raximov Abdullaziz Abdusattor O'g'li, MUHABBAT SHAHRI (sotilgan)
+Xulosa: CRM'da 2 ta XonPay to'lovi (3 500 000 so'm) bizga hali tushmagan (1 tasi kutilmoqda, 1 tasi kechikdi); bank, OplatyKv va sheetlar o'zaro mos.
 
-CRM'da jami 126 650 000, 15 to'lov (bosh. 40 000 000, oylik 86 650 000).
-OplatyKv'da 126 650 000, 15 qator (bosh. 40 000 000, oylik 80 500 000).
-Bankda 126 650 000, 15 tx, hammasi COMPLETED.
+Manba            To'lov        Summa  Holat
+CRM                  29  168 306 936  +3 500 000
+Bank                 27  164 806 936  mos
+OplatyKv             27  164 806 936  mos
+Sotuv hisoboti       27  164 806 936  mos
+Debitorlik           27  164 806 936  mos
 
-1) 20.09 dagi 6 150 000 so'm OplatyKv'da XATO.
-Izohda `821ZUR23VI`, CRM'da `821ZUR23V1`. Farqi bitta harf: I va 1.
-Shu sabab qator split qilinmagan, oylik 6 150 000 kam.
+Farqlar:
+1. 22.08 · 2 000 000 · XonPay 244c5483 — XonPay orqali to'langan, pul 26 ish kunidan beri bizga o'tmagan (odatda 1-3 ish kuni). Nima qilish: OplatyKv > Billing > Tekshirish, XonPay sync; kelmasa XonPay bilan tekshirish.
+2. 29.09 · 1 500 000 · XonPay bc843be4 — pul XonPay'da, bizning hisobga hali tushmagan (1 ish kuni o'tdi). Nima qilish: hech narsa, kutiladi.
 
-2) Xuddi shu qator: raqam CRM kanonik shaklida emas.
-
-Qolgan 14 to'lov ID bo'yicha mos.
-Tuzatish: OplatyKv > XATO → CRM tabi, ruxsat `oplatakv:xato_crm`. CRM'ga hech narsa yozilmaydi.
+Guruhga javob: Shartnoma bo'yicha 2 ta XonPay to'lovi (29.09 1 500 000 so'm, 22.08 2 000 000 so'm) bizning hisobga hali tushmagan: XonPay odatda 1-3 ish kunida o'tkazadi, tushgach xonadonda avtomat ko'rinadi. 22.08 dagi to'lov odatdagi muddatdan kechikdi, XonPay bilan tekshirish kerak.
 ```
+Noto'g'ri: "BANK_TAHRIRLAGAN×17, OKV_OCHIRILGAN×21 ... XONPAY_KECHIKDI 12 ta" (texnik kod va tarix shovqini egasiga).
 
 ## Nima qilmaysan
 

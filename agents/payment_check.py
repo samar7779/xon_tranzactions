@@ -111,6 +111,7 @@ class Kirish:
     mijoz: str = ""
     xom: str = ""
     tashlangan: int = 0                       # 3 tadan ortiq shartnoma tashlandi
+    batafsil: bool = False                    # '/tolov ... batafsil': egasiga eski texnik chiqish
 
 
 @dataclass
@@ -135,6 +136,8 @@ class Farq:
     ochiq: str = ""                           # to'lovchi erkin matni (maskalangan): FAQAT format_owner
     ochiq_raqam: str = ""                     # o'sha matndan faqat shartnoma raqamlari: agent bloki uchun
     sabab: str = ""                           # SHEET_YOQ / SHEET_FARQ: "<kod> — <izoh>" (nega sheetda yo'q)
+    hodisa: str = ""                          # tarix izi aniqlangan kun (ISO): shovqin filtri uchun
+    yashirin: bool = False                    # tarix shovqini: texnik chiqishda ko'rsatilmaydi, oxirida raqamlanadi
 
 
 @dataclass
@@ -226,7 +229,7 @@ class XonpayQator:
     shartnoma: str = ""
     summa: Decimal = _NOL                     # butun so'm
     sana: str = ""                            # date_paid ISO: CRM'dagi to'lov sanasi
-    holat: str = ""                           # TUSHGAN | KUTILMOQDA | KECHIKDI | NOMALUM (sana yo'q)
+    holat: str = ""                           # TUSHGAN | KUTILMOQDA | KECHIKDI | CRMDA_YOQ | NOMALUM (sana yo'q)
     ish_kun: Optional[int] = None             # date_paid dan bugungacha bank ish kunlari (tushmaganda)
     tushgan_sana: str = ""                    # matched_date ISO
     tushgan_id: str = ""                      # bizning bank kompozit ID (matched_external_id)
@@ -235,6 +238,7 @@ class XonpayQator:
     tekshirilgan: Optional[datetime] = None   # last_checked_at (tz'siz UTC)
     kompozit_crm: bool = False                # CRM external_id bank kompoziti: pul tushgan, Billing moslamagan
     izoh_qosh: str = ""                       # CRM'dan tuzilgan (Billing'da yo'q yoki o'qilmadi): izohga qo'shiladi
+    crm_orqali: bool = False                  # TUSHGAN CRM kompoziti orqali (Billing'da eski TOPILMAGAN qatori)
 
     @property
     def yolda(self) -> bool:
@@ -259,6 +263,7 @@ class Kontekst:
     kanon: List[str] = field(default_factory=list)
     vznos: Set[str] = field(default_factory=set)
     xonpay: List[Dict[str, Any]] = field(default_factory=list)
+    xonpay_holat: Optional[List["XonpayQator"]] = None   # CRM bilan kelishtirilgan Billing (None = xonpay'dan)
     loglar: List[Dict[str, Any]] = field(default_factory=list)
     tarix: List[Dict[str, Any]] = field(default_factory=list)
     arizalar: List[Dict[str, Any]] = field(default_factory=list)
@@ -308,6 +313,7 @@ class Natija:
     crm_ok: bool = False
     koprik: Optional["KoprikNatija"] = None   # panel ko'prigi (None = chaqirilmadi)
     xonpay: Optional[List[XonpayQator]] = None   # [xonpay] qatorlari (None = o'qilmadi)
+    xulosa: Optional["Xulosa"] = None         # egasi uchun oddiy tildagi xulosa (None = shartnoma yo'q / baza yiqildi)
 
 
 class CrmXato(Exception):
@@ -725,16 +731,20 @@ def _ext_qisqa(ext: str) -> str:
 def _xonpay_tafsil(x: XonpayQator) -> str:
     """TUSHGAN: bizga tushgan kun va bank kompozit ID (qisqa, hisob raqamlarisiz); yo'lda: o'tgan ish kunlari."""
     if x.holat == "TUSHGAN":
-        if x.kompozit_crm:
+        if x.crm_orqali:
+            t = "bizga %s, tx=%s (CRM orqali)" % (x.tushgan_sana or "-", qisqa_id(x.tushgan_id))
+        elif x.kompozit_crm:
             t = "CRM ID bank kompoziti %s, Billing moslamagan" % qisqa_id(x.tushgan_id)
         else:
             t = "bizga %s, tx=%s" % (x.tushgan_sana or "-", qisqa_id(x.tushgan_id or x.tushgan_tx))
         if x.tushgan_summa is not None and abs(x.tushgan_summa - x.summa) >= 1:
             t += "; bizda summa %s" % pul(x.tushgan_summa)
-        return t
+        return t + "; " + x.izoh_qosh if x.izoh_qosh else t
     if x.yolda:
         t = C.TOLOV_XONPAY_IZOH_TPL.format(n=x.ish_kun, chegara=C.TOLOV_XONPAY_ISH_KUNI)
         return t + "; " + x.izoh_qosh if x.izoh_qosh else t
+    if x.holat == "CRMDA_YOQ":
+        return C.TOLOV_XONPAY_CRMDA_YOQ
     return "sana yo'q"
 
 
@@ -998,8 +1008,12 @@ def _erkin_matn(matn: str) -> Optional[Kirish]:
     return None
 
 
+_BATAFSIL_RE = re.compile(r"(?i)\s+%s\s*$" % C.TOLOV_BATAFSIL_SOZ)
+
+
 def parse_kirish(matn: Any) -> Optional[Kirish]:
-    """TOLOV: qatori -> /tolov argumenti (bir qator) -> erkin matn. Yaroqsiz -> None."""
+    """TOLOV: qatori -> /tolov argumenti (bir qator) -> erkin matn. Yaroqsiz -> None.
+    Bir qatorli argument oxiridagi 'batafsil' so'zi olib tashlanadi va Kirish.batafsil = True (texnik chiqish)."""
     t = _s(matn)
     if not t or len(t) > 20000:
         return None
@@ -1007,11 +1021,16 @@ def parse_kirish(matn: Any) -> Optional[Kirish]:
     if m:
         # buzuq TOLOV: qatori (LLM xatosi) -> erkin matndagi shartnoma raqami
         return _tolov_qatori(m.group(1).strip(), t) or _erkin_matn(t)
-    if "\n" not in t and len(t) <= 200:
-        k = _argument(t)
-        if k is not None:
-            return k
-    return _erkin_matn(t)
+    batafsil = False
+    if "\n" not in t and _BATAFSIL_RE.search(" " + t):
+        t, batafsil = _BATAFSIL_RE.sub("", " " + t).strip(), True
+        if not t:
+            return None
+    k = _argument(t) if "\n" not in t and len(t) <= 200 else None
+    k = k or _erkin_matn(t)
+    if k is not None:
+        k.batafsil = batafsil
+    return k
 
 
 def kirish_nomi(k: Optional[Kirish], shartnomalar: Sequence[str] = ()) -> str:
@@ -2101,6 +2120,8 @@ class KoprikNatija:
     komp_qidirildi: Set[str] = field(default_factory=set)   # qidirilgan (topilmasa: bank sync muammosi)
     komp_xato: str = ""
     xonpay_crm: List[XonpayQator] = field(default_factory=list)   # Billing'da yo'q XonPay (koprik_tahlil yozadi)
+    # CRM_FARQ: shartnoma -> (faqat CRM'da, faqat OplatyKv'da) to'lovlar (egasi javobida har biri alohida)
+    mos_emas: Dict[str, Tuple[List[_KT], List[_KT]]] = field(default_factory=dict)
 
 
 def _koprik_urlopen(req: urllib.request.Request, timeout: float) -> Any:
@@ -2739,6 +2760,91 @@ def _komp_yoq_farq(x: _KT) -> Farq:
     return f
 
 
+def _crm_royxatlari(kn: Optional[KoprikNatija], crm_eski: Optional[Sequence[CrmTolov]],
+                    kanon: Sequence[str] = ()) -> Optional[Dict[str, List[_KT]]]:
+    """XonPay kelishtiruvi uchun shartnoma -> CRM to'lovlari (Внешний ID bilan). Panel ko'prigi ustun, bo'lmasa eski
+    CRM GET. CRM ma'lumoti umuman yo'q -> None; shartnoma CRM'da topilmagan yoki javob bermagan -> lug'atda yo'q."""
+    if kn is not None and not kn.xato and any(s.crm.topildi for s in kn.shartnomalar):
+        return {s.shartnoma: list(s.crm.tolovlar) for s in kn.shartnomalar if s.crm.topildi}
+    if crm_eski is None:
+        return None
+    out: Dict[str, List[_KT]] = {sh: [] for sh in kanon}
+    for c in crm_eski:
+        if c.manba == "transaction_id":
+            continue
+        sh = next((k for k in out if _shu_shartnoma(c.contract, k)), c.contract)
+        out.setdefault(sh, []).append(_KT(c.sana, c.amount, ext=c.external_id,
+                                          usul=_toza(_lotin(repair_mojibake(c.method)), 24)))
+    return out
+
+
+def xonpay_kelishtir(xp: List[XonpayQator], crm: Optional[Dict[str, List[_KT]]],
+                     bir: Optional[Sequence["_Birlik"]] = None) -> List[XonpayQator]:
+    """Billing'ning is_matched=false (vaqt bo'yicha KUTILMOQDA/KECHIKDI) qatorlarini CRM bilan kelishtiradi (joyida):
+    a) CRM to'lovlarida shu UUID Внешний ID sifatida bor -> haqiqatan yo'lda (holat o'zgarmaydi); a') CRM
+       to'lovida Внешний ID yo'q (null), summa teng va sana +-TOLOV_XONPAY_SANA_OYNA -> eski mantiq: yo'lda;
+    b) aks holda CRM'da summa teng (< 1 so'm), sana [date_paid, date_paid + TOLOV_XONPAY_OYNA_KUN] ichidagi, bizda
+       topilgan (bir; None = tekshirilmaydi) va boshqa Billing qatori egallamagan kompozit to'lov bor -> TUSHGAN
+       (CRM orqali, "Billing'da eski TOPILMAGAN qatori qolgan"); eng yaqin sana, bir CRM to'lovi bitta qatorga;
+    c) shartnoma bo'yicha CRM ma'lumoti yo'q -> vaqt bo'yicha holat qoladi, izohda "CRM bilan tekshirilmadi";
+    d) qolgani -> CRMDA_YOQ (yo'lda summasiga kirmaydi)."""
+    egallangan: Set[str] = set()              # TUSHGAN Billing qatorlari egallagan CRM ID (to'liq va yadro)
+    for x in xp:
+        if x.holat == "TUSHGAN":
+            for k in (x.ext, x.tushgan_id):
+                if k:
+                    egallangan.add(k.lower())
+                    if composite_core(k):
+                        egallangan.add("y:" + composite_core(k))
+
+    def olingan(ext: str) -> bool:
+        return ext.lower() in egallangan or bool(composite_core(ext)) and "y:" + composite_core(ext) in egallangan
+
+    nomzod: List[Tuple[int, str, int, str, int]] = []   # (kun farqi, Billing sanasi, Billing i, shartnoma, CRM j)
+    tekshir: List[int] = []
+    idsiz_band: Set[Tuple[str, int]] = set()             # (a') Внешний ID'siz CRM to'lovi bitta Billing qatoriga
+    for i, x in enumerate(xp):
+        if not x.yolda:
+            continue
+        sh = next((k for k in crm if _shu_shartnoma(x.shartnoma, k)), None) if crm is not None else None
+        if sh is None:
+            x.izoh_qosh = C.TOLOV_XONPAY_CRM_TEKSHIRILMADI                          # (c)
+            continue
+        idlar = {k for k in (x.uuid, x.ext.lower()) if k}
+        if any(t.ext and t.ext.lower() in idlar for t in crm[sh]):
+            continue                                                                # (a)
+        idsiz = [j for j, t in enumerate(crm[sh]) if not t.ext and (sh, j) not in idsiz_band
+                 and abs(t.summa - x.summa) < 1 and (_kun_farq(t.sana, x.sana) or 0) <= C.TOLOV_XONPAY_SANA_OYNA
+                 and _kun_farq(t.sana, x.sana) is not None]
+        if idsiz:                                                                   # (a') ID'siz: summa + sana
+            idsiz_band.add((sh, idsiz[0]))
+            continue
+        tekshir.append(i)
+        d0 = _sana_d(x.sana)
+        for j, t in enumerate(crm[sh]):
+            if (not t.ext or _UUID_RE.match(t.ext) or parse_composite(t.ext) is None or abs(t.summa - x.summa) >= 1
+                    or olingan(t.ext) or (bir is not None and not _komp_moslik(t.ext, bir)[0])):
+                continue
+            d1 = _sana_d(t.sana)
+            dd = (d1 - d0).days if d0 is not None and d1 is not None else -1
+            if 0 <= dd <= C.TOLOV_XONPAY_OYNA_KUN:
+                nomzod.append((dd, x.sana, i, sh, j))
+    band_x: Set[int] = set()
+    band_t: Set[Tuple[str, int]] = set()
+    for _dd, _sana, i, sh, j in sorted(nomzod):                                    # (b): eng yaqin sana
+        if i in band_x or (sh, j) in band_t:
+            continue
+        band_x.add(i)
+        band_t.add((sh, j))
+        x, t = xp[i], crm[sh][j]
+        x.holat, x.crm_orqali, x.ish_kun = "TUSHGAN", True, None
+        x.tushgan_id, x.tushgan_sana, x.izoh_qosh = t.ext, t.sana, C.TOLOV_XONPAY_ESKI_QATOR
+    for i in tekshir:
+        if i not in band_x:
+            xp[i].holat = "CRMDA_YOQ"                                               # (d)
+    return xp
+
+
 def koprik_tahlil(kn: KoprikNatija, okv: Optional[Sequence[Okv]] = (), tx: Optional[Sequence[Tx]] = (),
                   topilgan: Optional[Set[str]] = None, xonpay: Optional[Sequence[XonpayQator]] = (),
                   hozir: Optional[datetime] = None) -> Tuple[List[Farq], List[Bolim]]:
@@ -2766,6 +2872,7 @@ def koprik_tahlil(kn: KoprikNatija, okv: Optional[Sequence[Okv]] = (), tx: Optio
     kutish = [x for x in xonpay or () if x.yolda]
     bir = _birliklar(okv or [], tx or []) + [_birlik(None, t) for t in kn.komp_tx]
     kn.xonpay_crm = []
+    kn.mos_emas = {}
     chiqarilgan: Dict[str, Tuple[Decimal, Decimal]] = {}   # shartnoma -> (XonPay yo'lda, bank sync'da yo'q)
 
     def pre(sh: str, ajrat: str = ": ") -> str:
@@ -2833,6 +2940,7 @@ def koprik_tahlil(kn: KoprikNatija, okv: Optional[Sequence[Okv]] = (), tx: Optio
         if abs(cj - o.jami) >= 1 or (okv_toliq and (faqat_c or faqat_o)):
             qatorlar.append(pre(s.shartnoma, " ") + "mos emas: faqat CRM: %s; faqat OplatyKv: %s" % (
                 _kt_royxat(faqat_c), _kt_royxat(faqat_o)))
+            kn.mos_emas[s.shartnoma] = (list(faqat_c), list(faqat_o))
             chiq = "; ".join(x for x in ("XonPay yo'lda %s" % pul(yj) if yolda else "",
                                          "bank sync'da yo'q %s" % pul(nj) if yoq else "") if x)
             farqlar.append(_farq(
@@ -3220,7 +3328,7 @@ def _xonpay_farq(x: XonpayQator, kop: bool = False) -> Farq:
 def _raqamla(farqlar: List[Farq], juftlar: Sequence[Juft]) -> None:
     """Farqlarni jiddiylik, kod tartibi, sana, summa bo'yicha saralab F1, F2 ... raqamlaydi (juftlardagi
     farq ro'yxati ham). Yangi farq qo'shilganda (panel ko'prigi) qayta chaqiriladi."""
-    farqlar.sort(key=lambda f: (_SEV_RANK.get(f.jiddiylik, 9), _KOD_TARTIB.get(f.kod, 99), f.sana,
+    farqlar.sort(key=lambda f: (f.yashirin, _SEV_RANK.get(f.jiddiylik, 9), _KOD_TARTIB.get(f.kod, 99), f.sana,
                                 f.summa if f.summa is not None else _NOL, f.dalil, f.izoh))
     for i, f in enumerate(farqlar, 1):
         f.raqam = i
@@ -3292,7 +3400,7 @@ def juftla(crm: Optional[Sequence[CrmTolov]], okv: Sequence[Okv], tx: Sequence[T
     vz_guruh = {i for i, k in enumerate(ctx.kanon) if k in ctx.vznos}
     # XonPay yo'ldagi to'lovlar (Billing: CRM'da bor, pul bizda hali yo'q): BIZDA_YOQ emas, XONPAY_*.
     # CRM qatori bilan bog'lash: avval UUID (purpose) yoki external_id, keyin summa + sana (faqat-CRM qatorida)
-    xp_hammasi = xonpay_qatorlari(ctx.xonpay, ctx.hozir)
+    xp_hammasi = ctx.xonpay_holat if ctx.xonpay_holat is not None else xonpay_qatorlari(ctx.xonpay, ctx.hozir)
     xp_kutish = [x for x in xp_hammasi if x.yolda and guruh(x.shartnoma) >= 0]
     xp_g = [guruh(x.shartnoma) for x in xp_kutish]
     uuid_i = {x.uuid.upper(): i for i, x in enumerate(xp_kutish) if x.uuid}
@@ -3522,15 +3630,18 @@ def juftla(crm: Optional[Sequence[CrmTolov]], okv: Sequence[Okv], tx: Sequence[T
         izoh = "aniqlangan %s" % (SF._vaqt(r.get("detected_at")) or "-")
         if maydon:
             izoh += "; maydonlar: " + maydon
-        qosh(kalit_juft.get(ext), _farq(kod, sana=_sana_of(r.get("txn_date")), summa=summa,
-                                        dalil="tx=" + qisqa_id(ext), izoh=izoh))
+        f = _farq(kod, sana=_sana_of(r.get("txn_date")), summa=summa, dalil="tx=" + qisqa_id(ext), izoh=izoh)
+        f.hodisa = _sana_of(r.get("detected_at")) if r.get("detected_at") is not None else ""
+        qosh(kalit_juft.get(ext), f)
     for r in ctx.tarix:
         izoh = "%s %s (kim: %s)" % (_s(r.get("action")), SF._vaqt(r.get("created_at")) or "-",
                                    _toza(_lotin(_s(r.get("kim"))), 40) or "-")
         if _s(r.get("action")) == "edited":
             izoh += "; shartnoma %s -> %s" % (_s(r.get("eski")) or "-", _s(r.get("yangi")) or "bo'sh")
-        qosh(None, _farq("OKV_OCHIRILGAN", sana=_s(r.get("sana"))[:10], summa=_dec_n(r.get("summa")),
-                         dalil="okv=" + qisqa_id(r.get("oplata_kv_id")), izoh=izoh))
+        f = _farq("OKV_OCHIRILGAN", sana=_s(r.get("sana"))[:10], summa=_dec_n(r.get("summa")),
+                  dalil="okv=" + qisqa_id(r.get("oplata_kv_id")), izoh=izoh)
+        f.hodisa = _sana_of(r.get("created_at")) if r.get("created_at") is not None else ""
+        qosh(None, f)
     for r in ctx.arizalar:
         j = kalit_juft.get(_s(r.get("tx_id"))) or kalit_juft.get(_s(r.get("oplata_kv_id")))
         qosh(j, _farq("ARIZA_KUTMOQDA", sana=_sana_of(r.get("snap_date")), summa=_dec_n(r.get("snap_amount")),
@@ -3708,9 +3819,10 @@ def _koprik_qosh(n: Natija, kdl: Optional[float], okv: Optional[Sequence[Okv]] =
     if kdl is None:
         return [Bolim(k, "unknown", C.TOLOV_KOPRIK_PREFIKS + C.TOLOV_SABAB_OCHIRILGAN)
                 for k in ("crm_panel", "sheet", "panel_solishtirish")]
-    n.koprik = _koprik_collect(n.shartnomalar, kdl)
+    _koprik_yig(n, kdl, okv, tx)
+    if n.koprik is None:
+        return []
     try:
-        _komp_qidir(n.koprik, okv, tx, kdl)
         farqlar, bolimlar = koprik_tahlil(n.koprik, okv, tx, topilgan, n.xonpay, hozir=n.vaqt)
     except Exception as exc:  # noqa: BLE001 - tahlil xatosi qolgan tekshiruvni to'xtatmaydi
         log.exception("tolov ko'prik tahlili yiqildi")
@@ -3726,6 +3838,31 @@ def _koprik_qosh(n: Natija, kdl: Optional[float], okv: Optional[Sequence[Okv]] =
         n.farqlar.extend(farqlar)
         _raqamla(n.farqlar, n.juftlar)
     return bolimlar
+
+
+def _koprik_yig(n: Natija, kdl: Optional[float], okv: Optional[Sequence[Okv]] = None,
+                tx: Optional[Sequence[Tx]] = None) -> None:
+    """Panel ko'prigi so'rovlari (tarmoq) va bizda yo'q kompozitlar qidiruvi: n.koprik (bir marta). XonPay Billing'ini
+    CRM bilan kelishtirish uchun juftladan OLDIN chaqiriladi. Hech qachon exception chiqarmaydi."""
+    if not n.shartnomalar or kdl is None or n.koprik is not None:
+        return
+    n.koprik = _koprik_collect(n.shartnomalar, kdl)
+    try:
+        _komp_qidir(n.koprik, okv, tx, kdl)
+    except Exception as exc:  # noqa: BLE001 - kompozit qidiruvi yiqilsa faqat bank sync tekshirilmaydi
+        n.koprik.komp_xato = "ichki xato: " + exc.__class__.__name__
+        log.warning("tolov kompozit qidiruvi: %s", exc.__class__.__name__)
+
+
+def _shovqin_belgila(n: Natija) -> None:
+    """Tarix shovqini (C.TOLOV_SHOVQIN_KODLAR) so'nggi TOLOV_SHOVQIN_KUN kundan eski (sana va aniqlangan kun) va
+    muhim farqi yo'q to'lovga tegishli bo'lsa yashirin; ko'rinadiganlar F1.. ketma-ket qayta raqamlanadi."""
+    chegara = (config.today_local() - timedelta(days=C.TOLOV_SHOVQIN_KUN)).isoformat()
+    muhim = {id(f) for j in n.juftlar if any(g.kod in C.TOLOV_MUHIM_KODLAR for g in j.farqlar) for f in j.farqlar}
+    for f in n.farqlar:
+        if f.kod in C.TOLOV_SHOVQIN_KODLAR:
+            f.yashirin = max(f.sana, f.hodisa) < chegara and id(f) not in muhim
+    _raqamla(n.farqlar, n.juftlar)
 
 
 def _komp_qidir(kn: KoprikNatija, okv: Optional[Sequence[Okv]], tx: Optional[Sequence[Tx]], dl: float) -> None:
@@ -3806,8 +3943,6 @@ def _prefetch(n: Natija, matn: Any, crm: bool, dl: float, kdl: Optional[float] =
         arizalar=list(d.arizalar or []), izoh_tx=list(d.izoh_tx), tx_min=d.tx_min, sync_daq=d.sync_daq,
         hozir=config.now_utc(), maqsad=set(d.maqsad), bizda_qisman=_bizda_qisman(d),
     )
-    # XonPay (Billing) holati: [xonpay] bo'limi va panel CRM solishtiruvi uchun (juftla o'zi ham hisoblaydi)
-    n.xonpay = None if d.xonpay is None else xonpay_qatorlari(d.xonpay, ctx.hozir)
     # CRM
     cn: Optional[CrmNatija] = None
     if ses is not None:
@@ -3824,9 +3959,19 @@ def _prefetch(n: Natija, matn: Any, crm: bool, dl: float, kdl: Optional[float] =
     if cn is not None and not cn.toliq:
         ctx.crm_oyna = min((c.sana for c in cn.rows if c.sana and c.manba != "transaction_id"), default="")
     n.crm_ok = crm_rows is not None
+    okv_r, tx_r = (None if d.okv_xato else d.okv), (None if d.tx_xato else d.tx)
+    # panel ko'prigi (tarmoq, o'z muddati bilan) juftladan oldin: XonPay Billing'i CRM bilan kelishtiriladi
+    _koprik_yig(n, kdl, okv_r, tx_r)
+    if d.xonpay is not None:
+        bir = None if tx_r is None else _birliklar(okv_r or [], tx_r) + [
+            _birlik(None, t) for t in (n.koprik.komp_tx if n.koprik is not None else [])]
+        n.xonpay = xonpay_kelishtir(xonpay_qatorlari(d.xonpay, ctx.hozir),
+                                    _crm_royxatlari(n.koprik, crm_rows, d.kanon), bir)
+        ctx.xonpay_holat = n.xonpay
     n.juftlar, n.farqlar = juftla(crm_rows, d.okv, d.tx, ctx)
-    # panel ko'prigi: CRM (panel yo'li) va Google Sheet; o'z muddati bilan, DB'dan keyin
-    koprik_bolimlar = _koprik_qosh(n, kdl, None if d.okv_xato else d.okv, None if d.tx_xato else d.tx, d.topilgan)
+    # panel tahlili: CRM (panel yo'li) va Google Sheet farqlari
+    koprik_bolimlar = _koprik_qosh(n, kdl, okv_r, tx_r, d.topilgan)
+    _shovqin_belgila(n)
     maqsad_crm = [c for c in (crm_rows or []) if c.manba != "transaction_id"]
     n.jamilar = jamilar(maqsad_crm if crm_rows is not None else None, d.okv, d.tx,
                         crm_qisman=bool(cn and not cn.toliq), qisman=d.okv_qisman or d.tx_qisman)
@@ -3840,6 +3985,11 @@ def _prefetch(n: Natija, matn: Any, crm: bool, dl: float, kdl: Optional[float] =
     n.qisman = d.okv_qisman or d.tx_qisman or bool(cn and not cn.toliq) or bool(ctx.bizda_qisman)
     n.bolimlar += _bolimlar(n, d, cn, crm_sabab, ses, okv_qo, tx_holat)
     n.bolimlar += koprik_bolimlar
+    try:
+        n.xulosa = _xulosa_qur(n, d, crm_sabab)
+    except Exception:  # noqa: BLE001 - xulosa yiqilsa egasi texnik (batafsil) chiqishni oladi
+        log.exception("tolov xulosasi qurilmadi")
+        n.xulosa = None
 
 
 def _bizda_qisman(d: DbNatija) -> str:
@@ -3943,6 +4093,11 @@ def _xonpay_bolim(xp: Sequence[XonpayQator], maqsad: Set[str], kop: bool = False
         return Bolim("xonpay", "ok", C.TOLOV_XONPAY_YOQ)
     son = {h: sum(1 for x in xp if x.holat == h) for h in C.TOLOV_XONPAY_HOLATLAR + ("NOMALUM",)}
     holatlar = "tushgan %d, kutilmoqda %d, kechikdi %d" % (son["TUSHGAN"], son["KUTILMOQDA"], son["KECHIKDI"])
+    if son["CRMDA_YOQ"]:
+        holatlar += ", CRM'da yo'q %d" % son["CRMDA_YOQ"]
+    eski = sum(1 for x in xp if x.crm_orqali)
+    if eski:
+        holatlar += " (tushganlardan %d tasi CRM orqali: Billing'da eski TOPILMAGAN qatori)" % eski
     if son["NOMALUM"]:
         holatlar += ", sanasiz %d" % son["NOMALUM"]
     q = ["%d to'lov; jami %s" % (len(xp), pul(sum((x.summa for x in xp), _NOL))), holatlar]
@@ -4185,10 +4340,18 @@ def _bolimlar(n: Natija, d: DbNatija, cn: Optional[CrmNatija], crm_sabab: Option
             asos = "warn"
         out.append(Bolim("solishtirish", asos, "; ".join(q)))
     # farqlar
-    son = {s: sum(1 for f in n.farqlar if f.jiddiylik == s) for s in ("error", "warn", "info")}
+    ochiq = [f for f in n.farqlar if not f.yashirin]
+    son = {s: sum(1 for f in ochiq if f.jiddiylik == s) for s in ("error", "warn", "info")}
     fst = "error" if son["error"] else ("warn" if son["warn"] else "ok")
-    xabar = "%d ta (error %d, warn %d, info %d)" % (len(n.farqlar), son["error"], son["warn"], son["info"]) \
-        if n.farqlar else "farq yo'q"
+    xabar = "%d ta (error %d, warn %d, info %d)" % (len(ochiq), son["error"], son["warn"], son["info"]) \
+        if ochiq else "farq yo'q"
+    yashirin = [f.kod for f in n.farqlar if f.yashirin]
+    if yashirin:
+        sanoq: Dict[str, int] = {}
+        for kod in yashirin:
+            sanoq[kod] = sanoq.get(kod, 0) + 1
+        xabar += "; " + C.TOLOV_SHOVQIN_TPL.format(n=len(yashirin), royxat=", ".join(
+            "%s×%d" % (k, v) for k, v in sanoq.items()), kun=C.TOLOV_SHOVQIN_KUN)
     if not n.crm_ok and _koprik_crm_ok(n.koprik):
         xabar += "; CRM to'lov kodlari yo'q, CRM jami crm_panel da (CRM_FARQ)"
     elif not n.crm_ok:
@@ -4203,6 +4366,448 @@ def _bolimlar(n: Natija, d: DbNatija, cn: Optional[CrmNatija], crm_sabab: Option
     out.append(Bolim("farqlar", fst, xabar))
     out.append(Bolim("tolovlar", "warn" if n.qisman else "ok", ""))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Egasi uchun xulosa (oddiy tilda): /tolov javobi va Checker bloki boshi
+# ---------------------------------------------------------------------------
+@dataclass
+class ManbaQator:
+    nomi: str
+    soni: Optional[int] = None
+    summa: Optional[Decimal] = None
+    holat: str = ""                           # mos | +/- farq (OplatyKv'ga nisbatan) | o'qilmadi: <sabab>
+
+
+@dataclass
+class OddiyFarq:
+    sana: str                                 # ISO
+    summa: Optional[Decimal]
+    turi: str                                 # XonPay <uuid> | bank | naqd | OplatyKv | <sheet nomi>
+    sabab: str
+    nima: str
+    guruh: str = ""                           # xulosa/guruh javobi uchun toifa (egasiga ko'rsatilmaydi)
+
+
+@dataclass
+class Xulosa:
+    shartnoma: str
+    tavsif: str = ""                          # "<mijoz>, <obyekt> (<holat>)"
+    xulosa: str = ""
+    manbalar: List[ManbaQator] = field(default_factory=list)
+    farqlar: List[OddiyFarq] = field(default_factory=list)
+    eslatma: str = ""
+    guruh: str = ""
+    batafsil: str = ""                        # "Batafsil: /tolov <kirish> batafsil"
+
+
+def _holat_oddiy(status: Any) -> str:
+    """CRM shartnoma holati oddiy tilda: Продано -> sotilgan, Бронь -> bron, Расторгнут -> bekor qilingan."""
+    s = repair_mojibake(_s(status))
+    p = s.lower()
+    if re.search(r"прода|sotil|sold", p):
+        return "sotilgan"
+    if re.search(r"брон|bron", p):
+        return "bron"
+    if _BEKOR_RE.search(p):
+        return "bekor qilingan"
+    if re.search(r"свобод|bo'sh", p):
+        return "bo'sh"
+    return _lotin(s).lower()[:30]
+
+
+def _ishorali(d: Decimal) -> str:
+    return "mos" if abs(d) < 1 else ("+" if d > 0 else "") + pul(d)
+
+
+def _sana_qisqa(iso: str) -> str:
+    """ISO -> DD.MM (joriy yil) yoki DD.MM.YYYY."""
+    d = _sana_d(iso)
+    if d is None:
+        return iso or "-"
+    return d.strftime("%d.%m") if d.year == config.today_local().year else d.strftime("%d.%m.%Y")
+
+
+def _kt_turi(t: _KT) -> str:
+    """CRM to'lovi turi: XonPay <uuid 8>, bank (kompozit), naqd yoki Способ matni."""
+    if t.ext and _UUID_RE.match(t.ext):
+        return "XonPay " + t.ext[:8].lower()
+    if t.ext and parse_composite(t.ext) is not None:
+        return "bank"
+    u = _lotin(t.usul).lower()
+    if re.search(r"naqd|nalich|kassa|cash", u):
+        return "naqd"
+    if _xonpay_usul(u):
+        return "XonPay"
+    return u or "-"
+
+
+def _farq_turi(f: Farq) -> str:
+    if f.kod.startswith("XONPAY_"):
+        return "XonPay " + f.dalil.split("=", 1)[-1].split()[0]
+    if f.kod in ("SHEET_YOQ", "SHEET_FARQ"):
+        return f.dalil.split("sheet=", 1)[-1] or "sheet"
+    if f.kod in ("BIZDA_YOQ", "QAYTARIM"):
+        if "bankdan: yo'q" in f.izoh:
+            return "naqd"
+        return "XonPay" if "XonPay" in f.izoh else "bank"
+    return "bank" if _SANASIZ_RE.search(f.dalil + "_") or _KOMP_ICHIDA_SANA_RE.search(f.dalil) else "OplatyKv"
+
+
+def _oddiy(kod: str, **q: Any) -> Tuple[str, str]:
+    sabab, nima = C.TOLOV_ODDIY[kod]
+    return sabab.format(**q), nima.format(**q)
+
+
+def _sheet_sabab_oddiy(sabab: str) -> str:
+    """'FILTR_KATEGORIYA — ... (2 qator); EKSPORT_ESKI — ...' -> kod ma'nolari oddiy tilda (kodlarsiz)."""
+    if sabab.startswith(C.TOLOV_SABAB_ANIQLANMADI):
+        return "sabab aniqlanmadi (eksport sozlamasi va qatorlar mos)"
+    qism: List[str] = []
+    for p in sabab.split("; "):
+        kod = p.split(" — ", 1)[0].strip()
+        son = re.search(r"\((\d+) qator\)\s*$", p)
+        if kod in C.TOLOV_SHEET_SABABLAR:
+            qism.append(C.TOLOV_SHEET_SABABLAR[kod] + (" (%s ta)" % son.group(1) if son else ""))
+    return "; ".join(qism) or "sabab aniqlanmadi"
+
+
+def _oddiy_farqlar(n: Natija) -> List[OddiyFarq]:
+    """Ko'rinadigan MUHIM farqlar oddiy tilda, toifa tartibida (C.TOLOV_MUHIM_KODLAR), har toifada yangisi birinchi.
+    CRM_FARQ har to'lovga yoyiladi (kn.mos_emas); XATO / boshqa shartnoma bilan izohlangan to'lov takrorlanmaydi."""
+    fs = [f for f in n.farqlar if not f.yashirin and f.kod in C.TOLOV_MUHIM_KODLAR]
+    out: List[OddiyFarq] = []
+
+    def izohlangan(summa: Decimal, sana: str) -> bool:
+        for g in fs:
+            if g.kod in ("XATO", "BOSHQA_SHARTNOMA", "BIZDA_YOQ", "CRM_YOQ") and g.summa is not None \
+                    and abs(abs(g.summa) - abs(summa)) < 1:
+                dd = _kun_farq(g.sana, sana)
+                if dd is not None and dd <= C.TOLOV_KOPRIK_SANA_OYNA:
+                    return True
+        return False
+
+    tartib = {k: i for i, k in enumerate(C.TOLOV_MUHIM_KODLAR)}
+    fs.sort(key=lambda f: f.sana, reverse=True)                  # har toifada yangisi birinchi (barqaror saralash)
+    fs.sort(key=lambda f: (tartib[f.kod], not f.sabab.startswith("CRM: bizga tushgan")))
+    for f in fs:
+        turi = _farq_turi(f)
+        n_ish = re.match(r"^(\d+) ish kuni", f.izoh)
+        if f.kod == "XONPAY_KUTILMOQDA":
+            qosh = "; ".join(x for x in (C.TOLOV_XONPAY_BILLINGSIZ, C.TOLOV_XONPAY_CRM_TEKSHIRILMADI) if x in f.izoh)
+            izoh = "%s ish kuni o'tdi" % (n_ish.group(1) if n_ish else "?") + ("; " + qosh if qosh else "")
+            sabab, nima = _oddiy(f.kod, izoh=izoh)
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, "xonpay"))
+        elif f.kod == "XONPAY_KECHIKDI":
+            sabab, nima = _oddiy(f.kod, n=n_ish.group(1) if n_ish else "?")
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, "xonpay_kech"))
+        elif f.kod == "BIZDA_YOQ" and f.sabab.startswith("CRM: bizga tushgan"):
+            m = re.search(r"\((\d{4}-\d{2}-\d{2}) kompozitda\)", f.sabab)
+            sabab, nima = _oddiy("BANK_SYNC", sana=_sana_qisqa(m.group(1)) if m else "-")
+            out.append(OddiyFarq(f.sana, f.summa, "bank", sabab, nima, "bank_sync"))
+        elif f.kod == "BIZDA_YOQ":
+            sabab, nima = _oddiy("BIZDA_YOQ_NAQD" if turi == "naqd" else "BIZDA_YOQ")
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, "naqd" if turi == "naqd" else "crm_bor"))
+        elif f.kod == "CRM_FARQ":
+            faqat_c, faqat_o = (n.koprik.mos_emas.get(f.dalil, ([], [])) if n.koprik is not None else ([], []))
+            if not faqat_c and not faqat_o:
+                sabab, nima = _oddiy("CRM_FARQ", summa=pul(f.summa))
+                out.append(OddiyFarq(f.sana, f.summa, "-", sabab, nima, "crm_bor"))
+            for t in sorted(faqat_c, key=lambda t: t.sana, reverse=True):
+                if not izohlangan(t.summa, t.sana):
+                    sabab, nima = _oddiy("CRM_BOR")
+                    out.append(OddiyFarq(t.sana, t.summa, _kt_turi(t), sabab, nima, "crm_bor"))
+            for t in sorted(faqat_o, key=lambda t: t.sana, reverse=True):
+                if not izohlangan(t.summa, t.sana):
+                    sabab, nima = _oddiy("OKV_BOR")
+                    out.append(OddiyFarq(t.sana, t.summa, "OplatyKv", sabab, nima, "okv_bor"))
+        elif f.kod == "XATO":
+            m = re.search(r"contract_no=(\S+)", f.izoh)
+            sabab, nima = _oddiy(f.kod, raqam=m.group(1).rstrip(";") if m else "?")
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, "xato"))
+        elif f.kod == "BOSHQA_SHARTNOMA":
+            m = re.search(r"tx shartnoma (\S+)", f.izoh)
+            izoh = ("bank izohida shu raqam bor, lekin tx shartnomasi %s" % m.group(1)) if f.izoh.startswith(
+                "izohda raqam bor") and m else _toza(_lotin(f.izoh), 80)
+            sabab, nima = _oddiy(f.kod, izoh=izoh)
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, "boshqa"))
+        elif f.kod in ("SHEET_YOQ", "SHEET_FARQ"):
+            sabab, nima = _oddiy(f.kod, summa=pul(f.summa), sabab=_sheet_sabab_oddiy(f.sabab), tuzatish=f.tuzatish)
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, "sheet"))
+        elif f.kod == "SUMMA_FARQ":
+            sabab, nima = _oddiy(f.kod, izoh=_toza(_lotin(f.izoh), 80))
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, "okv"))
+        else:
+            sabab, nima = _oddiy(f.kod)
+            grp = {"CRM_YOQ": "okv_bor", "QAYTARIM": "crm_bor", "SYNC_KUTILMOQDA": "sync"}.get(f.kod, "okv")
+            out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, grp))
+    return out
+
+
+def _manbalar(n: Natija, d: DbNatija, crm_sabab: Optional[str]) -> List[ManbaQator]:
+    """5 manba: CRM, Bank, OplatyKv, solishtiriladigan sheetlar. Holat OplatyKv'ga nisbatan (bank: bankdan kelgan
+    OplatyKv qatorlariga nisbatan)."""
+    okv_j, okv_qo = _okv_jami_sql(d.okv_jami) if d.okv_jami is not None else (None, {})
+    okv_jami = okv_j.jami if okv_j is not None else None
+    rows: List[ManbaQator] = []
+
+    def nisbat(summa: Optional[Decimal]) -> str:
+        return _ishorali(summa - okv_jami) if summa is not None and okv_jami is not None else "OplatyKv o'qilmadi"
+
+    kn = n.koprik
+    crm_q = ManbaQator("CRM")
+    if kn is not None and not kn.xato and kn.shartnomalar and all(s.crm.topildi for s in kn.shartnomalar):
+        crm_q.soni = sum(len(s.crm.tolovlar) for s in kn.shartnomalar)
+        crm_q.summa = sum((_crm_yigindi(s.crm)[2] for s in kn.shartnomalar), _NOL)
+        crm_q.holat = nisbat(crm_q.summa)
+    elif n.crm_ok and n.jamilar is not None and n.jamilar.crm is not None:
+        crm_q.soni, crm_q.summa = n.jamilar.crm.soni, n.jamilar.crm.jami
+        crm_q.holat = nisbat(crm_q.summa)
+    else:
+        yoq = next((s for s in (kn.shartnomalar if kn is not None and not kn.xato else []) if not s.crm.topildi), None)
+        sabab = (C.TOLOV_KOPRIK_PREFIKS + kn.xato if kn is not None and kn.xato else
+                 (yoq.crm.xato or "CRM'da topilmadi") if yoq is not None else crm_sabab or C.TOLOV_SABAB_OCHIRILGAN)
+        crm_q.holat = "o'qilmadi: " + _toza(_lotin(sabab), 80)
+    rows.append(crm_q)
+    bank = ManbaQator("Bank")
+    if d.tx_jami is not None and n.jamilar is not None:
+        bank.soni = sum(SF._int(r.get("soni")) for r in d.tx_jami if r.get("mijoz"))
+        bank.summa = n.jamilar.tx_client
+        if okv_j is not None:
+            bank.holat = _ishorali(bank.summa - okv_qo.get("bankdan", _NOL))
+            tashqi = okv_j.jami - okv_qo.get("bankdan", _NOL)
+            if abs(tashqi) >= 1:
+                bank.holat += " (OplatyKv'da bankdan tashqari %s)" % pul(tashqi)
+        else:
+            bank.holat = "OplatyKv o'qilmadi"
+    else:
+        bank.holat = "o'qilmadi: " + (d.xatolar.get("transactions") or C.TOLOV_SABAB_DB)
+    rows.append(bank)
+    okv = ManbaQator("OplatyKv")
+    if okv_j is not None:
+        okv.soni, okv.summa = okv_j.soni, okv_j.jami
+        muammo = sum(1 for f in n.farqlar if not f.yashirin and f.kod in ("XATO", "OKV_YOQ", "TX_YOQ", "DUBLIKAT"))
+        okv.holat = "mos" if not muammo else "%d ta muammo (pastda)" % muammo
+    else:
+        okv.holat = "o'qilmadi: " + (d.xatolar.get("oplata_kv") or C.TOLOV_SABAB_DB)
+    rows.append(okv)
+    if kn is None or kn.xato:
+        rows.append(ManbaQator("Sheetlar", holat="o'qilmadi: " + (
+            C.TOLOV_KOPRIK_PREFIKS + kn.xato if kn is not None else C.TOLOV_SABAB_OCHIRILGAN)))
+        return rows
+    tanlangan = _sheet_tanlangan(kn)
+    sheetlar = [(sid, nomi) for sid, nomi in kn.sheetlar if sid in tanlangan]
+    if not sheetlar:
+        rows.append(ManbaQator("Sheetlar", holat="o'qilmadi: " + C.TOLOV_SABAB_SHEET_YOQ))
+    for sid, nomi in sheetlar:
+        sh = [next((x for x in s.sheetlar if x.id == sid), None) for s in kn.shartnomalar]
+        q = ManbaQator(nomi)
+        yoq_sh = next((x for x in sh if x is None or not x.mavjud), None) if sh else None
+        if not sh or any(x is None or not x.mavjud for x in sh):
+            q.holat = "o'qilmadi: " + ((yoq_sh.sabab if yoq_sh is not None else "") or "natija yo'q")
+        else:
+            q.soni = sum(x.qatorlar for x in sh if x is not None)
+            q.summa = sum((x.jami for x in sh if x is not None), _NOL)
+            q.holat = nisbat(q.summa)
+        rows.append(q)
+    return rows
+
+
+def _yig(fs: Sequence[OddiyFarq]) -> Decimal:
+    return sum((abs(f.summa) for f in fs if f.summa is not None), _NOL)
+
+
+def _xulosa_jumla(manbalar: Sequence[ManbaQator], fs: Sequence[OddiyFarq]) -> str:
+    """Bitta jumla: hammasi mos yoki farqlar toifalari (summasi bilan) va o'qilmagan manbalar."""
+    g: Dict[str, List[OddiyFarq]] = {}
+    for f in fs:
+        g.setdefault(f.guruh, []).append(f)
+    qism: List[str] = []
+    xp = g.get("xonpay", []) + g.get("xonpay_kech", [])
+    if xp:
+        k, m = len(g.get("xonpay", [])), len(g.get("xonpay_kech", []))
+        tafsil = (" (%d tasi kutilmoqda, %d tasi kechikdi)" % (k, m) if k and m else
+                  ": 3 ish kunidan kechikdi" if m else ": odatdagi 1-3 ish kuni kutilmoqda")
+        qism.append("CRM'da %d ta XonPay to'lovi (%s so'm) bizga hali tushmagan%s" % (len(xp), pul(_yig(xp)), tafsil))
+    matn = {
+        "bank_sync": "CRM'dagi {n} ta bank to'lovi ({s} so'm) bizning Tranzaksiyalarda yo'q (bank sync)",
+        "crm_bor": "CRM'da {n} ta to'lov ({s} so'm) bizda yo'q",
+        "naqd": "CRM'da {n} ta naqd to'lov ({s} so'm), bankda bo'lmaydi",
+        "okv_bor": "bizda {n} ta to'lov ({s} so'm) CRM'da yo'q",
+        "xato": "{n} ta to'lov ({s} so'm) bizda XATO: bank izohidagi shartnoma raqami noto'g'ri",
+        "boshqa": "{n} ta to'lov boshqa shartnoma ostida",
+        "sync": "{n} ta yangi bank to'lovi OplatyKv sync'ini kutmoqda",
+        "okv": "{n} ta to'lov bo'yicha bank va OplatyKv orasida muammo",
+    }
+    for grp, tpl in matn.items():
+        if g.get(grp):
+            qism.append(tpl.format(n=len(g[grp]), s=pul(_yig(g[grp]))))
+    for f in g.get("sheet", []):
+        qism.append("%s da to'lovlar to'liq ko'rinmaydi: %s" % (f.turi, f.sabab.split(": ", 1)[-1]))
+    oqilmadi = [m.nomi for m in manbalar if m.holat.startswith("o'qilmadi")]
+    boshqa_mos = all(m.holat == "mos" or m.holat.startswith("mos ") for m in manbalar
+                     if m.nomi != "CRM" and not m.holat.startswith("o'qilmadi"))
+    if not qism:
+        okv = next((m for m in manbalar if m.nomi == "OplatyKv"), None)
+        if not oqilmadi and all(m.holat == "mos" or m.holat.startswith("mos ") for m in manbalar) and okv is not None:
+            return C.TOLOV_XULOSA_MOS_TPL.format(n=okv.soni, summa=pul(okv.summa)) + "."
+        farqli = [m.nomi for m in manbalar if not (m.holat == "mos" or m.holat.startswith("mos "))
+                  and not m.holat.startswith("o'qilmadi")]
+        if farqli:
+            qism.append("jami farqli: %s (to'lov darajasida sabab topilmadi, batafsil rejimda)" % ", ".join(farqli))
+        else:
+            qism.append("tekshirilgan manbalar mos")
+    elif boshqa_mos and any(f.guruh in ("xonpay", "xonpay_kech", "bank_sync", "crm_bor", "naqd") for f in fs) \
+            and all(f.guruh in ("xonpay", "xonpay_kech", "bank_sync", "crm_bor", "naqd") for f in fs):
+        qism.append("bank, OplatyKv va sheetlar o'zaro mos")
+    if oqilmadi:
+        qism.append("o'qilmadi: " + ", ".join(oqilmadi))
+    return "; ".join(qism) + "."
+
+
+def _guruh_javobi(n: Natija, manbalar: Sequence[ManbaQator], fs: Sequence[OddiyFarq]) -> str:
+    """Guruhga nusxalash uchun 1-3 jumla: to'lov topildimi, qayerda, nega ko'rinmaydi, qachon ko'rinadi."""
+    k = n.kirish
+
+    def ds(sana: str, summa: Optional[Decimal]) -> Tuple[str, str]:
+        return _sana_qisqa(sana), pul(abs(summa)) if summa is not None else "-"
+
+    if k is not None and k.tur == "xonpay" and n.xonpay:
+        x = next((x for x in n.xonpay if x.uuid == k.id or x.ext.lower() == k.id), None)
+        if x is not None:
+            sana, summa = ds(x.sana, x.summa)
+            if x.holat == "KUTILMOQDA":
+                return C.TOLOV_XONPAY_GURUH_JAVOB.replace("(DD.MM, N so'm)", "(%s, %s so'm)" % (sana, summa))
+            if x.holat == "KECHIKDI":
+                return C.TOLOV_GURUH_XONPAY_KECHIKDI_TPL.format(sana=sana, summa=summa)
+            if x.holat == "TUSHGAN":
+                return C.TOLOV_GURUH_XONPAY_TUSHGAN_TPL.format(sana=sana, summa=summa,
+                                                               tushgan=_sana_qisqa(x.tushgan_sana))
+    g: Dict[str, List[OddiyFarq]] = {}
+    for f in fs:
+        g.setdefault(f.guruh, []).append(f)
+    jumla: List[str] = []
+    kut, kech = g.get("xonpay", []), g.get("xonpay_kech", [])
+    if len(kut) == 1 and not kech:
+        sana, summa = ds(kut[0].sana, kut[0].summa)
+        jumla.append(C.TOLOV_XONPAY_GURUH_JAVOB.replace("(DD.MM, N so'm)", "(%s, %s so'm)" % (sana, summa)))
+    elif len(kech) == 1 and not kut:
+        sana, summa = ds(kech[0].sana, kech[0].summa)
+        jumla.append(C.TOLOV_GURUH_XONPAY_KECHIKDI_TPL.format(sana=sana, summa=summa))
+    elif kut or kech:
+        royxat = ", ".join("%s %s so'm" % ds(f.sana, f.summa) for f in kut + kech)
+        jumla.append("Shartnoma bo'yicha %d ta XonPay to'lovi (%s) bizning hisobga hali tushmagan: XonPay odatda 1-3 ish"
+                     " kunida o'tkazadi, tushgach xonadonda avtomat ko'rinadi." % (len(kut) + len(kech), royxat))
+        if kech:
+            jumla.append("%s dagi to'lov odatdagi muddatdan kechikdi, XonPay bilan tekshirish kerak." % ", ".join(
+                ds(f.sana, f.summa)[0] for f in kech))
+    shablon = (
+        ("bank_sync", "To'lov ({sana}, {summa} so'm) CRM'da bor, lekin bankdan bizning tizimga hali tushmagan; bank"
+                      " ma'lumoti yangilangach xonadonda ko'rinadi."),
+        ("xato", "To'lov ({sana}, {summa} so'm) bankdan kelgan, lekin izohdagi shartnoma raqami noto'g'ri yozilgan;"
+                 " to'g'ri shartnomaga biriktirilgach xonadonda ko'rinadi."),
+        ("sync", "To'lov bankdan yaqinda kelgan, tizim avtomat yangilanmoqda; bir necha daqiqada ko'rinadi."),
+        ("naqd", "To'lov ({sana}, {summa} so'm) CRM'da naqd sifatida yozilgan, bankdan kelmagan."),
+        ("crm_bor", "To'lov ({sana}, {summa} so'm) CRM'da bor, lekin bizning bankda topilmadi; tekshirish kerak."),
+        ("okv_bor", "To'lov ({sana}, {summa} so'm) bizda bor, CRM'da hali yo'q; CRM operatori kiritishi kerak."),
+        ("boshqa", "To'lov ({sana}, {summa} so'm) boshqa shartnoma ostida yozilgan; qaysi shartnomaga tegishliligi"
+                   " aniqlanishi kerak."),
+    )
+    for grp, tpl in shablon:
+        if g.get(grp) and len(jumla) < 3:
+            sana, summa = ds(g[grp][0].sana, g[grp][0].summa)
+            jumla.append(tpl.format(sana=sana, summa=summa))
+    if g.get("sheet") and len(jumla) < 3:
+        f = g["sheet"][0]
+        keyin = " Keyingi eksportda ko'rinadi." if "eksportning oxirgi ishidan keyin" in f.sabab else ""
+        jumla.append("To'lovlar bizda bor, lekin %s da hali to'liq ko'rinmaydi.%s" % (f.turi, keyin))
+    if not jumla:
+        okv = next((m for m in manbalar if m.nomi == "OplatyKv"), None)
+        if okv is not None and okv.summa is not None:
+            jumla.append(C.TOLOV_GURUH_MOS_TPL.format(n=okv.soni, summa=pul(okv.summa)))
+    return " ".join(jumla[:3])
+
+
+def _xulosa_qur(n: Natija, d: DbNatija, crm_sabab: Optional[str]) -> Xulosa:
+    """Egasi uchun oddiy tildagi xulosa: sarlavha, bitta jumla, 5 manba jadvali, MUHIM farqlar (sabab + nima
+    qilish), taqsimot eslatmasi (faqat jami mos bo'lsa), guruhga javob. Tarix shovqini kirmaydi."""
+    x = Xulosa(shartnoma=", ".join(n.shartnomalar))
+    kesh = {_s(r.get("contract_number")): r for r in (d.kesh or [])}
+    r = kesh.get(n.shartnomalar[0]) if len(n.shartnomalar) == 1 else None
+    if r is not None:
+        holat = _holat_oddiy(r.get("status"))
+        x.tavsif = ", ".join(v for v in (mijoz_ismi(r.get("customer_name")),
+                                         _toza(_lotin(_s(r.get("object_name"))), 40)) if v)
+        if holat:
+            x.tavsif += " (%s)" % holat if x.tavsif else holat
+    x.manbalar = _manbalar(n, d, crm_sabab)
+    x.farqlar = _oddiy_farqlar(n)
+    x.xulosa = _xulosa_jumla(x.manbalar, x.farqlar)
+    jami_mos = all(m.holat == "mos" or m.holat.startswith("mos ") for m in x.manbalar if m.nomi in ("CRM", "Bank"))
+    if jami_mos and any(not f.yashirin and f.kod in C.TOLOV_TAQSIMOT_KODLAR for f in n.farqlar):
+        x.eslatma = C.TOLOV_ESLATMA_TAQSIMOT
+    x.guruh = _guruh_javobi(n, x.manbalar, x.farqlar)
+    k = n.kirish
+    x.batafsil = C.TOLOV_BATAFSIL_TPL.format(
+        kirish=k.id if k is not None and k.tur in ("xonpay", "id") else ",".join(n.shartnomalar))
+    return x
+
+
+def _manba_jadval(manbalar: Sequence[ManbaQator]) -> List[str]:
+    """'Manba            To'lov        Summa  Holat' ustunlari (nomi 16, soni 7, summa >= 11, 2 bo'shliq)."""
+    fmt = "%-16s%7s  %11s  %s"
+    out = [fmt % C.TOLOV_MANBA_SARLAVHA]
+    for m in manbalar:
+        out.append((fmt % (_toza(_lotin(m.nomi), 15), "-" if m.soni is None else m.soni,
+                           "-" if m.summa is None else pul(m.summa), _toza(m.holat, 160))).rstrip())
+    return out
+
+
+def _farq_satr(f: OddiyFarq) -> str:
+    q = " · ".join((_sana_qisqa(f.sana), pul(f.summa) if f.summa is not None else "-", _toza(f.turi, 40)))
+    return "%s — %s. Nima qilish: %s." % (q, _toza(f.sabab, 300).rstrip("."), _toza(f.nima, 200).rstrip("."))
+
+
+def _xulosa_qatorlari(x: Xulosa, farq_max: int) -> Tuple[List[str], List[str], List[str], List[str]]:
+    """(bosh qatorlar, jadval, farq qatorlari, oxirgi qatorlar) — oddiy matn (HTML'siz)."""
+    bosh = [x.shartnoma + (" — " + x.tavsif if x.tavsif else ""), "Xulosa: " + _toza(x.xulosa, 700)]
+    farq = ["%d. %s" % (i, _farq_satr(f)) for i, f in enumerate(x.farqlar[:farq_max], 1)]
+    if len(x.farqlar) > farq_max:
+        farq.append("... yana %d ta farq: batafsil rejimda" % (len(x.farqlar) - farq_max))
+    oxir = ([x.eslatma] if x.eslatma else []) + ["Guruhga javob: " + _toza(x.guruh, 700)]
+    return bosh, _manba_jadval(x.manbalar), farq, oxir
+
+
+def format_xulosa(n: Natija) -> str:
+    """/tolov egasiga (Telegram HTML, <= TELEGRAM_LIMIT): sarlavha, Xulosa, 5 manba jadvali, Farqlar (sabab + nima
+    qilish), Guruhga javob, 'Batafsil: /tolov ... batafsil'. Xulosa bo'lmasa (nomzodlar, baza yiqilgan) batafsil."""
+    x = n.xulosa
+    if x is None:
+        return format_batafsil(n)
+    esc = lambda s: html.escape(s, quote=False)  # noqa: E731
+    farq_max = C.TOLOV_EGA_FARQ_MAX
+    while True:
+        bosh, jadval, farq, oxir = _xulosa_qatorlari(x, farq_max)
+        qator = ["<b>%s</b>%s" % (esc(x.shartnoma), esc(" — " + x.tavsif) if x.tavsif else ""),
+                 "<b>Xulosa:</b> " + esc(bosh[1][len("Xulosa: "):]),
+                 "<pre>" + esc("\n".join(jadval)) + "</pre>"]
+        qator += ["<b>Farqlar:</b>"] + [esc(f) for f in farq] if farq else ["<b>Farqlar:</b> yo'q"]
+        qator += [esc(o) for o in oxir[:-1]]
+        qator += ["<b>Guruhga javob:</b> " + esc(oxir[-1][len("Guruhga javob: "):]), esc(x.batafsil)]
+        matn = "\n".join(qator)
+        if len(matn) <= C.TELEGRAM_LIMIT or farq_max == 0:
+            return matn[:C.TELEGRAM_LIMIT]
+        farq_max -= 1
+
+
+def _xulosa_blok(n: Natija) -> List[str]:
+    """Checker bloki boshi: xulosa oddiy matnda (HTML'siz), keyin 'TEXNIK:'. Xulosa yo'q bo'lsa []."""
+    if n.xulosa is None:
+        return []
+    bosh, jadval, farq, oxir = _xulosa_qatorlari(n.xulosa, C.TOLOV_BLOK_FARQ_MAX)
+    qator = [C.TOLOV_XULOSA_BLOK_BOSH] + [_bir_qator(bosh[0], 300), bosh[1]] + jadval
+    qator += (["Farqlar:"] + farq) if farq else ["Farqlar: yo'q"]
+    return qator + oxir + [C.TOLOV_XULOSA_BLOK_OXIR]
 
 
 # ---------------------------------------------------------------------------
@@ -4256,14 +4861,17 @@ def _juft_qator(j: Juft, korinadi: Set[int]) -> str:
 
 def _jadval(n: Natija, maks: int) -> Tuple[List[Juft], int, bool]:
     """(ko'rsatiladigan juftlar, jami, qolganlari hammasi mos)."""
-    farqli = [j for j in n.juftlar if j.farqlar or j.maqsad]
-    toza = [j for j in n.juftlar if not (j.farqlar or j.maqsad)]
+    def farqi_bor(j: Juft) -> bool:                # yashirin tarix shovqini farq hisoblanmaydi
+        return any(not f.yashirin for f in j.farqlar)
+
+    farqli = [j for j in n.juftlar if farqi_bor(j) or j.maqsad]
+    toza = [j for j in n.juftlar if not (farqi_bor(j) or j.maqsad)]
     farqli.sort(key=lambda j: _j_sana(j), reverse=True)
     farqli.sort(key=lambda j: not j.maqsad)
     toza.sort(key=lambda j: _j_sana(j), reverse=True)
     tanlangan = (farqli + toza)[:max(0, maks)]
     qolgan = [j for j in n.juftlar if j not in tanlangan]
-    return tanlangan, len(n.juftlar), all(not j.farqlar for j in qolgan)
+    return tanlangan, len(n.juftlar), all(not farqi_bor(j) for j in qolgan)
 
 
 def _render(n: Natija, limit: int, jadval_max: int, olcham: Callable[[str], int] = len,
@@ -4274,8 +4882,9 @@ def _render(n: Natija, limit: int, jadval_max: int, olcham: Callable[[str], int]
         return [C.CHECKER_QATOR_TPL.format(komponent="kirish", status="UNKNOWN", xabar=C.TOLOV_SABAB_KIRISH)]
     tartib = {k: i for i, k in enumerate(C.TOLOV_KOMPONENTLAR)}
     bolimlar = sorted(n.bolimlar, key=lambda b: tartib.get(b.komponent, 99))
-    korinadi_f = n.farqlar[:C.TOLOV_FARQ_MAX]
-    ortiq = n.farqlar[C.TOLOV_FARQ_MAX:]
+    ochiq_f = [f for f in n.farqlar if not f.yashirin]   # yashirin tarix shovqini: [farqlar] xabarida soni bilan
+    korinadi_f = ochiq_f[:C.TOLOV_FARQ_MAX]
+    ortiq = ochiq_f[C.TOLOV_FARQ_MAX:]
     korinadi: Set[int] = {f.raqam for f in korinadi_f}
     jamlangan = ""
     if ortiq:
@@ -4310,7 +4919,7 @@ def _render(n: Natija, limit: int, jadval_max: int, olcham: Callable[[str], int]
                 if jamlangan:
                     lines.append(jamlangan)
             elif b.qatorlar:
-                lines += ["  " + _toza(x, 300) for x in b.qatorlar]
+                lines += ["  " + _toza(x, 420) for x in b.qatorlar]
         kesildi = (len(jadval) - tn) + (len(frows) - fn)
         if kesildi:
             lines.append(C.TOLOV_KESILDI_TPL.format(n=kesildi))
@@ -4335,13 +4944,22 @@ def _render(n: Natija, limit: int, jadval_max: int, olcham: Callable[[str], int]
 
 
 def format_block(n: Natija) -> str:
-    """=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) === ... === TUGADI ==="""
-    ichki = C.TOLOV_BLOK_MAX - len(C.TOLOV_BLOK_BOSH) - len(C.TOLOV_BLOK_OXIR) - 2
-    return "\n".join([C.TOLOV_BLOK_BOSH] + _render(n, ichki, C.TOLOV_JADVAL_MAX) + [C.TOLOV_BLOK_OXIR])
+    """=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) === ... === TUGADI ===. Boshida egasi uchun xulosa
+    (oddiy tilda: Xulosa, 5 manba jadvali, farqlar, guruhga javob), keyin 'TEXNIK:' va komponent qatorlari."""
+    xulosa = _xulosa_blok(n)
+    ichki = C.TOLOV_BLOK_MAX - len(C.TOLOV_BLOK_BOSH) - len(C.TOLOV_BLOK_OXIR) - 2 - sum(len(x) + 1 for x in xulosa)
+    return "\n".join([C.TOLOV_BLOK_BOSH] + xulosa + _render(n, ichki, C.TOLOV_JADVAL_MAX) + [C.TOLOV_BLOK_OXIR])
 
 
 def format_owner(n: Natija) -> str:
-    """/tolov uchun HTML: sarlavha, <pre> ichida komponent qatorlari (escape), oxirida tahlil taklifi."""
+    """/tolov javobi: oddiy tilda xulosa (format_xulosa); '/tolov ... batafsil' bo'lsa texnik (format_batafsil)."""
+    if n.kirish is not None and n.kirish.batafsil:
+        return format_batafsil(n)
+    return format_xulosa(n)
+
+
+def format_batafsil(n: Natija) -> str:
+    """/tolov ... batafsil uchun HTML: sarlavha, <pre> ichida komponent qatorlari (escape), oxirida tahlil taklifi."""
     nomi = kirish_nomi(n.kirish, n.shartnomalar)
     vaqt = config.fmt_local(n.vaqt or config.now_utc(), "%H:%M")
     sarlavha = C.TOLOV_OWNER_SARLAVHA_TPL.format(kirish=html.escape(_toza(nomi, 120), quote=False),

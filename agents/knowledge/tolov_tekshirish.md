@@ -3,7 +3,7 @@
 ## Vazifasi
 Shartnoma yoki bitta to'lovni manbalarda solishtirish: bank (`transactions`), OplatyKv (`oplata_kv`), XonSaroy CRM va ulangan Google Sheetlar (Sotuv hisoboti, Debitorlik va h.k.). Faqat o'qish: hech bir manbaga yozilmaydi, tuzatish panelda yoki CRM operatorida.
 Agentda DB ham, CRM ham yo'q. Jonli qatorlarni bot o'zi yig'adi (`agents/payment_check.py`): DB `db.tx("facts", readonly=True)`; CRM va sheetlar panel ko'prigi orqali: `GET http://127.0.0.1:<PORT>/api/agent-bridge/payment-check` (panel Chek payment bilan aynan bir xil hisob) va `GET /api/agent-bridge/exports` (eksport sozlamasi). Eski to'g'ridan `GET {XONSAROY_CLIENT_BASE}/payment-history` yo'li default o'chiq (prod'da 404). Juftlash va farq kodlari Python'da hisoblanadi, agent faqat tushuntiradi.
-Chaqiruv ikki yo'l: egasi `/tolov <shartnoma | ID | XonPay UUID | summa sana | mijoz ism>` yozadi (LLM'siz jadval) yoki Leader intent `payment_check` bilan Checker'ga topshiradi. Checker topshirig'i oxirida `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` ... `=== TUGADI ===` bloki keladi.
+Chaqiruv ikki yo'l: egasi `/tolov <shartnoma | ID | XonPay UUID | summa sana | mijoz ism>` yozadi (LLM'siz oddiy tildagi xulosa, 6.1; oxirida `batafsil` bo'lsa texnik jadval) yoki Leader intent `payment_check` bilan Checker'ga topshiradi. Checker topshirig'i oxirida `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` ... `=== TUGADI ===` bloki keladi.
 Blok yo'q bo'lsa jonli ma'lumot ham yo'q: panelda qayerga qarashni ayt (8-bo'lim jadvali).
 
 ## Qisqa algoritm (agent uchun)
@@ -104,6 +104,16 @@ Qoidalar:
 | `TUSHGAN` | `is_matched` (Billing bilan bir xil; `tryMatchOne` topolmasa eski `matched_*` qoladi, hisobga olinmaydi); yoki CRM `external_id` bank kompoziti | `bizga <matched_date>, tx=<kompozit yadrosi>`; kompozit, lekin Billing moslamagan: `CRM ID bank kompoziti <yadro>, Billing moslamagan` |
 | `KUTILMOQDA` | tushmagan, ≤ 3 bank ish kuni o'tgan | `<n> ish kuni o'tdi (chegara 3, bayramlar hisobga olinmagan); tekshirilgan <vaqt>` |
 | `KECHIKDI` | tushmagan, > 3 bank ish kuni | xuddi shunday |
+| `CRMDA_YOQ` | Billing'da tushmagan, lekin CRM'da na shu UUID, na mos kompozit to'lov bor (kelishtiruv, pastda) | `CRM'da na shu UUID, na mos kompozit to'lov bor`; yo'lda summasiga kirmaydi, farq kodi yo'q (info) |
+
+### Billing ↔ CRM kelishtiruvi (eski TOPILMAGAN qatorlar)
+XonPay puli bizga tushgach CRM `Внешний ID` UUID'dan bank kompozitiga o'zgaradi, `xonpay_transactions` dagi eski UUID qatori esa `is_matched=false` bo'lib qoladi (hodisa: `6326MSO25HN`, Billing 12 ta "KECHIKDI", aslida 10 tasi tushgan). Shuning uchun `is_matched=false` qator CRM bilan kelishtiriladi (`payment_check.py::xonpay_kelishtir`, CRM: panel ko'prigi, bo'lmasa eski CRM GET):
+- a) CRM to'lovlarida shu UUID `Внешний ID` sifatida bor: haqiqatan yo'lda, `KUTILMOQDA` yoki `KECHIKDI` (ish kuni qoidasi). CRM to'lovida `Внешний ID` yo'q (`null`), summa teng va sana ±1 kun bo'lsa ham shunday (eski summa+sana mantiqi).
+- b) Aks holda CRM'da summa teng, sana `[date_paid, date_paid + 10 kalendar kun]` ichida, bizda topilgan (kompozit) va boshqa Billing qatori egallamagan to'lov bor: `TUSHGAN` (CRM orqali), izohda `Billing'da eski TOPILMAGAN qatori qolgan`. Eng yaqin sana tanlanadi, bir CRM to'lovi bitta Billing qatoriga. Moslangan Billing qatorlarining kompoziti (`matched_external_id`, kompozit `external_id`) band hisoblanadi.
+- c) Shartnoma bo'yicha CRM ma'lumoti yo'q (ko'prik ishlamadi, CRM javob bermadi): vaqt bo'yicha holat, izohda `CRM bilan tekshirilmadi`.
+- d) Qolgani `CRMDA_YOQ` (info): yo'lda summasiga kirmaydi.
+- "Yo'lda" jami = faqat (a) + Billing'da hali yo'q CRM UUID to'lovlari. `6326MSO25HN` da kutilgan natija: yo'lda 2 ta, 3 500 000 (`bc843be4` KUTILMOQDA, `244c5483` KECHIKDI); CRM jami OplatyKv'dan aynan shuncha ko'p.
+- `[xonpay]` qatorida: `tushgan a, kutilmoqda b, kechikdi c, CRM'da yo'q d (tushganlardan e tasi CRM orqali: Billing'da eski TOPILMAGAN qatori)`.
 
 - Misol: juma kungi to'lov. Shanba va yakshanba 0, dushanba 1, keyingi chorshanba 3 (KUTILMOQDA), payshanba 4 (KECHIKDI).
 - Farq kodlari (7-bo'lim): yo'ldagi har to'lov `XONPAY_KUTILMOQDA` (info) yoki `XONPAY_KECHIKDI` (warn). Dalil `xonpay=<uuid 8 belgi>`, izoh `<n> ish kuni o'tdi (chegara 3, bayramlar hisobga olinmagan)`, `sabab:` egasi matni:
@@ -213,6 +223,35 @@ Ko'prik har CRM to'loviga `externalId` (CRM `Внешний ID`) va `method` (CR
 - `[crm]` qatorida `500 chegarasi, ro'yxat to'liq bo'lmasligi mumkin` bo'lsa (STATUS `WARN`, error farq bo'lsa `ERROR`): CRM ro'yxati to'liq bo'lmasligi mumkin, CRM jamini "to'liq" dema.
 - Blok ichida faqat `(tolov tekshiruvi yiqildi: <Xato>)` yoki `(payment_check yuklanmadi)`: blok qurilmagan, jonli ma'lumot yo'q.
 - `/tolov` tarixida bir qator qoladi: `To'lov tekshiruvi <kirish>: CRM ...; OplatyKv ...; bank ...; farq: ...` (CRM jami panel ko'prigidan bo'lsa `<summa> (panel)`) yoki `To'lov tekshiruvi <kirish>: N nomzod, shartnoma tanlanmadi`.
+
+## 6.1 Egasi javobi (/tolov) va guruhga javob (oddiy tilda)
+`/tolov <shartnoma | UUID | ...>` endi texnik jadval emas, oddiy tildagi xulosa beradi (`payment_check.py::format_xulosa`, Telegram HTML, emoji yo'q). Texnik to'liq chiqish: oxiriga `batafsil` so'zi (`/tolov 6326MSO25HN batafsil`), u o'zgarishsiz (`format_batafsil`). Checker bloki texnik qoladi, lekin boshida shu xulosa oddiy matnda: `XULOSA (egasi va guruh uchun oddiy tilda; texnik qismi pastda):` ... `TEXNIK:`, keyin komponent qatorlari.
+
+Tuzilma:
+```
+<b>6326MSO25HN</b> — Raximov Abdullaziz Abdusattor O'g'li, MUHABBAT SHAHRI (sotilgan)
+<b>Xulosa:</b> CRM'da 2 ta XonPay to'lovi (3 500 000 so'm) bizga hali tushmagan (1 tasi kutilmoqda, 1 tasi kechikdi); bank, OplatyKv va sheetlar o'zaro mos.
+<pre>
+Manba            To'lov        Summa  Holat
+CRM                  29  168 306 936  +3 500 000
+Bank                 27  164 806 936  mos
+OplatyKv             27  164 806 936  mos
+Sotuv hisoboti       27  164 806 936  mos
+Debitorlik           27  164 806 936  mos
+</pre>
+<b>Farqlar:</b>
+1. 22.08 · 2 000 000 · XonPay 244c5483 — ... . Nima qilish: ...
+<b>Guruhga javob:</b> 1-3 jumla, nusxalash uchun
+Batafsil: /tolov 6326MSO25HN batafsil
+```
+- Sarlavha: shartnoma, mijozning to'liq ismi, obyekt, holat (`crm_contracts`: `Продано` → sotilgan, `Бронь` → bron, bekor → bekor qilingan).
+- Xulosa: bitta jumla. Hammasi mos bo'lsa `hammasi mos: CRM, bank, OplatyKv va sheetlar bir xil (N to'lov, X so'm).` Aks holda toifalar summasi bilan: XonPay yo'lda, bank sync'da yo'q, CRM'da bor bizda yo'q, naqd, bizda bor CRM'da yo'q, XATO, boshqa shartnoma, sheetda ko'rinmaydi (sabab ma'nosi), OplatyKv muammosi; o'qilmagan manbalar oxirida `o'qilmadi: CRM, ...`. Manba o'qilmagan bo'lsa "hammasi mos" deyilmaydi.
+- Jadval: `Manba` 16, `To'lov` 7, `Summa` kamida 11 belgi, orasida 2 bo'shliq. Manbalar: CRM (panel to'lovlar ro'yxati; panel bo'lmasa eski CRM GET), Bank (CLIENT tx soni va sof summasi), OplatyKv (variantlar bilan), solishtiriladigan sheetlar (nomi bilan). `Holat`: `mos` yoki OplatyKv'ga nisbatan `+`/`-` farq; Bank bankdan kelgan OplatyKv qatorlariga nisbatan, OplatyKv'da bankdan tashqari qator bo'lsa `(OplatyKv'da bankdan tashqari X)`; OplatyKv `mos` yoki `N ta muammo (pastda)`; o'qilmasa `o'qilmadi: <sabab>`.
+- Farqlar: raqamlangan, `sana · summa · turi — sabab. Nima qilish: qadam.` Turi: `XonPay <uuid 8>`, `bank`, `naqd`, `OplatyKv` yoki sheet nomi. Faqat to'lov darajasidagi muhim farqlar (`contract.py::TOLOV_MUHIM_KODLAR`: XonPay yo'lda/kechikdi, CRM'da bor bizda yo'q, bizda bor CRM'da yo'q, XATO, boshqa shartnoma, sheetda yo'q + sabab ma'nosi, bank sync, OplatyKv'ga tushmagan, sync kutilmoqda va h.k.). `CRM_FARQ` har to'lovga yoyiladi (XATO yoki boshqa shartnoma bilan izohlangani takrorlanmaydi). Texnik kodlar ko'rsatilmaydi. 12 tadan ko'pi: `... yana N ta farq: batafsil rejimda`.
+- Taqsimot (`CRM_SPLIT`, `SPLIT_FARQ`, `SPLIT_YOQ`) faqat CRM va bank jami mos bo'lsa bitta eslatma: `Eslatma: jami mos, faqat boshlang'ich/oylik taqsimoti CRM bilan farq qiladi ...`.
+- Tarix shovqini (`BANK_OCHIRGAN`, `BANK_KOCHIRGAN`, `BANK_TAHRIRLAGAN`, `OKV_OCHIRILGAN`, `KATEGORIYA`) xulosa va farqlarga KIRMAYDI. Texnik chiqishda ham faqat so'nggi 7 kun (to'lov sanasi yoki aniqlangan kun) yoki muhim farqli to'lovga bog'liq bo'lsa ko'rsatiladi; qolgani `[farqlar]` qatorida soni bilan: `tarix shovqini ko'rsatilmadi (N: KOD×n, ...): 7 kundan eski va farqsiz to'lovlarda`.
+- Guruhga javob: 1-3 jumla (to'lov topildimi, qayerda, nega ko'rinmaydi, qachon ko'rinadi). XonPay yo'lda: `Bu to'lov XonPay orqali qilingan (DD.MM, N so'm). ...` (2.1); kechikdi: `... XonPay bilan tekshirish kerak.`; hammasi mos: `Shartnoma bo'yicha barcha to'lovlar (N ta, X so'm) CRM, bank va xonadon hisobotida bir xil ko'rinadi.`
+- Agent (Checker) egasiga ham shu tuzilmada javob beradi, texnik kodlarsiz: blok boshidagi XULOSA qismidan foydalanadi, sabab va tuzatishni 6-7 bo'limdan oddiy tilda to'ldiradi.
 
 ## 7. Farq kodlari → sabab → kim va qayerda tuzatadi
 Kodlar `agents/contract.py::TOLOV_FARQ_KODLARI` bilan bir xil. "Odatiymi" = ha bo'lsa tuzatish kerak emas.

@@ -654,7 +654,15 @@ TOLOV_XONPAY_ISH_KUNI = 3                         # shundan ko'p ish kuni tushma
 TOLOV_XONPAY_SANA_OYNA = 1                        # CRM to'lovi <-> Billing qatori: summa teng, sana +-1 kun
 TOLOV_XONPAY_QATOR_MAX = 8                        # [xonpay] ostidagi qatorlar (sarlavhasiz)
 TOLOV_XONPAY_TUSHGAN_MAX = 3                      # ulardan tushganlari (eng yangilari)
-TOLOV_XONPAY_HOLATLAR: Tuple[str, ...] = ("TUSHGAN", "KUTILMOQDA", "KECHIKDI")
+TOLOV_XONPAY_HOLATLAR: Tuple[str, ...] = ("TUSHGAN", "KUTILMOQDA", "KECHIKDI", "CRMDA_YOQ")
+# Billing <-> CRM kelishtiruvi (is_matched=false qator): pul tushgach CRM Внешний ID UUID'dan kompozitga o'tadi,
+# Billing'dagi eski UUID qatori TOPILMAGAN bo'lib qoladi. CRM'da shu UUID bor -> yo'lda; CRM'da summa teng,
+# sana [date_paid, date_paid + 10 kun] ichidagi, bizda topilgan kompozit -> TUSHGAN (CRM orqali); CRM o'qilmasa
+# vaqt bo'yicha; aks holda CRMDA_YOQ (yo'lda summasiga kirmaydi).
+TOLOV_XONPAY_OYNA_KUN = 10
+TOLOV_XONPAY_ESKI_QATOR = "Billing'da eski TOPILMAGAN qatori qolgan"
+TOLOV_XONPAY_CRM_TEKSHIRILMADI = "CRM bilan tekshirilmadi"
+TOLOV_XONPAY_CRMDA_YOQ = "CRM'da na shu UUID, na mos kompozit to'lov bor"
 TOLOV_XONPAY_SARLAVHA = "sana | summa | uuid | holat | izoh"
 TOLOV_XONPAY_KUTILMOQDA_TPL = (
     "XonPay orqali to'langan {sana}, pul hali bizning hisobga tushmagan; odatda 1-3 ish kunida o'tadi"
@@ -771,10 +779,81 @@ TOLOV_FARQ_TUZATISH: Dict[str, str] = {
     "KUCHSIZ_MOSLIK": "\"aniq\" dema, ID bilan tasdiqla",
 }
 
+# /tolov egasi uchun oddiy tilda (format_owner; "batafsil" so'zi bilan eski texnik chiqish). Checker bloki
+# boshida ham shu xulosa. Farqlar ro'yxatiga faqat to'lov darajasidagi MUHIM kodlar kiradi; taqsimot kodlari
+# faqat jami mos bo'lsa bitta eslatma; tarix shovqini egasiga ko'rsatilmaydi, texnik chiqishda ham faqat so'nggi
+# TOLOV_SHOVQIN_KUN kun yoki farqli to'lovga bog'liq bo'lsa.
+TOLOV_BATAFSIL_SOZ = "batafsil"
+TOLOV_BATAFSIL_TPL = "Batafsil: /tolov {kirish} batafsil"
+TOLOV_MUHIM_KODLAR: Tuple[str, ...] = (
+    "XONPAY_KECHIKDI", "XONPAY_KUTILMOQDA", "BIZDA_YOQ", "CRM_FARQ", "CRM_YOQ", "XATO", "BOSHQA_SHARTNOMA",
+    "SHEET_YOQ", "SHEET_FARQ", "OKV_YOQ", "TX_YOQ", "DUBLIKAT", "SUMMA_FARQ", "QAYTARIM", "SYNC_KUTILMOQDA",
+    "TXMINDATE",
+)
+TOLOV_TAQSIMOT_KODLAR: Tuple[str, ...] = ("CRM_SPLIT", "SPLIT_FARQ", "SPLIT_YOQ")
+TOLOV_SHOVQIN_KODLAR: Tuple[str, ...] = (
+    "BANK_OCHIRGAN", "BANK_KOCHIRGAN", "BANK_TAHRIRLAGAN", "OKV_OCHIRILGAN", "KATEGORIYA",
+)
+TOLOV_SHOVQIN_KUN = 7
+TOLOV_SHOVQIN_TPL = "tarix shovqini ko'rsatilmadi ({n}: {royxat}): {kun} kundan eski va farqsiz to'lovlarda"
+TOLOV_EGA_FARQ_MAX = 12                           # egasi javobida farqlar (qolgani batafsil rejimda)
+TOLOV_BLOK_FARQ_MAX = 8                           # Checker bloki boshidagi xulosada
+TOLOV_XULOSA_MOS_TPL = "hammasi mos: CRM, bank, OplatyKv va sheetlar bir xil ({n} to'lov, {summa} so'm)"
+TOLOV_XULOSA_BLOK_BOSH = "XULOSA (egasi va guruh uchun oddiy tilda; texnik qismi pastda):"
+TOLOV_XULOSA_BLOK_OXIR = "TEXNIK:"
+TOLOV_MANBA_SARLAVHA = ("Manba", "To'lov", "Summa", "Holat")
+TOLOV_NIMA_KUTISH = "hech narsa, kutiladi"
+# Farq turi -> (sabab, nima qilish) oddiy tilda. {..} blokdagi qiymat bilan to'ldiriladi.
+TOLOV_ODDIY: Dict[str, Tuple[str, str]] = {
+    "XONPAY_KUTILMOQDA": ("mijoz XonPay orqali to'lagan, pul XonPay'da, bizning hisobga hali tushmagan ({izoh});"
+                          " odatda 1-3 ish kunida o'tadi",
+                          "hech narsa, kutiladi: tushgach Tranzaksiyalar, OplatyKv va xonadonda avtomat ko'rinadi"),
+    "XONPAY_KECHIKDI": ("XonPay orqali to'langan, pul {n} ish kunidan beri bizga o'tmagan (odatda 1-3 ish kuni)",
+                        "OplatyKv > Billing > Tekshirish, XonPay sync; kelmasa XonPay bilan tekshirish"),
+    "BANK_SYNC": ("CRM'da bizga tushgan deb turibdi (bank ID sanasi {sana}), lekin bizning Tranzaksiyalarda yo'q",
+                  "bank sync: Sync sahifasi yoki Sverka; sana ko'chgan bo'lsa O'zgargan to'lovlar"),
+    "BIZDA_YOQ": ("CRM'da bor, bizda (bank, OplatyKv) yo'q",
+                  "bankda bormi: Sverka yoki /tolov <summa> <sana>; bo'lsa kategoriya yoki shartnomani tuzatish"),
+    "BIZDA_YOQ_NAQD": ("CRM'da bor, bizda yo'q: naqd to'lov, bankdan kelmagan",
+                       "hech narsa, naqd to'lov bankda bo'lmaydi"),
+    "CRM_BOR": ("CRM'da bor, OplatyKv'da yo'q",
+                "bizda XATO yoki boshqa shartnomada bo'lsa: OplatyKv > XATO → CRM; naqd bo'lsa odatiy"),
+    "OKV_BOR": ("OplatyKv'da bor, CRM'da yo'q",
+                "CRM operatori (CRM'ga biz yozmaymiz); split qilinmagan bo'lsa avval split"),
+    "CRM_FARQ": ("CRM va OplatyKv jami {summa} farq qiladi", "batafsil rejimda qaysi to'lovlar mos emasligini ko'rish"),
+    "CRM_YOQ": ("bizda bor, CRM'da yo'q",
+                "bizda XATO yoki split yo'q bo'lsa avval shuni tuzatish; qolgani CRM operatori"),
+    "XATO": ("bank izohidagi shartnoma raqami {raqam} CRM'da topilmagan (XATO)",
+             "OplatyKv > XATO → CRM tabida to'g'ri shartnomaga biriktirish yoki tx shartnomasini tuzatish"),
+    "BOSHQA_SHARTNOMA": ("to'lov boshqa shartnoma ostida: {izoh}",
+                         "qaysi shartnoma to'g'riligini hal qilish; bizda tx shartnomasi, CRM'da CRM operatori"),
+    "SHEET_YOQ": ("sheetda bu shartnoma to'lovlari ko'rinmaydi: {sabab}", "{tuzatish}"),
+    "SHEET_FARQ": ("sheet summasi OplatyKv'dan {summa} farq qiladi: {sabab}", "{tuzatish}"),
+    "OKV_YOQ": ("bank to'lovi OplatyKv'ga tushmagan", "OplatyKv sync (Admin > Sync) yoki bitta to'lov: add-from-tx"),
+    "SYNC_KUTILMOQDA": ("bank to'lovi yangi, OplatyKv avto-sync navbatida", "hech narsa, bir necha daqiqada tushadi"),
+    "TXMINDATE": ("to'lov OplatyKv sync boshlanish sanasidan (txMinDate) oldin",
+                  "kerak bo'lsa bitta to'lov: add-from-tx"),
+    "TX_YOQ": ("OplatyKv'da bor, bank tranzaksiyasi yo'q (bank o'chirgan bo'lishi mumkin)",
+               "noto'g'ri o'chgan bo'lsa O'zgargan to'lovlar > Tiklash"),
+    "DUBLIKAT": ("bitta bank to'lovi OplatyKv'da ikki marta", "egasi qarori; tozalashni dasturchi qiladi"),
+    "SUMMA_FARQ": ("summa farqli: {izoh}", "bank tahrirlagan bo'lsa sync tenglaydi; aks holda qo'lda tekshirish"),
+    "QAYTARIM": ("CRM'da qaytarim (manfiy), bizda chiqim yo'q",
+                 "bizda chiqim bo'lsa mos; bo'lmasa storno yoki perebroska: egasi qarori"),
+}
+TOLOV_ESLATMA_TAQSIMOT = ("Eslatma: jami mos, faqat boshlang'ich/oylik taqsimoti CRM bilan farq qiladi (odatiy: CRM"
+                          " turi bo'yicha, bizda reja bo'yicha).")
+TOLOV_GURUH_XONPAY_KECHIKDI_TPL = ("Bu to'lov XonPay orqali qilingan ({sana}, {summa} so'm). Pul XonPay'dan bizning"
+                                   " hisobga hali o'tmagan (odatdagi 1-3 ish kunidan oshdi), XonPay bilan tekshirish"
+                                   " kerak.")
+TOLOV_GURUH_XONPAY_TUSHGAN_TPL = ("Bu to'lov XonPay orqali qilingan ({sana}, {summa} so'm) va bizning hisobga"
+                                  " {tushgan} da tushgan.")
+TOLOV_GURUH_MOS_TPL = ("Shartnoma bo'yicha barcha to'lovlar ({n} ta, {summa} so'm) CRM, bank va xonadon hisobotida"
+                       " bir xil ko'rinadi.")
+
 # /tolov (LLM'siz). Toza lotin, emoji yo'q.
 MSG_TOLOV_FOYDALANISH = (
     "Foydalanish: /tolov <shartnoma> (3 tagacha, vergul bilan), /tolov <to'lov ID>, /tolov <XonPay UUID>, "
-    "/tolov <summa> <sana>, /tolov mijoz <familiya ism>.\n"
+    "/tolov <summa> <sana>, /tolov mijoz <familiya ism>. Oxirida 'batafsil': texnik to'liq chiqish.\n"
     "Misol: /tolov 821ZUR23V1 yoki /tolov 6150000 2026-09-20"
 )
 TOLOV_OWNER_SARLAVHA_TPL = "<b>To'lov tekshiruvi</b> — {kirish} — {vaqt}"
