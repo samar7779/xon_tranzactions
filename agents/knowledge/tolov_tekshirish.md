@@ -3,7 +3,7 @@
 ## Vazifasi
 Shartnoma yoki bitta to'lovni manbalarda solishtirish: bank (`transactions`), OplatyKv (`oplata_kv`), XonSaroy CRM va ulangan Google Sheetlar (Sotuv hisoboti, Debitorlik va h.k.). Faqat o'qish: hech bir manbaga yozilmaydi, tuzatish panelda yoki CRM operatorida.
 Agentda DB ham, CRM ham yo'q. Jonli qatorlarni bot o'zi yig'adi (`agents/payment_check.py`): DB `db.tx("facts", readonly=True)`; CRM va sheetlar panel ko'prigi orqali: `GET http://127.0.0.1:<PORT>/api/agent-bridge/payment-check` (panel Chek payment bilan aynan bir xil hisob) va `GET /api/agent-bridge/exports` (eksport sozlamasi). Eski to'g'ridan `GET {XONSAROY_CLIENT_BASE}/payment-history` yo'li default o'chiq (prod'da 404). Juftlash va farq kodlari Python'da hisoblanadi, agent faqat tushuntiradi.
-Chaqiruv ikki yo'l: egasi `/tolov <shartnoma | ID | summa sana | mijoz ism>` yozadi (LLM'siz jadval) yoki Leader intent `payment_check` bilan Checker'ga topshiradi. Checker topshirig'i oxirida `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` ... `=== TUGADI ===` bloki keladi.
+Chaqiruv ikki yo'l: egasi `/tolov <shartnoma | ID | XonPay UUID | summa sana | mijoz ism>` yozadi (LLM'siz jadval) yoki Leader intent `payment_check` bilan Checker'ga topshiradi. Checker topshirig'i oxirida `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` ... `=== TUGADI ===` bloki keladi.
 Blok yo'q bo'lsa jonli ma'lumot ham yo'q: panelda qayerga qarashni ayt (8-bo'lim jadvali).
 
 ## Qisqa algoritm (agent uchun)
@@ -13,6 +13,7 @@ Blok yo'q bo'lsa jonli ma'lumot ham yo'q: panelda qayerga qarashni ayt (8-bo'lim
 4. Har `F<n>` farq uchun 7-bo'limdan kod qatorini top. `SHEET_YOQ`, `SHEET_FARQ` da `sabab:` qismini 7.1 dan izohla.
 5. Sabab va kim, qayerda tuzatishini ayt: panel yo'li, ruxsat nomi yoki "CRM operatori".
 6. `KUCHSIZ_MOSLIK` bo'lsa ogohlantir: juft faqat summa va sana bo'yicha, "aniq" dema.
+6a. `XONPAY_KUTILMOQDA` xato emas: pul XonPay'da, 1-3 bank ish kunida o'tadi (2.1). `XONPAY_KECHIKDI` egasiga aytiladi.
 7. "To'langan" summaning qaysi hisobi ekanini ayt (8-bo'lim): `[crm_panel]` panel Chek payment hisobi (`/order/show`, topmasa payment-history zaxirasi); eski `[crm]` qatori CRM to'lov tarixi yig'indisi.
 8. Hech narsa yozma va tuzatishni bajarma: faqat yo'lini ayt.
 
@@ -24,7 +25,7 @@ Blok yo'q bo'lsa jonli ma'lumot ham yo'q: panelda qayerga qarashni ayt (8-bo'lim
 | Panel ko'prigi (asosiy CRM va Sheet manbasi) | `GET http://127.0.0.1:<PORT>/api/agent-bridge/payment-check?contracts=A,B,C` (`agent-bridge.service.ts::paymentCheck` → `chek-order.service.ts::paymentCheck`) va `GET /api/agent-bridge/exports` | backend: OplatyKv (aniq `contract_no`), CRM (`crmPaymentPart`: `/order/show`, topmasa payment-history zaxirasi), sheetlar (`readContractsPayments`) | jonli | panel Chek payment bilan aynan bir xil; `allMatch` = panel "Mos/Farqli" |
 | CRM to'lov tarixi (eski yo'l, default o'chiq) | `GET {XONSAROY_CLIENT_BASE}/payment-history?contract=` (INDEX); prod'da 404, `AGENTS_TOLOV_CRM=1` bo'lsagina | XonSaroy: CRM operatori, XonPay, bizning `/api/v1/oplata-kv/changes` feed'i (CRM uni o'qiydi, `api.md`) | jonli | `SUM(amount)`, qaytarim manfiy; split `initial_amount`, `monthly_amount`, `other_amount` |
 | CRM shartnoma keshi | `crm_contracts` | `crm-contract-cache.service.ts::lookup` | `found=true` 24 soat, `found=false` 4 soat | to'lov yo'q: shartnoma bor-yo'qligi (XATO ta'rifi), `status`, `object_name`, `crm_order_id` |
-| XonPay | `xonpay_transactions` | `xonpay.service.ts` (CRM `/payment-history/excel`, `payment_method` Xon Pay) | 07-23 soatlari, default har 60 daq | CRM'ning faqat XonPay qismi; `is_matched`, `matched_tx_id` |
+| XonPay | `xonpay_transactions` (panel OplatyKv > Billing) | `xonpay.service.ts` (CRM `/payment-history/excel`, `payment_method` Xon Pay) | 07-23 soatlari, default har 60 daq | CRM'ning faqat XonPay qismi; `is_matched`, `matched_tx_id`; blokda `[xonpay]` (2.1) |
 | CRM sverka | `settings` `crmSverka.snapshot` | `crm-sverka.service.ts` | 07:00, 12:00, 17:00 (14 soatgacha eski) | to'lov tarixi yig'indisi, shartnoma kesimi. Bot ham, agent ham o'qimaydi |
 | Google Sheet | eksport jadvali (ko'prik orqali o'qiladi, faqat to'lov ustunli sheetlar) | `google-export.service.ts::run` (`oplataKv.getRowsForExport` filtrlari bilan) | eksport cron'i yoki Admin > Export > Bajarish | `oplata_kv` nusxasi (filtrdan keyin), mustaqil manba emas. XATO qatorda shartnoma o'rniga `XATO` yoziladi |
 
@@ -54,6 +55,76 @@ CRM alohida: operator, XonPay va bizning feed. Biz CRM'ga yozmaymiz.
 | 12 | Reinvest yoki fiktiv | bor | CLIENT emas (`categorization.service.ts::isExcludedClientStatus`) | yo'q | bo'lishi mumkin |
 | 13 | `txMinDate` dan oldingi | bor | CLIENT | yo'q: sync bu davrni olmaydi | bo'lishi mumkin |
 | 14 | Naqd | yo'q | yo'q | faqat Excel yoki qo'lda bo'lsa | bor, `is_received_from_bank` = false |
+
+## 2.1 XonPay to'lovi: bizning hisobga tushganmi (egasi qoidasi, 2026-09-29)
+
+XonPay — mijozlar ilovasi. Mijoz shartnomaga XonPay orqali to'lasa, to'lov DARHOL CRM'da ko'rinadi
+(CRM XonPay bilan birga ishlaydi). Lekin pul avval XonPay'ning hisob raqamiga tushadi, bizning korxona
+hisobiga emas. Bizning hisobga 1-3 bank ish kuni ichida o'tadi. Shu oraliqda to'lov CRM'da bor, lekin
+Tranzaksiyalar, OplatyKv, xonadon (sheetlar) da hali YO'Q. Bu xato emas.
+
+Qanday aniqlanadi: CRM to'lovining `Способ` (`payment_method`) va `Внешний ID` (`external_id`) maydoni.
+
+| `Способ` | `Внешний ID` | Ma'nosi | Nima deyiladi |
+|---|---|---|---|
+| Xon Pay | UUID, masalan `bc843be4-83ed-419f-9330-09068d16df2d` | XonPay'da turibdi, bizning hisobga HALI TUSHMAGAN | kutiladi (1-3 ish kuni) |
+| Xon Pay yoki boshqa | bizning kompozit, masalan `3734765350_2730_22.12.2025_20208000305742909002_22696000905500044001_200000000_-` | bizning hisobga TUSHGAN | shu ID bilan `transactions.external_id` da bo'lishi shart |
+
+Qoidalar:
+- UUID holatidagi to'lov sanasidan 1-3 bank ish kuni o'tmagan: normal kutish. Dam olish kunlari
+  hisoblanmaydi (juma kungi to'lov dushanba tushishi mumkin).
+- 3 bank ish kunidan oshgan, `Внешний ID` hali UUID: pul XonPay'dan kelmay qolgan. `xonpay_transactions`
+  (XonPay sync) va XonPay bilan tekshirish kerak. Bu egasiga aytiladi.
+- `Внешний ID` kompozit, lekin bizning `transactions` da bunday `external_id` yo'q: bizning sync muammosi
+  (bank sync kechikkan yoki bank sanani ko'chirgan, yadro yoki gid bilan qidiriladi).
+- Kompozit ID ichidagi summa tiyinda (`200000000` = 2 000 000 so'm), sana `dd.mm.yyyy` — pul bizning
+  hisobga tushgan kun.
+- Guruhga javob namunasi (`contract.py::TOLOV_XONPAY_GURUH_JAVOB`, DD.MM va N o'rniga blokdagi sana va summa):
+  "Bu to'lov XonPay orqali qilingan (DD.MM, N so'm). Pul hali bizning hisobga tushmagan, XonPay 1-3 ish kunida o'tkazadi. Tushgach xonadonda avtomat ko'rinadi."
+- Misollar: `224VHA26E4` (28.09, XonPay 10 mln, hali tushmagan), `6326MSO25HN`.
+
+### Bizda qayerda ko'rinadi: Billing (`xonpay_transactions`)
+- Panel: OplatyKv > Billing (`/uz/oplatykv/billing`, `crm:view`). Holat filtri (TOPILMAGAN yoki tushgan), qidiruv shartnoma, F.I.O. yoki UUID bo'yicha, qatorda "Tekshirish" tugmasi (`xonpay.service.ts::recheckOne` → `tryMatchOne`). XonPay sync cron faqat 07-23 soatlarida (`xonpay.cron.intervalMinutes`, default 60).
+- Jadval `xonpay_transactions` (Prisma `XonpayTransaction`, ustunlar `@map` dan):
+  - `external_id` (PK) — CRM `Внешний ID`: avval UUID, pul bizga tushgach bank kompoziti bo'ladi.
+  - `xonpay_uuid` — CRM `purpose` dagi `XONPAY:(UUID)`, katta harfda saqlanadi.
+  - `contract`, `amount` (BigInt, butun so'm), `date_paid` (CRM to'lov sanasi, `@db.Date`), `is_received_from_bank` (CRM belgisi).
+  - `is_matched`, `matched_tx_id` (`transactions.id`), `matched_external_id` (bizning bank kompozit ID), `matched_amount`, `matched_date` (bizga tushgan kun), `last_checked_at` (oxirgi moslash urinishi).
+  - `full_name`, `purpose`, `crm_uuid` blokka o'qilmaydi.
+- Moslash (`tryMatchOne`): UUID bizning `transactions.description` ichidan qidiriladi (katta-kichik harf farqsiz, eng yangi tx). Topilsa `is_matched=true`, bank tx bilan bog'lanadi. Topilmasa faqat `last_checked_at` yangilanadi. Bank izohida UUID bo'lmasa Billing o'zi moslamaydi.
+- Bir UUID ikki qatorda bo'lishi mumkin (`external_id` UUID dan kompozitga o'tgan): blok bittasini oladi, TUSHGAN ustun.
+
+### Blokda: `[xonpay]` bo'limi va holatlar
+- Qator: `[xonpay] STATUS: N to'lov; jami <summa>; tushgan a, kutilmoqda b, kechikdi c; yo'lda <summa> (bizning hisobga hali tushmagan); Billing oxirgi tekshiruvi <vaqt>`. To'lov yo'q bo'lsa `XonPay to'lovi yo'q`. STATUS `WARN` faqat KECHIKDI bo'lsa.
+- Ostida sarlavha `sana | summa | uuid | holat | izoh` va qatorlar: `>>` so'ralgan to'lov, keyin yo'ldagilar (avval KECHIKDI), keyin 3 ta eng yangi tushgan (ko'pi bilan 8 qator, qolgani `+N`). `uuid` birinchi 8 belgi, `sana` = `date_paid`.
+- Holat (ish kuni = dushanba-juma, Toshkent sanasi; `date_paid` dan keyingi kundan bugungacha; bayramlar hisobga olinmaydi):
+
+| Holat | Qoida | `izoh` ustuni |
+|---|---|---|
+| `TUSHGAN` | `is_matched` (Billing bilan bir xil; `tryMatchOne` topolmasa eski `matched_*` qoladi, hisobga olinmaydi); yoki CRM `external_id` bank kompoziti | `bizga <matched_date>, tx=<kompozit yadrosi>`; kompozit, lekin Billing moslamagan: `CRM ID bank kompoziti <yadro>, Billing moslamagan` |
+| `KUTILMOQDA` | tushmagan, ≤ 3 bank ish kuni o'tgan | `<n> ish kuni o'tdi (chegara 3, bayramlar hisobga olinmagan); tekshirilgan <vaqt>` |
+| `KECHIKDI` | tushmagan, > 3 bank ish kuni | xuddi shunday |
+
+- Misol: juma kungi to'lov. Shanba va yakshanba 0, dushanba 1, keyingi chorshanba 3 (KUTILMOQDA), payshanba 4 (KECHIKDI).
+- Farq kodlari (7-bo'lim): yo'ldagi har to'lov `XONPAY_KUTILMOQDA` (info) yoki `XONPAY_KECHIKDI` (warn). Dalil `xonpay=<uuid 8 belgi>`, izoh `<n> ish kuni o'tdi (chegara 3, bayramlar hisobga olinmagan)`, `sabab:` egasi matni:
+  - `XONPAY_KUTILMOQDA`: `XonPay orqali to'langan <sana>, pul hali bizning hisobga tushmagan; odatda 1-3 ish kunida o'tadi`
+  - `XONPAY_KECHIKDI`: `<N> ish kunidan beri tushmagan: Billing > Tekshirish, XonPay sync va XonPay bilan tekshirish`
+- CRM kodlari bilan to'qnashmaydi. CRM to'lovi yo'ldagi Billing qatoriga UUID (`purpose`) yoki `external_id`, bo'lmasa summa (farq < 1 so'm) va sana (±1 kun) bo'yicha mos kelsa: `BIZDA_YOQ` emas, `XONPAY_*`. Panel yo'lida u CRM solishtiruvidan chiqariladi: `[crm_panel]` da `XonPay yo'lda N ta, <summa> (bizda hali yo'q, solishtirilmaydi)`, ostida `XonPay yo'lda: <sana> <summa> <tur>`; `CRM_FARQ` bermaydi. Yo'ldagi CRM qatori bank to'loviga `kuchsiz` juftlanmaydi.
+- Kirish: `/tolov <UUID>` (8-4-4-4-12 hex yoki `XONPAY:(UUID)`), Leader topshirig'ida `TOLOV: id=<UUID>`. UUID `xonpay_transactions` dan (`xonpay_uuid` yoki `external_id`) topiladi, shartnoma aniqlanadi va to'liq tekshiriladi. To'lov holati `[kirish]` qatorida birinchi: `XonPay UUID <uuid>: KUTILMOQDA (to'langan <sana>, <summa>; ...)`. Billing'da yo'q bo'lsa bank izohidagi `XONPAY:(UUID)` bo'yicha (so'nggi 120 kun). Hech qayerda yo'q: `UUID xonpay_transactions'da ham, bank izohida ham yo'q: XonPay sync hali olmagan bo'lishi mumkin (07-23)`.
+
+### Panel yo'lida CRM `Внешний ID` va `Способ` (ko'prik `externalId`, `method`)
+Ko'prik har CRM to'loviga `externalId` (CRM `Внешний ID`) va `method` (CRM `Способ`) beradi (`agent-bridge.types.ts::BridgeCrmPayment`, `chek-order.service.ts::crmPaymentPart`; CRM javobida bo'lmasa `null`). `[crm_panel]` solishtiruvidan oldin har to'lov shu bo'yicha ajratiladi (`payment_check.py::_crm_tasnif`):
+
+| `externalId` | Nima qilinadi | Kod |
+|---|---|---|
+| UUID (8-4-4-4-12 hex) va `method` da `xon pay`/`xonpay` (bo'shliq, katta-kichik harf farqsiz), yoki UUID Billing'da bor | XonPay to'lovi. Billing qatori UUID bo'yicha aniq topiladi (summa+sana taxminidan ustun): `TUSHGAN` solishtiriladi; `KUTILMOQDA`/`KECHIKDI` solishtiruvdan chiqariladi. Billing'da hali yo'q (sync 07-23 kelmagan): holat CRM sanasidan ish kunlari bilan, izohga `Billing'da hali yo'q` (Billing o'qilmagan bo'lsa `Billing o'qilmadi`) qo'shiladi va `[xonpay]` ga ham tushadi | `XONPAY_KUTILMOQDA` / `XONPAY_KECHIKDI`, `CRM_FARQ` EMAS |
+| bizning bank kompoziti | egasi qoidasi: pul bizga tushgan. Bizning qatorlar bilan `kuchli` (to'liq `external_id` yoki `source_tx_id`), `yadro`, `gid`; shartnoma qatorlarida topilmasa butun `transactions` dan bitta qo'shimcha SELECT (`external_id` yoki `bank_general_id`, ko'pi bilan 30 ta). Topilsa solishtiriladi; boshqa shartnoma tx'ida bo'lsa `BOSHQA_SHARTNOMA`. Hech qayerda yo'q: bizning sync muammosi, solishtiruvdan chiqariladi | `BIZDA_YOQ`, `sabab: CRM: bizga tushgan (<sana> kompozitda), bizning Tranzaksiyalarda yo'q — bank sync`, tuzatish `bank sync: Sync sahifasi yoki Sverka; sana ko'chgan bo'lsa O'zgargan to'lovlar` |
+| `null` yoki boshqa | avvalgi mantiq: Billing yo'ldagi qatorlari bilan summa (farq < 1 so'm) va sana (±1 kun) | `CRM_FARQ` yoki `XONPAY_*` |
+
+- `[crm_panel]` qatorlarida CRM to'lovi `<sana> <summa> <tur> <Способ> id=<qisqa>`: UUID birinchi 8 belgi (`Xon Pay id=bc843be4`), kompozitda general_id (yo'q bo'lsa num) va sana (`id=3734765350/22.12.2025`).
+- Ostida `CRM ID: kompozit N (bizda: kuchli a, yadro b, gid c; yo'q d); XonPay UUID M (TUSHGAN x, KUTILMOQDA y, KECHIKDI z; Billing'da hali yo'q w); ID'siz yoki boshqa k`, kerak bo'lsa `XonPay yo'lda: ...` va `bizda yo'q (bank sync): ...`. Asosiy qatorda `bizda yo'q (bank sync) N ta, <summa> (solishtirilmaydi, BIZDA_YOQ)`, `[panel_solishtirish]` da `shundan bizda yo'q (bank sync) <summa>`.
+- `kompozit qidiruvi o'qilmadi (bank sync tekshirilmadi): <sabab>`: qo'shimcha SELECT ishlamagan, kompozitlar oddiy solishtiriladi, `BIZDA_YOQ` (bank sync) chiqmaydi. Bizning `transactions` qatorlari o'qilmagan bo'lsa ham qidirilmaydi.
+- Eski CRM yo'li yoqilgan bo'lsa ham bir to'lov uchun bitta kod: bir xil kod va dalil (`xonpay=<uuid>`, `crm=<kompozit>`) takrorlanmaydi.
 
 ## 3. Moslash kalitlari
 - Kompozit ID (`sync.service.ts::makeCompositeId`): `[IP_|HB_]general_id_num_ddate_acc_ct_acc_dt_amount_sign`. `ddate` = `dd.mm.yyyy`, `amount` tiyinda (615000000 = 6 150 000 so'm), oxirgi bo'lak `+` yoki `-`. Prefiks: `IP_` Ipak Yo'li, `HB_` Hamkor, Kapitalbank prefiksiz. Bo'lak yo'q bo'lsa `no_general_id`, `no_num` va h.k.
@@ -103,14 +174,14 @@ CRM alohida: operator, XonPay va bizning feed. Biz CRM'ga yozmaymiz.
 |---|---|
 | `kirish` | nima so'ralgan (shartnoma, ID, summa+sana yoki mijoz), variantlar soni, so'rov vaqti (Toshkent) |
 | `crm_kesh` | `crm_contracts`: found, holat, obyekt, order, oxirgi tekshiruv; dublikat raqamda mijozning to'liq ismi |
-| `crm` | eski yo'l (default o'chiq): jonli CRM to'lov tarixi, soni, jami, boshlang'ich, oylik, boshqa, qaytarim. Odatda `UNKNOWN: o'chirilgan`: CRM ma'lumoti `crm_panel` da |
-| `crm_xonpay` | `crm` ishlamaganda zaxira: faqat `xonpay_transactions` (CRM'ning XonPay qismi) |
+| `crm` | eski yo'l (default o'chiq): jonli CRM to'lov tarixi, soni, jami, boshlang'ich, oylik, boshqa, qaytarim. Odatda `UNKNOWN: o'chirilgan`: CRM ma'lumoti `crm_panel` da. `[solishtirish]` da XonPay yo'ldagi CRM qatorlari `shundan XonPay yo'lda <summa>` bo'lib statusga kirmaydi |
 | `crm_panel` | CRM panel yo'li (ko'prik): narx, reja bosh./oylik, `to'lovlar N ta: bosh., oylik, jami` (CRM to'lovlar ro'yxati yig'indisi, turi bo'yicha), `qoldiq (narx - to'lovlar)`, `panel jami (grafik/tarix max)` (faqat ma'lumot: panel aralash to'lovni ikki sanashi mumkin, farq hisobiga kirmaydi). Ostida `oxirgi to'lovlar: <sana> <summa> <tur>` (5 ta, eng yangisi birinchi); `CRM_FARQ` bo'lsa `mos emas: faqat CRM: ...; faqat OplatyKv: ...`; `CRM_SPLIT` bo'lsa `split farqi: <sana> <summa> CRM <tur>, OplatyKv bosh. <n>, oylik <n>`. `zaxira: payment-history (narx, reja, qoldiq yo'q)`: order topilmagan. `CRM'da topilmadi` (WARN), `CRM javob bermadi: <sabab>` (UNKNOWN) |
 | `oplata_kv` | qatorlar soni, jami, boshlang'ich, oylik, split yo'q, XATO soni. `XATO ?` (qatorlar o'qilmadi) yoki `XATO va KANONIK_EMAS tekshirilmadi (crm_kesh o'qilmadi)` bo'lsa XATO sanalmagan: "XATO yo'q" dema |
 | `sheet` | har ulangan sheet uchun alohida qator, nomi bilan (lotinda). Solishtiriladigan sheet: `<nomi>: bosh. <n>, oylik <n>, jami <n>; <N> qator; oxirgi qator #<n>; oxirgi to'lov ~<sana>; OplatyKv bilan mos` yoki `sheet - OplatyKv: <ustun> <farq>; sheetda yo'q: ...; OplatyKv'da yo'q: ...; split farqi: ...`. Boshqa sheet: `<nomi>: ma'lumot uchun, solishtirilmaydi: <N> qator, jami <n>` (STATUS doim OK, SHEET_* chiqmaydi). `o'qilmadi: <sabab>` (UNKNOWN). Ostida `eksport: manba, rejim; dateFrom; filtr; cron; oxirgi ish` va SHEET_* bo'lsa `sabab: <sana> <summa> <kod>: <izoh>` qatorlari. Ko'prik sheet to'loviga sana bermaydi: `~<sana>` OplatyKv qatori bilan summa bo'yicha juftlab olingan |
 | `transactions` | tx soni, kirim, chiqim, `status` kesimi. `izoh qidiruvi o'qilmadi: <sabab>` (WARN): faqat izohdagi raqam qidiruvi ishlamagan, tx ma'lumoti o'qilgan |
+| `xonpay` | Billing (`xonpay_transactions`, CRM'ning XonPay qismi): soni, jami, tushgan, kutilmoqda, kechikdi, yo'lda summa, Billing oxirgi tekshiruvi; ostida `sana \| summa \| uuid \| holat \| izoh` qatorlari (2.1). `UNKNOWN`: Billing o'qilmadi, yo'ldagi to'lov `BIZDA_YOQ` yoki `CRM_FARQ` bo'lib chiqishi mumkin |
 | `bank_izi` | `transaction_change_logs` (DELETED, MOVED, EDITED) va `oplata_kv_history` (`deleted`, `edited`) izlari; oyna qatorda yoziladi |
-| `kontekst` | vznos, perebroska, kutilayotgan ariza, XonPay soni va moslangani |
+| `kontekst` | vznos, perebroska, kutilayotgan ariza (XonPay `xonpay` bo'limida) |
 | `solishtirish` | `CRM - OplatyKv = <jami> (bosh. <n>, oylik <n>)` (eski `crm` tekshirilmagan bo'lsa `CRM tekshirilmadi`); `OplatyKv(bank) - bank = <n>`. 2-3 shartnomada avval har shartnoma alohida (`<shartnoma>: CRM - OplatyKv = ..., OplatyKv(bank) - bank = ...`), keyin `jami: ...`: bir shartnomadagi ortiqcha ikkinchisidagi kamni yopmaydi, har birini alohida ayt |
 | `panel_solishtirish` | `panel Mos` yoki `panel Farqli` (panelning o'z belgisi, faqat ma'lumot: panel CRM jamlari MAX bilan); `OplatyKv (aniq raqam) <N> qator, jami ...`; `CRM to'lovlar - OplatyKv = <jami> (bosh. <n>, oylik <n>)`; har solishtiriladigan sheet `<nomi> - OplatyKv = <jami> (bosh. <n>, oylik <n>)`. STATUS faqat `CRM_FARQ`, `SHEET_*` dan (`CRM_SPLIT` info, ko'tarmaydi). OplatyKv bu yerda aniq `contract_no` bo'yicha (XATO shakldagi qatorlar kirmaydi), `oplata_kv` qatori variantlar bilan: ikkalasi farq qilishi mumkin |
 | `farqlar` | soni va jiddiylik kesimi (CRM tekshirilmagan bo'lsa `; CRM tekshirilmadi: CRM kodlari yo'q`; panel CRM ishlagan bo'lsa `; CRM to'lov kodlari yo'q, CRM jami crm_panel da (CRM_FARQ)`; `qisman: ... qatorlari o'qilmadi, BIZDA_YOQ ... tekshirilmadi` bo'lsa "CRM'da bor, bizda yo'q" tekshirilmagan); ostida farq qatorlari |
@@ -120,7 +191,7 @@ CRM alohida: operator, XonPay va bizning feed. Biz CRM'ga yozmaymiz.
 - Panel bo'limlari (`crm_panel`, `sheet`, `panel_solishtirish`) ko'prik ishlamasa uchalasi `UNKNOWN: ko'prik: <sabab>`, qolgan tekshiruv (DB) davom etadi. Sabablar: `ko'prik kaliti yo'q (AGENT_BRIDGE_KEY)`, `ko'prik manzili yaroqsiz (faqat http://127.0.0.1 yoki http://localhost)`, `shartnoma formati ko'prikka mos emas (A-Z, 0-9, 3-20 belgi)` (masalan `/SH` li raqam so'ralmaydi), `vaqt tugadi`, `timeout`, `ulanish rad etildi (backend ishlamayapti yoki PORT noto'g'ri)`, `HTTP 403 (kalit mos emas yoki backend'da ko'prik yopiq)`, `HTTP 404 (backend'da agent-bridge yo'q)`, `HTTP 400 (so'rov rad etildi: shartnoma yoki sheet formati)`, `HTTP 429 (so'rov chegarasi, keyinroq)`, `javob JSON emas`, `javob shakli kutilmagan`, `javob 5 MB dan katta`, `redirect taqiqlangan (<kod>)`, `boshqa hostga yo'naltirildi`. `[sheet] UNKNOWN: to'lov ustunli sheet ulanmagan`: tekshiradigan sheet yo'q. `ko'prik: o'chirilgan`: bot ko'prikni chaqirmagan.
 - STATUS: `OK` farq yo'q; `WARN` kamida bitta warn farq yoki natija `qisman`; `ERROR` kamida bitta error farq; `UNKNOWN` manba javob bermagan. `UNKNOWN` asosiy sabablari (`contract.py::TOLOV_SABAB_*`): `o'chirilgan` (eski CRM yo'li: `AGENTS_TOLOV_CRM` default `0`), `kalit yo'q`, `manzil yaroqsiz`, `vaqt tugadi` (umumiy deadline), `kunlik cheklov tugadi`, `so'rov chegarasi` (7 ta), `kirish o'qilmadi`, `baza javob bermadi` (ortidan xato matni bo'lishi mumkin). Boshqa matn ham keladi: CRM'da `HTTP <kod>`, `timeout` (bitta GET), `javob JSON emas`, `javob 5 MB dan katta`, `redirect taqiqlangan (<kod>)`, `boshqa hostga yo'naltirildi`, tarmoq xatosi (`<Xato>: <sabab>`); baza bo'limida SQL xato matni; `[solishtirish] UNKNOWN: tekshiruv yiqildi: <Xato>`. Bunday matn aynan keltiriladi, sabab to'qilmaydi.
 - `[crm] UNKNOWN` bo'lsa to'lov darajasidagi CRM kodlari (`CRM_YOQ`, `BIZDA_YOQ`, `SPLIT_FARQ`) hisoblanmaydi. `[crm_panel]` ishlagan bo'lsa CRM jami solishtirilgan (`CRM_FARQ`), faqat har to'lov alohida juftlanmagan. Ikkalasi ham `UNKNOWN` bo'lsa "CRM mos" DEMA: "CRM tekshirilmadi".
-- Farq qatori: `F<n> KOD | sana | summa | dalil | izoh | sabab: ... | tuzatish: ...` (`sabab:` faqat `SHEET_YOQ`, `SHEET_FARQ` da). Dalil: `okv=`, `tx=`, `crm=` yoki `ariza=` va qisqa ID; `KANONIK_EMAS` da `<bizdagi> ≈ <CRM kanonik>`; `CRM_FARQ` da shartnoma; `SHEET_*` da `<shartnoma> sheet=<nomi>`; dalil bo'lmasa `-`. `CRM_FARQ` summasi = CRM jami - OplatyKv jami; `SHEET_FARQ` summasi = sheet jami - OplatyKv jami; `SHEET_YOQ` summasi = OplatyKv jami.
+- Farq qatori: `F<n> KOD | sana | summa | dalil | izoh | sabab: ... | tuzatish: ...` (`sabab:` faqat `SHEET_YOQ`, `SHEET_FARQ`, `XONPAY_KUTILMOQDA`, `XONPAY_KECHIKDI` va bank sync `BIZDA_YOQ` da). Dalil: `okv=`, `tx=`, `crm=`, `ariza=` yoki `xonpay=` (UUID 8 belgi) va qisqa ID; `KANONIK_EMAS` da `<bizdagi> ≈ <CRM kanonik>`; `CRM_FARQ` da shartnoma; `SHEET_*` da `<shartnoma> sheet=<nomi>`; dalil bo'lmasa `-`. `CRM_FARQ` summasi = CRM jami - OplatyKv jami; `SHEET_FARQ` summasi = sheet jami - OplatyKv jami; `SHEET_YOQ` summasi = OplatyKv jami.
 - Jadval sarlavhasi `sana | summa | tur | CRM | OKV | TX | moslik | kod`. Ustunlar:
 
 | Ustun | Qiymat |
@@ -152,7 +223,7 @@ Kodlar `agents/contract.py::TOLOV_FARQ_KODLARI` bilan bir xil. "Odatiymi" = ha b
 | `KANONIK_EMAS` | warn | skelet mos, satr farqli | qo'lda yoki ariza bilan kanonik bo'lmagan raqam (`approve` kanonikka o'tkazmaydi) | xodim: tx shartnomasini CRM shakliga (`set-contract`, `categories:manage`); OplatyKv sync bilan tenglashadi | yo'q |
 | `BOSHQA_SHARTNOMA` | warn | CRM'da shu to'lov boshqa shartnomada yoki izohdagi raqam boshqa tx'da. 2-3 shartnoma so'ralganda izohda `CRM'da <B> ostida, bizda <A>` | operator boshqa shartnomaga kiritgan, dublikat raqam, izohda xato | qaysi to'g'riligini egasi hal qiladi; bizda tx shartnomasi (`set-contract`); CRM'da bo'lsa CRM operatori | yo'q |
 | `CRM_YOQ` | error | bizda bor, CRM'da jufti yo'q | bizning qator feed'da faol emas (XATO yoki split yo'q), CRM hali olmagan, operator o'chirgan | avval bizda: XATO yoki split tuzatilsa feed CRM'ga beradi. Qator faol bo'lsa CRM operatori. Biz CRM'ga yozmaymiz | yo'q |
-| `BIZDA_YOQ` | error | CRM'da bor, bizda yo'q | naqd (`is_received_from_bank=false`), raqam ajratilmagan, reinvest yoki fiktiv, `txMinDate` dan oldin, bank o'chirgan; izohda `CRM dublikat (external_id takror)` bo'lsa bir to'lov CRM'da ikki marta yozilgan (CRM operatori) | bankda bormi: Sverka (Kapital, Ipak) yoki `/tolov <summa> <sana>`; tx bor, CLIENT emas bo'lsa kategoriya (`categories:manage`) | naqdda ha |
+| `BIZDA_YOQ` | error | CRM'da bor, bizda yo'q (XonPay yo'ldagi to'lov bu kod emas: `XONPAY_*`). Panel yo'lida CRM `Внешний ID` bank kompoziti, bizning `transactions` da yo'q: `sabab: CRM: bizga tushgan (<sana> kompozitda), ... — bank sync` (2.1) | naqd (`is_received_from_bank=false`), raqam ajratilmagan, reinvest yoki fiktiv, `txMinDate` dan oldin, bank o'chirgan; izohda `CRM dublikat (external_id takror)` bo'lsa bir to'lov CRM'da ikki marta yozilgan (CRM operatori) | bankda bormi: Sverka (Kapital, Ipak) yoki `/tolov <summa> <sana>`; tx bor, CLIENT emas bo'lsa kategoriya (`categories:manage`) | naqdda ha |
 | `OKV_YOQ` | error | tx CLIENT + shartnoma, OplatyKv qatori yo'q | avto-sync o'chiq yoki ishlamagan, `createMany` bo'lagi yiqilgan | xodim: `POST /oplata-kv/sync-now` (`oplatakv:sync`) yoki bitta to'lov `POST /oplata-kv/add-from-tx` (`oplatakv:split`) | yo'q |
 | `TX_YOQ` | error | OplatyKv bank qatori, tx yo'q (yetim) | bank o'chirgan (DELETED kaskadi), sana ko'chib eski nusxa qolgan (2026-09-24 gacha) | noto'g'ri o'chgan bo'lsa O'zgargan to'lovlar > Tiklash (`changed_txn:check`, `changed_txn:restore`); yetim dublikat: egasi qarori | yo'q |
 | `SUMMA_FARQ` | error | juft, summa farqli | bank summani o'zgartirgan (EDITED), qo'lda tahrir, kuchsiz juft | bank EDITED: keyingi sync kaskad qiladi; qolsa qo'lda tekshirish | yo'q |
@@ -169,6 +240,8 @@ Kodlar `agents/contract.py::TOLOV_FARQ_KODLARI` bilan bir xil. "Odatiymi" = ha b
 | `OKV_OCHIRILGAN` | warn | `oplata_kv_history` da `deleted` yoki shartnoma tozalangan | kaskad o'chirish, qo'lda o'chirish, shartnomani bo'shatish (`contract_no='xato'`) | tarixni ko'rish: `GET /oplata-kv/:id/history` (kim, qachon) | yo'q |
 | `SHEET_YOQ` | warn | OplatyKv'da to'lov bor, sheetda shartnoma qatori topilmadi (`matchedRows` 0) | 7.1 sabab kodlari: eksport filtri, `dateFrom`, eksport eskirgan, XATO | `sabab:` bo'yicha (7.1); umumiy: `eksport eskirgan bo'lishi mumkin: Admin > Export > <sheet nomi> > Bajarish` | filtrda ha |
 | `SHEET_FARQ` | warn | sheet summasi OplatyKv'dan farq qiladi; izohda qaysi ustunda qancha: `sheet - OKV: <ustun> <farq>` | 7.1 sabab kodlari; sheetga qo'lda qator qo'shilgan | `sabab:` bo'yicha (7.1); sheet bo'limida `sheetda yo'q:` (OplatyKv'da bor, sheetda yo'q to'lovlar) va `OplatyKv'da yo'q:` (sheet qatorlari) | filtrda ha |
+| `XONPAY_KECHIKDI` | warn | XonPay to'lovi Billing'da tushmagan, `date_paid` dan 3 bank ish kunidan ko'p o'tgan. `sabab: <N> ish kunidan beri tushmagan: Billing > Tekshirish, XonPay sync va XonPay bilan tekshirish` | XonPay pulni o'tkazmagan; bank izohida UUID yo'q (Billing moslay olmagan); XonPay sync ishlamagan | xodim: OplatyKv > Billing > Tekshirish (`crm:view`), XonPay sync; kelmasa XonPay bilan tekshirish. Egasiga aytiladi (2.1) | yo'q |
+| `XONPAY_KUTILMOQDA` | info | XonPay to'lovi CRM'da bor, Billing'da hali tushmagan, ≤ 3 bank ish kuni. `sabab: XonPay orqali to'langan <sana>, pul hali bizning hisobga tushmagan; odatda 1-3 ish kunida o'tadi` | egasi qoidasi: XonPay pulni 1-3 bank ish kunida o'tkazadi (2.1) | kerak emas: tushgach Tranzaksiyalar, OplatyKv va xonadonda avtomat ko'rinadi | ha |
 | `ARIZA_KUTMOQDA` | info | `xato_correction_requests` `status='pending'` | tuzatish arizasi berilgan | ariza tasdig'ini kutish (`/correction/:id/approve`, `categories:manage`) | ha |
 | `SANA_SILJIGAN` | info | juft, sana 1-3 kun farqli | Hamkor settlement, XonPay, bank ko'chirishi | kerak emas | ha |
 | `CRM_SPLIT` | info | panel yo'li: CRM va OplatyKv jami va to'lovlari mos, faqat boshlang'ich/oylik taqsimoti farqli. Izoh: `CRM bosh. <n>, oylik <n>; OKV bosh. <n>, oylik <n>` | CRM to'lovni turi bo'yicha (butun summa bosh. yoki oylik), bizda reja waterfall bo'yicha bo'lingan (bitta to'lov ikkala qismga) | kerak emas; CRM bo'linishi kerak bo'lsa XATO → CRM > Split (`applyCrmSplit`). Qaysi to'lov: `[crm_panel]` ostida `split farqi:` | ha |
@@ -260,6 +333,11 @@ Muhim tuzoqlar:
 - To'g'ri: "Debitorlik faqat MONTHLY va FIRST qatorlarni oladi. Bu to'lov split qilinmagan, shuning uchun sheetga tushmaydi. Split qilinsa keyingi eksportda chiqadi."
 - Noto'g'ri: "Eksportni qayta ishga tushiring" (filtr sabab bo'lsa qayta eksport yordam bermaydi).
 
+**9) XonPay yo'lda.** Blok: `[kirish] OK: XonPay UUID bc843be4-83ed-419f-9330-09068d16df2d: KUTILMOQDA (to'langan 2026-09-28, 10 000 000; 1 ish kuni o'tdi (chegara 3, bayramlar hisobga olinmagan)); shartnoma 224VHA26E4 (bazadan)`, `[xonpay] OK: ...; tushgan 5, kutilmoqda 1, kechikdi 0; yo'lda 10 000 000 ...`, `[crm_panel] OK: ...; XonPay yo'lda 1 ta, 10 000 000 (bizda hali yo'q, solishtirilmaydi)`, `F1 XONPAY_KUTILMOQDA | 2026-09-28 | 10 000 000 | xonpay=bc843be4 | 1 ish kuni o'tdi (chegara 3, bayramlar hisobga olinmagan) | sabab: XonPay orqali to'langan 2026-09-28, ...`.
+- To'g'ri (guruhga): "Bu to'lov XonPay orqali qilingan (28.09, 10 000 000 so'm). Pul hali bizning hisobga tushmagan, XonPay 1-3 ish kunida o'tkazadi. Tushgach xonadonda avtomat ko'rinadi."
+- Noto'g'ri: "To'lov bizda yo'q, bank yo'qotgan" yoki "CRM bilan 10 000 000 farq bor".
+- `XONPAY_KECHIKDI` bo'lsa (masalan juma to'lovi, keyingi payshanba): "3 ish kunidan oshdi, pul hali kelmagan. OplatyKv > Billing > Tekshirish; kelmasa XonPay bilan tekshirish kerak." Bu egasiga aytiladi.
+
 ## 10. Nima qilinmaydi
 - CRM'ga yozish yo'q. Bot faqat GET qiladi (ko'prikda ham faqat `payment-check` va `exports`; Sheets'ga yozadigan `exports/:id/run` chaqirilmaydi), agent CRM'ga umuman ulanmaydi. Hech bir kod "CRM'da tuzat" amalini bot yoki agentga bermaydi: faqat "CRM operatori ishi" deyiladi.
 - Bot ham, agent ham tuzatmaydi. Tekshiruv tushuntiradi va tuzatish yo'lini aytadi. So'ralmagan tuzatish yo'q: tuzatish panelda yoki Support REJAsi orqali.
@@ -298,12 +376,16 @@ Muhim tuzoqlar:
 - Ko'prik muddati 90 s (CRM show sekin), prefetch boshidan 100 s gacha; Leader tashqarida 120 s kutadi. Ko'prik kaliti faqat header'da, logga, xato matniga va blokka tushmaydi. Proxy ishlatilmaydi (nginx headerlari bo'lsa ko'prik 403 beradi).
 - Ko'prik sheet to'lovlariga sana bermaydi (faqat qator raqami): `oxirgi to'lov ~<sana>` va `sheetda yo'q` OplatyKv bilan summa bo'yicha juftlab topilgan, aniq emas.
 - Ko'prik OplatyKv'ni aniq `contract_no` bo'yicha oladi, `[oplata_kv]` esa variantlar (O/0, I/1, `/SH`) bilan: XATO shakldagi qator `[panel_solishtirish]` ga kirmaydi.
+- XonPay ish kuni hisobi bayramlarni bilmaydi, faqat shanba va yakshanba chiqariladi (egasi qarori 2026-09-29: hozircha yetarli). Izohda `bayramlar hisobga olinmagan` turadi. Bayram atrofida `XONPAY_KECHIKDI` erta chiqishi mumkin, sanani ayt.
+- XonPay sync 07-23 da ishlaydi: yangi XonPay to'lovi Billing'ga kelguncha Billing'da yo'q. Panel CRM to'lovida `externalId` UUID bo'lsa u baribir XonPay deb aniqlanadi (`Billing'da hali yo'q`, 2.1). `externalId` `null` bo'lsa summa+sana ham topolmaydi: u `CRM_FARQ` bo'lib chiqishi mumkin.
 - Sheet summasi panel mantiqida: ulanmagan ustun 0 bo'ladi (masalan faqat jami ustuni bo'lsa bosh. va oylik 0), `SHEET_FARQ` shu ustunda chiqishi mumkin.
 
 ## Tez-tez qilinadigan o'zgarishlar
 | Vazifa | Qayerda |
 |---|---|
 | Yangi farq kodi | 3 joy birga: `payment_check.py` (`juftla`), `contract.py::TOLOV_FARQ_KODLARI` va `TOLOV_FARQ_TUZATISH`, shu fayl 7-bo'lim; `checker.md` kodlar ro'yxati ham |
+| XonPay chegarasi yoki matni | `contract.py::TOLOV_XONPAY_*` (ish kuni chegarasi 3, matnlar), `payment_check.py::xonpay_qatorlari`, `ish_kunlari`, shu fayl 2.1, `checker.md` |
+| Ko'prik CRM to'lovi maydonlari (`externalId`, `method`) | backend `agent-bridge.types.ts::BridgeCrmPayment` ↔ `payment_check.py::_koprik_parse`, `_crm_tasnif`, `_komp_qidir`; `contract.py::TOLOV_KOMPOZIT_*`, `TOLOV_TUZ_BANK_SYNC`; shu fayl 2.1 |
 | Yangi obyekt kodi | `backend/src/categorization/contract-parser.ts::OBJECT_CODES` va `payment_check.py` dagi nusxa, shu fayl 4-bo'lim |
 | CRM param yoki maydon o'zgarishi | `payment_check.py` allowlist (`_crm_get`), `crm.service.ts::paymentsByContract`, shu fayl 1-bo'lim va Xavfli joylar |
 | Chegaralar (so'rov soni, kunlik, kesh) | `contract.py::TOLOV_*`, env `AGENTS_TOLOV_CRM_KUNLIK` |

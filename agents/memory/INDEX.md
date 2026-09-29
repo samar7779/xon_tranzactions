@@ -92,7 +92,7 @@ Facts kalitlari (`agents/state/support_facts.json`, bir yozuv = bir qator, Grep 
 - "Deploy o'tdimi, tuzatish serverga yetdimi?" → `deploy` (`head`, `manba`, `deploys[].natija/xatolar`) + `system.services.<nom>.ishga_tushgan`.
 - "Men bergan vazifa yoki va'da qani?" → `agent_tasks.tasks` va `agent_tasks.promises`. Topilmasa: "Yo'q, topilmadi."
 - `updated_at` 15 daqiqadan eski bo'lsa ayt; yoshni faqat `[HOZIRGI VAQT ...]` qatoridan hisobla.
-- "Shu shartnoma yoki to'lov to'g'rimi?" → Facts'da yo'q: checker `payment_check` yoki `/tolov`.
+- "Shartnoma yoki to'lov (XonPay UUID ham) to'g'rimi?" → Facts'da yo'q: `payment_check` yoki `/tolov`.
 - Bo'limda `error` bo'lsa: "facts'da bu bo'lim xato berdi: <error>" de, taxmin qilma.
 - "Nega shunday qilingan?" → `CHANGELOG.md` 2-bo'lim, keyin modul fayli.
 - Kalit Facts'da yo'q bo'lsa: DIAGNOSTIKAda faqat "<kalit> facts'da yo'q" de. `support_facts.py`ga yangi bo'lim REJAsi faqat egasi "qo'sh" yoki "tuzat" desa.

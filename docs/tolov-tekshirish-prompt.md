@@ -35,10 +35,55 @@ Qo'shimcha:
 - Hammasini bir ekranda solishtirish: **Chek order → to'lov tekshiruvi** tabi (`/uz/chek-order`).
   U OplatyKv, CRM va sheetlarni yonma-yon ko'rsatadi, 200 tagacha shartnoma.
 - Bank bilan solishtirish (sverka): `/uz/check`. CRM ↔ OplatyKv kesimi: `/uz/check-crm`.
-- XonPay to'lovlari: `xonpay_transactions` (CRM'dagi XonPay qismi).
+- XonPay to'lovlari va ular bizga tushgan-tushmagani: **OplatyKv → Billing** (`/uz/oplatykv/billing`),
+  bazada `xonpay_transactions` (1.1-bo'lim).
 
 **Muhim:** sheetlar bizning OplatyKv'dan eksport qilinadi. Sheetda to'lov yo'q bo'lsa, sabab deyarli
 har doim eksport tomonda (filtr yoki eksport hali ishlamagan), CRM yoki bank tomonda emas.
+
+## 1.1 XonPay: pul bizning hisobga tushganmi (eng ko'p uchraydigan holat)
+
+XonPay — mijozlar ilovasi. Mijoz shartnomaga XonPay orqali to'lasa, to'lov **darhol CRM'da ko'rinadi**,
+lekin pul avval **XonPay'ning hisob raqamiga** tushadi, bizning korxona hisobiga emas. Bizning hisobga
+**1-3 bank ish kuni** ichida o'tadi. Shu oraliqda to'lov CRM'da bor, lekin Tranzaksiyalar, OplatyKv va
+xonadon (sheetlar) da hali yo'q. Bu xato emas.
+
+Qanday aniqlanadi: CRM'da to'lovni ochib ("Редактировать оплату") **Способ** va **Внешний ID** ga qaraladi.
+
+| Способ | Внешний ID | Ma'nosi |
+|---|---|---|
+| Xon Pay | UUID: `bc843be4-83ed-419f-9330-09068d16df2d` | XonPay'da, bizga **hali tushmagan** — kutiladi |
+| Xon Pay yoki boshqa | bizning kompozit: `3734765350_2730_22.12.2025_20208000305742909002_22696000905500044001_200000000_-` | bizning hisobga **tushgan** — shu ID Tranzaksiyalarda bo'lishi shart |
+
+- Kompozit ID tuzilishi: `tranzaksiya ID _ raqam _ tushgan sana _ hisob (kredit) _ hisob (debet) _ summa tiyinda _ belgi`.
+- UUID holatida sanadan 3 bank ish kunidan oshgan bo'lsa: XonPay'dan kelmay qolgan, egasiga ayt
+  (XonPay sync va XonPay bilan tekshirish).
+- Kompozit ID bor-u, Tranzaksiyalarda yo'q: bizning bank sync muammosi.
+- Guruhga: "Bu to'lov XonPay orqali qilingan (DD.MM). Pul hali bizning hisobga tushmagan, XonPay 1-3 ish
+  kunida o'tkazadi. Tushgach xonadonda avtomat ko'rinadi."
+- Misollar: `224VHA26E4` (28.09, XonPay 10 mln), `6326MSO25HN`.
+
+**Eng tez tekshirish joyi — OplatyKv → Billing** (`/uz/oplatykv/billing`):
+- Bu XonPay orqali qilingan barcha to'lovlar ro'yxati. Qidiruv: shartnoma, F.I.O. yoki **UUID**.
+- Holat: **TOPILMAGAN** — pul hali bizning hisobga tushmagan; tushgan bo'lsa bank tranzaksiyasi (TX) bilan
+  bog'langan bo'ladi. "Tekshirish" tugmasi shu to'lovni qaytadan bank bilan solishtiradi.
+- Qanday bog'lanadi: CRM to'lovi izohida `XONPAY:(UUID)` bo'ladi. XonPay pulni bizning hisobga
+  o'tkazganda, bank tranzaksiyasi izohida ham shu UUID turadi. Tizim UUID'ni bizning tranzaksiyalardan
+  qidiradi, topsa "tushgan" qiladi va bank kompozit ID'sini yozadi.
+- XonPay sync har kuni 07:00–23:00 oralig'ida avtomatik ishlaydi.
+- Bazada: `xonpay_transactions` jadvali (`xonpay_uuid`, `contract`, `amount`, `date_paid`, `is_matched`,
+  `matched_external_id`, `matched_date`).
+
+```sql
+-- XonPay: shartnoma yoki UUID bo'yicha, tushgan-tushmagani
+SELECT date_paid, amount, xonpay_uuid, is_matched, matched_date, matched_external_id, last_checked_at
+  FROM xonpay_transactions
+ WHERE upper(contract) = '6326MSO25HN'            -- yoki: xonpay_uuid = 'bc843be4-83ed-419f-9330-09068d16df2d'
+ ORDER BY date_paid DESC;
+```
+
+Chekdagi raqamni doim CRM bilan solishtir: masalan memorial orderda "dog №224VHA26EA" yozilgan,
+CRM'dagi haqiqiy raqam `224VHA26E4` (A va 4 aralashgan). Chekdagi qabul qiluvchi hisob bizniki ekanini ham tekshir.
 
 ## 2. Tekshirish tartibi
 
@@ -61,7 +106,7 @@ har doim eksport tomonda (filtr yoki eksport hali ishlamagan), CRM yoki bank tom
 
 | Belgi | Sabab | Yechim |
 |---|---|---|
-| CRM'da bor (XonPay), bankda va OplatyKv'da yo'q | XonPay pulni bankka **bank ish kunida** o'tkazadi; dam olish kunida tushmaydi | Kutiladi. Tushgach avtomat ko'rinadi. Guruhga: "bank hali o'tkazmagan, ish kunida tushadi" |
+| CRM'da bor (Способ = Xon Pay, Внешний ID = UUID), bankda va OplatyKv'da yo'q | Pul XonPay hisobida, bizga **1-3 bank ish kunida** o'tadi; dam olish kunida tushmaydi | Billing'da UUID bo'yicha holatini ko'r (TOPILMAGAN = hali tushmagan). 3 ish kunigacha kutiladi, oshsa XonPay bilan tekshiriladi. Guruhga: "XonPay orqali to'langan, pul hali bizga tushmagan, ish kunida tushadi" |
 | Chekda bor, Tranzaksiyalarda yo'q | Bank sync kechikkan yoki yiqilgan; yoki bank to'lov sanasini ko'chirgan | Admin → Sync tarixi (`/uz/admin/sync-logs`), sverka. Sana ±3 kun ichida qidir |
 | Tranzaksiyada bor, OplatyKv'da **XATO** | Izohda shartnoma raqami yo'q yoki noto'g'ri | OplatyKv → **XATO → CRM**: CRM'dan topib biriktirish (yoki XATO tuzatish arizasi, 2 bosqichli tasdiq) |
 | Chekdagi raqam CRM'dagidan farq qiladi (masalan `528MSO25WY` va `5282MSO25WY`) | Chekda ma'lumot xatosi | CRM'dagi to'g'ri (kanonik) raqamni ko'rsat; tx shartnomasini kanonik shaklga o'tkazish |

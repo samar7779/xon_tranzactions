@@ -95,7 +95,7 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 - Egasi shartnoma yoki to'lovni tekshirishni, CRM bilan solishtirishni so'rasa: `intent: payment_check`, `delegate_to: checker`.
 - `task_for_agent` ning BIRINCHI qatori mashina qatori, keyin oddiy topshiriq. To'rt shakl:
   - `TOLOV: shartnoma=821ZUR23V1` (3 tagacha, vergul bilan: `shartnoma=A,B,C`)
-  - `TOLOV: id=<kompozit ID, general_id yoki tx cuid>`
+  - `TOLOV: id=<kompozit ID, general_id yoki tx cuid>` (XonPay to'lovi UUID si ham: `id=bc843be4-83ed-419f-9330-09068d16df2d`)
   - `TOLOV: summa=6150000 sana=YYYY-MM-DD` (summa faqat raqam, bo'shliqsiz; `kun=N` ixtiyoriy)
   - `TOLOV: mijoz=<familiya ism>` (faqat egasi ismni o'zi yozgan bo'lsa)
 - Raqam va ID'ni egasi yozgandek ko'chir, "tuzatma". Qator bo'lmasa bot shartnomani matndan izlaydi, bu ishonchsiz.
@@ -104,7 +104,7 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 - Synth'da jamilarni (CRM, OplatyKv, bank) va har farqni qisqartirma: sana, summa, sabab, kim tuzatadi. `UNKNOWN` manbani "mos" dema.
 - Bu qoida synth topshirig'idagi "qisqa ayt" ko'rsatmasidan va yuqoridagi "natijani qisqartir" qoidasidan ustun. Qisqa faqat ohang va jumla, mazmun to'liq.
 - Synth topshirig'ida intent yo'q. Checker natijasida CRM, OplatyKv va bank jamilari bo'lsa yoki `OXIRGI SUHBAT`dagi so'nggi so'rov to'lov tekshiruvi bo'lsa, shu qoida amal qiladi.
-- Egasi `/tolov <shartnoma | ID | summa sana | mijoz ism>` yozsa, bot LLM'siz jadval beradi, sen chaqirilmaysan. Tarixda `/tolov ...` va `To'lov tekshiruvi <shartnoma>: CRM ...; OplatyKv ...; bank ...; farq: ...` qatori qoladi. Nomzod ko'p bo'lsa: `To'lov tekshiruvi <kirish>: N nomzod, shartnoma tanlanmadi`. Keyin "farqini tushuntir" desa: `payment_check`, o'sha shartnoma bilan.
+- Egasi `/tolov <shartnoma | ID | XonPay UUID | summa sana | mijoz ism>` yozsa, bot LLM'siz jadval beradi, sen chaqirilmaysan. Tarixda `/tolov ...` va `To'lov tekshiruvi <shartnoma>: CRM ...; OplatyKv ...; bank ...; farq: ...` qatori qoladi. Nomzod ko'p bo'lsa: `To'lov tekshiruvi <kirish>: N nomzod, shartnoma tanlanmadi`. Keyin "farqini tushuntir" desa: `payment_check`, o'sha shartnoma bilan.
 
 ## 6. Kod o'zgarishi qanday ishlaydi
 

@@ -552,7 +552,7 @@ TOLOV_TOPSHIRIQ_RE = re.compile(r"(?im)^\s*TOLOV:\s*(.+)$")
 TOLOV_BLOK_BOSH = "=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ==="
 TOLOV_BLOK_OXIR = CHECKER_BLOK_OXIR  # "=== TUGADI ===" (ikki blok bir topshiriqda birga kelmaydi)
 TOLOV_KOMPONENTLAR: Tuple[str, ...] = (
-    "kirish", "crm_kesh", "crm", "crm_xonpay", "crm_panel", "oplata_kv", "sheet", "transactions", "bank_izi",
+    "kirish", "crm_kesh", "crm", "crm_panel", "oplata_kv", "sheet", "transactions", "xonpay", "bank_izi",
     "kontekst", "solishtirish", "panel_solishtirish", "farqlar", "tolovlar", "nomzodlar",
 )
 TOLOV_JADVAL_SARLAVHA = "sana | summa | tur | CRM | OKV | TX | moslik | kod"
@@ -647,6 +647,40 @@ TOLOV_EKSPORT_ESKI_TPL = "eksport oxirgi marta {vaqt} da ishlagan ({holat}), cro
 TOLOV_EKSPORT_HECH_TPL = "eksport hech ishlamagan, cron: {cron}"
 TOLOV_SABAB_ANIQLANMADI = "aniqlanmadi"
 
+# XonPay (egasi qoidasi, 2026-09-29): mijoz XonPay ilovasi orqali to'lasa to'lov darhol CRM'da ko'rinadi, pul
+# esa XonPay hisobiga tushib, bizning hisobga 1-3 BANK ISH KUNI ichida o'tadi. Manba: xonpay_transactions
+# (panel OplatyKv > Billing). Ish kuni = dushanba-juma, Toshkent sanasi; bayramlar hisobga olinmaydi.
+TOLOV_XONPAY_ISH_KUNI = 3                         # shundan ko'p ish kuni tushmasa KECHIKDI
+TOLOV_XONPAY_SANA_OYNA = 1                        # CRM to'lovi <-> Billing qatori: summa teng, sana +-1 kun
+TOLOV_XONPAY_QATOR_MAX = 8                        # [xonpay] ostidagi qatorlar (sarlavhasiz)
+TOLOV_XONPAY_TUSHGAN_MAX = 3                      # ulardan tushganlari (eng yangilari)
+TOLOV_XONPAY_HOLATLAR: Tuple[str, ...] = ("TUSHGAN", "KUTILMOQDA", "KECHIKDI")
+TOLOV_XONPAY_SARLAVHA = "sana | summa | uuid | holat | izoh"
+TOLOV_XONPAY_KUTILMOQDA_TPL = (
+    "XonPay orqali to'langan {sana}, pul hali bizning hisobga tushmagan; odatda 1-3 ish kunida o'tadi"
+)
+TOLOV_XONPAY_KECHIKDI_TPL = (
+    "{n} ish kunidan beri tushmagan: Billing > Tekshirish, XonPay sync va XonPay bilan tekshirish"
+)
+TOLOV_XONPAY_IZOH_TPL = "{n} ish kuni o'tdi (chegara {chegara}, bayramlar hisobga olinmagan)"
+TOLOV_XONPAY_YOQ = "XonPay to'lovi yo'q"
+# Panel ko'prigi CRM to'lovida Внешний ID (externalId) va Способ (method): UUID + "Xon Pay" = XonPay to'lovi.
+# Billing'da hali bo'lmasa (sync 07-23) holat CRM sanasidan hisoblanadi, izohga shu belgi qo'shiladi.
+TOLOV_XONPAY_BILLINGSIZ = "Billing'da hali yo'q"
+TOLOV_XONPAY_BILLING_OQILMADI = "Billing o'qilmadi"
+# Внешний ID bizning bank kompoziti (egasi qoidasi: pul bizga tushgan), lekin bizning transactions'da yo'q
+TOLOV_KOMPOZIT_YOQ_TPL = "CRM: bizga tushgan ({sana} kompozitda), bizning Tranzaksiyalarda yo'q — bank sync"
+TOLOV_TUZ_BANK_SYNC = "bank sync: Sync sahifasi yoki Sverka; sana ko'chgan bo'lsa O'zgargan to'lovlar"
+TOLOV_KOMPOZIT_QIDIRUV_MAX = 30                   # bizda topilmagan kompozitlar: bitta qo'shimcha SELECT
+TOLOV_XONPAY_TOPILMADI = (
+    "UUID xonpay_transactions'da ham, bank izohida ham yo'q: XonPay sync hali olmagan bo'lishi mumkin (07-23)"
+)
+# Guruhga javob namunasi (checker.md va bilim faylida harfma-harf): DD.MM va N o'rniga blokdagi qiymat
+TOLOV_XONPAY_GURUH_JAVOB = (
+    "Bu to'lov XonPay orqali qilingan (DD.MM, N so'm). Pul hali bizning hisobga tushmagan, XonPay 1-3 ish kunida"
+    " o'tkazadi. Tushgach xonadonda avtomat ko'rinadi."
+)
+
 # UNKNOWN sabablari (blokda "[crm] UNKNOWN: <sabab>")
 TOLOV_SABAB_OCHIRILGAN = "o'chirilgan"
 TOLOV_SABAB_KALIT_YOQ = "kalit yo'q"
@@ -684,6 +718,8 @@ TOLOV_FARQ_KODLARI: Dict[str, str] = {
     "OKV_OCHIRILGAN": "warn",
     "SHEET_YOQ": "warn",
     "SHEET_FARQ": "warn",
+    "XONPAY_KECHIKDI": "warn",
+    "XONPAY_KUTILMOQDA": "info",
     "ARIZA_KUTMOQDA": "info",
     "SANA_SILJIGAN": "info",
     "CRM_SPLIT": "info",
@@ -721,6 +757,8 @@ TOLOV_FARQ_TUZATISH: Dict[str, str] = {
     "OKV_OCHIRILGAN": "tarixni ko'rish: kim, qachon",
     "SHEET_YOQ": TOLOV_TUZ_SHEET_TPL.format(sheet="<sheet nomi>"),    # blokda haqiqiy nom bilan
     "SHEET_FARQ": TOLOV_TUZ_SHEET_TPL.format(sheet="<sheet nomi>"),
+    "XONPAY_KECHIKDI": "OplatyKv > Billing > Tekshirish, XonPay sync; kelmasa XonPay bilan tekshirish",
+    "XONPAY_KUTILMOQDA": "kutish: XonPay 1-3 ish kunida o'tkazadi, tushgach avtomat ko'rinadi",
     "ARIZA_KUTMOQDA": "ariza tasdig'ini kutish (correction)",
     "SANA_SILJIGAN": "odatiy (Hamkor settlement, XonPay)",
     "CRM_SPLIT": "odatiy: CRM turi bo'yicha, bizda reja waterfall; kerak bo'lsa XATO → CRM > Split",
@@ -735,7 +773,7 @@ TOLOV_FARQ_TUZATISH: Dict[str, str] = {
 
 # /tolov (LLM'siz). Toza lotin, emoji yo'q.
 MSG_TOLOV_FOYDALANISH = (
-    "Foydalanish: /tolov <shartnoma> (3 tagacha, vergul bilan), /tolov <to'lov ID>, "
+    "Foydalanish: /tolov <shartnoma> (3 tagacha, vergul bilan), /tolov <to'lov ID>, /tolov <XonPay UUID>, "
     "/tolov <summa> <sana>, /tolov mijoz <familiya ism>.\n"
     "Misol: /tolov 821ZUR23V1 yoki /tolov 6150000 2026-09-20"
 )

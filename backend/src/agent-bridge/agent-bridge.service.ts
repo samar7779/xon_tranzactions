@@ -138,6 +138,8 @@ export class AgentBridgeService implements OnModuleInit {
         amount: num(p?.amount),
         kind: p?.kind === 'initial' ? 'initial' : 'monthly',
         type: strOrNull(p?.type),
+        externalId: strOrNull(p?.externalId),       // Внешний ID: XonPay UUID yoki bank kompoziti
+        method: strOrNull(p?.method),               // Способ: masalan "Xon Pay"
       })),
     };
     if (c.viaPaymentHistory === true) out.viaPaymentHistory = true;

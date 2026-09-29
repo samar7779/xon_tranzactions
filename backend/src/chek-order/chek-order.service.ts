@@ -421,6 +421,9 @@ export class ChekOrderService {
           amount: toNum(p.amount) || 0,
           kind: crmKindOf(p.type, crmRu(p.type)),
           type: crmRu(p.type) || null,
+          // Внешний ID va Способ: XonPay UUID (hali tushmagan) yoki bizning bank kompoziti (tushgan)
+          externalId: String(p.external_id ?? '').trim() || null,
+          method: crmRu(p.payment_method) || null,
         }));
         // Split: INDEX qatorlarida initial_amount/monthly_amount alohida bo'lsa AYNAN
         // shuni ishlatamiz (aralash to'lov to'g'ri taqsimlanadi); aks holda kind bo'yicha.
@@ -453,6 +456,8 @@ export class ChekOrderService {
         amount: toNum(h.amount) || 0,
         kind: crmKindOf(h.type, crmRu(h.type)),
         type: crmRu(h.type) || null,
+        externalId: String(h.external_id ?? '').trim() || null,
+        method: crmRu(h.payment_method) || null,
       }));
       const histInitial = payments.filter((p) => p.kind === 'initial').reduce((a, p) => a + p.amount, 0);
       const histMonthly = payments.filter((p) => p.kind === 'monthly').reduce((a, p) => a + p.amount, 0);
@@ -474,7 +479,7 @@ export class ChekOrderService {
         const rows = await this.crm.paymentsByContract(cn).catch(() => [] as any[]);
         if (rows.length) {
           let li = 0, lm = 0;
-          const lpay = rows.map((p: any) => ({ date: toDay(p.date_paid ?? p.date), amount: toNum(p.amount) || 0, kind: crmKindOf(p.type, crmRu(p.type)), type: crmRu(p.type) || null }));
+          const lpay = rows.map((p: any) => ({ date: toDay(p.date_paid ?? p.date), amount: toNum(p.amount) || 0, kind: crmKindOf(p.type, crmRu(p.type)), type: crmRu(p.type) || null, externalId: String(p.external_id ?? '').trim() || null, method: crmRu(p.payment_method) || null }));
           for (const p of rows as any[]) {
             const ia = toNum(p.initial_amount); const ma = toNum(p.monthly_amount);
             if (ia != null || ma != null) { li += ia || 0; lm += ma || 0; }

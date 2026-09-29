@@ -13,6 +13,8 @@ export interface BridgeOplataPart {          // chek-order.service oplatakvBatch
 
 export interface BridgeCrmPayment {
   date: string | null; amount: number; kind: 'initial' | 'monthly'; type: string | null;
+  externalId: string | null;                 // CRM Внешний ID (XonPay UUID yoki bizning bank kompoziti)
+  method: string | null;                     // CRM Способ (masalan "Xon Pay")
 }
 export type BridgeCrmPart =                  // crmPaymentPart() shakli, `debug` OLIB TASHLANGAN
   | {
