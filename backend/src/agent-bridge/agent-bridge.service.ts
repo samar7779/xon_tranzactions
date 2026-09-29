@@ -20,6 +20,9 @@ const num = (v: any): number => {
   return Number.isFinite(n) ? n : 0;
 };
 const numOrNull = (v: any): number | null => (v == null ? null : num(v));
+// Sozlama ro'yxati (string yoki son massiv) -> tozalangan satrlar; massiv bo'lmasa bo'sh
+const strList = (v: any): string[] =>
+  Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean).slice(0, 200) : [];
 const strOrNull = (v: any): string | null => (v == null ? null : String(v));
 const cut = (v: any): string => String(v ?? '').slice(0, ERR_MAX);
 
@@ -189,7 +192,23 @@ export class AgentBridgeService implements OnModuleInit {
       tabName: String(s.tabName ?? ''),
       writeMode: s.writeMode === 'upsert' ? 'upsert' : 'replace',
       hasPayColumns: !!sources.find((x) => x.id === s.id)?.hasPayColumns,
-      cron: { enabled: !!s.cron?.enabled, everyMinutes: numOrNull(s.cron?.everyMinutes) },
+      cron: {
+        enabled: !!s.cron?.enabled,
+        everyMinutes: numOrNull(s.cron?.everyMinutes),
+        hourFrom: numOrNull(s.cron?.hourFrom),
+        hourTo: numOrNull(s.cron?.hourTo),
+        days: strList(s.cron?.days).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6),
+      },
+      dateFrom: s.dateFrom ? String(s.dateFrom).slice(0, 10) : null,
+      filter: {
+        objects: strList(s.filter?.objects),
+        categories: strList(s.filter?.categories),
+        txTypes: strList(s.filter?.txTypes),
+        accounts: strList(s.filter?.accounts),
+        amountSign: s.filter?.amountSign === 'pos' || s.filter?.amountSign === 'neg' ? s.filter.amountSign : null,
+      },
+      keyField: s.keyField ? String(s.keyField) : null,
+      fields: (s.columns || []).map((c) => String(c?.field ?? '')).filter(Boolean),
       lastRun: this.pickLastRun(lastRuns[i]),
     }));
 

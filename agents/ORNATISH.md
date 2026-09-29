@@ -161,7 +161,10 @@ Format: `KALIT=qiymat`, har biri alohida qatorda. Qiymat qo'shtirnoqsiz yoki `'.
 | `XONSAROY_API_KEY` | `/tolov` uchun | CRM client kaliti. `backend/.env` da allaqachon bor. B variantda (6-qadam) bot env fayliga qo'shiladi. Yo'q bo'lsa CRM so'ralmaydi: `[crm] UNKNOWN: kalit yo'q` |
 | `XONSAROY_API_SECRET` | `/tolov` uchun | CRM client siri. Joyi `XONSAROY_API_KEY` bilan bir xil |
 | `XONSAROY_CLIENT_BASE` | yo'q | CRM client manzili, faqat `https`. Default `https://app-api.xonsaroy.uz/api/v4/client` (backend bilan bir xil). `backend/.env` da bo'lsa, B variantda ham qo'shiladi. Yaroqsiz bo'lsa `[crm] UNKNOWN: manzil yaroqsiz` |
-| `AGENTS_TOLOV_CRM` | yo'q | default `1` (yoqilgan). `0` CRM so'rovlarini o'chiradi: `[crm] UNKNOWN: o'chirilgan`, bank va OplatyKv tekshiruvi ishlayveradi |
+| `AGENT_BRIDGE_KEY` | `/tolov` uchun | panel ko'prigi kaliti (backend `agent-bridge` bilan bir xil, `backend/.env` da, >= 32 belgi). B variantda bot env fayliga ham qo'shiladi. Yo'q bo'lsa `[crm_panel] UNKNOWN: ko'prik: ko'prik kaliti yo'q (AGENT_BRIDGE_KEY)` |
+| `AGENT_BRIDGE_URL` | yo'q | ko'prik manzili, faqat `http://127.0.0.1:<port>` yoki `http://localhost:<port>` (yo'lsiz). Default `http://127.0.0.1:<PORT>` (`PORT` default `3001`) |
+| `AGENTS_TOLOV_SHEETLAR` | yo'q | OplatyKv bilan solishtiriladigan sheetlar (id yoki nom, vergul bilan). Default: nomida Sotuv yoki Debetor bo'lganlar |
+| `AGENTS_TOLOV_CRM` | yo'q | eski to'g'ridan CRM GET, default `0` (o'chiq, prod'da 404): `[crm] UNKNOWN: o'chirilgan`, CRM ma'lumoti `[crm_panel]` dan. `1` yoqadi |
 | `AGENTS_TOLOV_CRM_KUNLIK` | yo'q | bir kunda (Toshkent) CRM GET so'rovlari chegarasi, default `300`. Oshsa `[crm] UNKNOWN: kunlik cheklov tugadi` |
 | `ANTHROPIC_BASE_URL` | yo'q | faqat proxy kerak bo'lsa |
 | `DEPLOY_LOCK` | yo'q | default `/var/run/xon-tranzactions-deploy.lock` (`deploy.sh` bilan bir xil) |
@@ -172,7 +175,7 @@ Shablon tavsiya qilgan timeout'lar: support 600, leader 300, checker 240, teache
 Kerak bo'lsa `AGENT_TIMEOUT_S_SUPPORT`, `AGENT_TIMEOUT_S_LEADER`, `AGENT_TIMEOUT_S_CHECKER` bilan bering.
 
 `XONSAROY_*` kalitlarini faqat bot jarayoni ishlatadi, faqat `GET {XONSAROY_CLIENT_BASE}/payment-history`
-uchun (CRM faqat o'qiladi). Agentga ular o'tmaydi: 14b dagi env ro'yxati o'zgarmaydi.
+uchun (eski yo'l, default o'chiq; CRM faqat o'qiladi). `AGENT_BRIDGE_KEY` faqat loopback ko'prik GET header'ida. Agentga ular o'tmaydi: 14b dagi env ro'yxati o'zgarmaydi.
 Env fayl keshlanadi, kalit o'zgargach servisni restart qiling.
 
 Backend servisi ham `backend/.env` ni o'qiydi (`EnvironmentFile`). Yangi kalitlar backendga zarar
@@ -514,7 +517,8 @@ Qayta yoqish: shu buyruqda `'0'` o'rniga `'1'`.
 | Facts `updated_at` 15 daqiqadan eski | bot to'xtagan | `systemctl status xon-tranzactions-leader` |
 | `/tolov` blokida `[crm] UNKNOWN: kalit yo'q` | bot o'qiydigan env faylda `XONSAROY_API_KEY` yoki `XONSAROY_API_SECRET` yo'q (ko'pincha B variant) | 5, 6-qadam, keyin restart |
 | `[crm] UNKNOWN: manzil yaroqsiz` | `XONSAROY_CLIENT_BASE` `https` emas yoki buzuq | 5-qadam, keyin restart |
-| `[crm] UNKNOWN: o'chirilgan` | `AGENTS_TOLOV_CRM=0` | kalitni olib tashlang yoki `1` qiling, keyin restart |
+| `[crm] UNKNOWN: o'chirilgan` | eski CRM GET default o'chiq (`AGENTS_TOLOV_CRM` = `0`) | odatiy: CRM `[crm_panel]` da. Eski yo'l kerak bo'lsa `1` |
+| `[crm_panel] UNKNOWN: ko'prik: HTTP 403 (...)` | kalit mos emas, backend'da `AGENT_BRIDGE_KEY` yo'q yoki so'rov proxy orqali | ikkala tomonda bir xil kalit, backend restart |
 | `[crm] UNKNOWN: kunlik cheklov tugadi` | bugungi CRM so'rovlari `AGENTS_TOLOV_CRM_KUNLIK` ga yetdi | ertaga (Toshkent) o'zi tiklanadi yoki chegarani oshirib restart qiling |
 
 ## 18. Bot root EMAS bo'lsa (ixtiyoriy)

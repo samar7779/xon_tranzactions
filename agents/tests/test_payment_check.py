@@ -195,15 +195,18 @@ def _crm_qator(ext: str, contract: str = SH, amount: Any = 6150000, sana: str = 
 
 
 class _CrmEnvBase(unittest.TestCase):
-    """CRM env (faqat nomlar) + haqiqiy .env o'qilmaydi + kesh va kunlik hisoblagich soxta."""
+    """CRM env (faqat nomlar) + haqiqiy .env o'qilmaydi + kesh va kunlik hisoblagich soxta.
+    Eski to'g'ridan GET default o'chiq: bu yerda AGENTS_TOLOV_CRM=1 (eski yo'l testlari uchun).
+    Ko'prik env'i (kalit, URL, PORT) default yo'q, ko'prik tarmog'i ham soxta (self.kop)."""
 
-    env: Dict[str, str] = {}
+    env: Dict[str, Optional[str]] = {}
 
     def setUp(self) -> None:
         # jonli env o'quvchisi (kill switch, kunlik) haqiqiy backend/.env ga tegmasin: mavjud bo'lmagan yo'l
         yoq_fayl = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_yoq_env_fayli.env")
-        env = {C.TOLOV_CRM_ENV_BASE: BASE, C.TOLOV_CRM_ENV_KEY: KALIT, C.TOLOV_CRM_ENV_SECRET: SIR,
-               "AGENTS_ENV_FILE": yoq_fayl}
+        env: Dict[str, Optional[str]] = {C.TOLOV_CRM_ENV_BASE: BASE, C.TOLOV_CRM_ENV_KEY: KALIT,
+                                         C.TOLOV_CRM_ENV_SECRET: SIR, C.TOLOV_CRM_ENV_YOQ: "1",
+                                         "AGENTS_ENV_FILE": yoq_fayl}
         env.update(self.env)
         pc._ENV_JONLI.clear()
         self.addCleanup(pc._ENV_JONLI.clear)
@@ -212,9 +215,12 @@ class _CrmEnvBase(unittest.TestCase):
                 env.pop(k)
         self._patch(mock.patch.dict(os.environ, env, clear=False))
         for k in (C.TOLOV_CRM_ENV_BASE, C.TOLOV_CRM_ENV_KEY, C.TOLOV_CRM_ENV_SECRET, C.TOLOV_CRM_ENV_YOQ,
-                  C.TOLOV_CRM_ENV_KUNLIK):
+                  C.TOLOV_CRM_ENV_KUNLIK, C.TOLOV_KOPRIK_ENV_KEY, C.TOLOV_KOPRIK_ENV_URL, C.TOLOV_KOPRIK_ENV_PORT,
+                  C.TOLOV_SHEETLAR_ENV):
             if k not in env:
                 os.environ.pop(k, None)
+        self.kop = FakeNet(default=RuntimeError("ko'prik kutilmagan chaqirildi"))
+        self._patch(mock.patch.object(pc, "_koprik_urlopen", self.kop))
         self._patch(mock.patch.object(config, "load_env_file", lambda path=None: {}))
         self.kunlik = 0
 
@@ -1080,7 +1086,11 @@ class CrmOchiqEmasTest(_CrmEnvBase):
         with mock.patch.dict(os.environ, {C.TOLOV_CRM_ENV_YOQ: "1"}):
             self.assertIsNone(pc._crm_holati())
         os.environ.pop(C.TOLOV_CRM_ENV_YOQ, None)
-        self.assertIsNone(pc._crm_holati())  # default yoqilgan
+        # default O'CHIQ (prod'da /payment-history 404): CRM ma'lumoti panel ko'prigidan
+        self.assertEqual(pc._crm_holati(), C.TOLOV_SABAB_OCHIRILGAN)
+        self.assertEqual(C.TOLOV_CRM_YOQ_DEFAULT, "0")
+        with mock.patch.dict(os.environ, {C.TOLOV_CRM_ENV_YOQ: ""}):
+            self.assertEqual(pc._crm_holati(), C.TOLOV_SABAB_OCHIRILGAN)
 
     def test_env_fayli_ozgarsa_restartsiz(self):
         """Review 4: AGENTS_TOLOV_CRM=0 / kunlik cheklov env faylida o'zgarsa bot restartisiz kuchga kiradi."""
@@ -1098,6 +1108,7 @@ class CrmOchiqEmasTest(_CrmEnvBase):
             os.utime(yol, ns=(st.st_atime_ns, st.st_mtime_ns + siljish * 10 ** 9))
 
         with mock.patch.dict(os.environ, {"AGENTS_ENV_FILE": yol}):
+            os.environ.pop(C.TOLOV_CRM_ENV_YOQ, None)   # fayl qiymati ishlasin (os.environ ustun)
             yoz("AGENTS_TOLOV_CRM=1\n%s=%s\n" % (C.TOLOV_CRM_ENV_SECRET, SIR), 1)
             self.assertIsNone(pc._crm_holati())
             self.assertEqual(pc._kunlik_limit(), C.TOLOV_CRM_KUNLIK_DEFAULT)
@@ -1575,14 +1586,24 @@ class StatikTest(unittest.TestCase):
         self.assertNotRegex(src, r"(?i)method\s*=\s*[\"'](POST|PUT|PATCH|DELETE)")
         self.assertNotRegex(src, r"(?i)\.(post|put|patch|delete)\(")
         reqs = re.findall(r"urllib\.request\.Request\(([^)]*)", src)
-        self.assertEqual(len(reqs), 1)
-        self.assertIn('data=None, method="GET"', reqs[0])
-        # tarmoq faqat _urlopen (opener.open) va uni chaqiruvchi _crm_get ichida
-        qolgan = src.replace(inspect.getsource(pc._urlopen), "").replace(inspect.getsource(pc._crm_get), "")
+        self.assertEqual(len(reqs), 2)                 # eski CRM GET va panel ko'prigi GET
+        for r in reqs:
+            self.assertIn('data=None, method="GET"', r)
+        # tarmoq faqat _urlopen/_koprik_urlopen (opener.open) va ularni chaqiruvchi _crm_get/_koprik_get ichida
+        qolgan = src
+        for fn in (pc._urlopen, pc._crm_get, pc._koprik_urlopen, pc._koprik_get):
+            qolgan = qolgan.replace(inspect.getsource(fn), "")
         self.assertNotRegex(qolgan, r"(?m)\.open\(|urlopen\(|http\.client|^\s*import requests|create_connection")
         self.assertIn("_urlopen(req", inspect.getsource(pc._crm_get))
+        self.assertIn("_koprik_urlopen(req", inspect.getsource(pc._koprik_get))
         self.assertNotIn("/order/show", src)
         self.assertNotIn("/excel", src)
+        # ko'prik: faqat ikki GET yo'li; Sheets'ga yozadigan exports/:id/run yo'q
+        self.assertEqual(pc._KOPRIK_YOLLAR, ("/api/agent-bridge/payment-check", "/api/agent-bridge/exports"))
+        for yol in ("/api/agent-bridge/exports/s1/run", "/api/agent-bridge/payment-check/", "/api/oplata-kv"):
+            with self.assertRaises(ValueError):
+                pc._koprik_get(yol, {}, pc._mono() + 30)
+        self.assertNotRegex(src, r"[\"']/run[\"']|%s/run" % re.escape("{id}"))
 
     def test_taqiq_ustunlar_sqlda_yoq(self):
         sqls = _sql_satrlari()
@@ -1666,12 +1687,642 @@ class SinxronTest(unittest.TestCase):
                 self.assertIsNone(C.KIRILL_RE.search(getattr(C, nom)), nom)
         self.assertTrue(config.is_sensitive("agents/payment_check.py"))
 
+    def test_koprik_satrlari_bilim_va_prompt(self):
+        """Panel ko'prigi satrlari contract.py bilan bilim fayli va checker.md da harfma-harf."""
+        self.assertEqual(list(C.TOLOV_SHEET_SABABLAR), list(C.TOLOV_SHEET_SABAB_TUZATISH))
+        self.assertEqual(list(C.TOLOV_SHEET_SABABLAR), ["FILTR_OBYEKT", "FILTR_KATEGORIYA", "FILTR_TUR", "FILTR_HISOB",
+                                                        "FILTR_SANA", "FILTR_BELGI", "EKSPORT_ESKI", "XATO_RAQAM"])
+        for kod in C.TOLOV_SHEET_SABABLAR:
+            for s in (C.TOLOV_SHEET_SABABLAR[kod], C.TOLOV_SHEET_SABAB_TUZATISH[kod]):
+                self.assertIsNone(C.KIRILL_RE.search(s), kod)
+                self.assertNotRegex(s, r"[\[\]]", kod)          # blokda [ ] -> ( ) bo'lardi
+            self.assertLessEqual(len(C.TOLOV_SHEET_SABAB_TUZATISH[kod].format(sheet="Sotuv hisoboti")), 100, kod)
+            self.assertNotIn(kod, C.TOLOV_FARQ_KODLARI)
+        self.assertEqual({C.TOLOV_FARQ_KODLARI[k] for k in ("CRM_FARQ", "SHEET_YOQ", "SHEET_FARQ")}, {"error", "warn"})
+        self.assertEqual(C.TOLOV_FARQ_KODLARI["CRM_FARQ"], "error")
+        for k in ("SHEET_YOQ", "SHEET_FARQ"):
+            self.assertEqual(C.TOLOV_FARQ_TUZATISH[k], C.TOLOV_TUZ_SHEET_TPL.format(sheet="<sheet nomi>"))
+        self.assertEqual((C.TOLOV_KOPRIK_TIMEOUT_S, C.TOLOV_KOPRIK_JAVOB_MAX, C.TOLOV_KOPRIK_PORT_DEFAULT),
+                         (90, 5 * 1024 * 1024, 3001))
+        self.assertLess(C.TOLOV_KOPRIK_DEADLINE_S, C.TOLOV_TASHQI_TIMEOUT_S)
+        self.assertGreaterEqual(C.TOLOV_KOPRIK_DEADLINE_S, C.TOLOV_KOPRIK_TIMEOUT_S)
+        path = config.KNOWLEDGE_DIR / "tolov_tekshirish.md"
+        chk = config.AGENTS_DIR / "checker.md"
+        if not path.exists() or not chk.exists():
+            raise unittest.SkipTest("bilim fayli yoki checker.md yo'q")
+        text, c = path.read_text(encoding="utf-8"), chk.read_text(encoding="utf-8")
+        m = re.search(r"(?ms)^## 7\..*?(?=^## )", text)
+        for kod in C.TOLOV_SHEET_SABABLAR:
+            self.assertIn("| `%s` | %s | %s |" % (kod, C.TOLOV_SHEET_SABABLAR[kod], C.TOLOV_SHEET_SABAB_TUZATISH[kod]),
+                          m.group(0), kod)
+            self.assertIn("`%s`" % kod, c, kod)
+        for kod in ("CRM_FARQ", "CRM_SPLIT", "SHEET_YOQ", "SHEET_FARQ"):
+            self.assertIn("`%s`" % kod, c, kod)
+        self.assertEqual(C.TOLOV_FARQ_KODLARI["CRM_SPLIT"], "info")
+        for s in (C.TOLOV_SHEETLAR_ENV, C.TOLOV_SHEET_MALUMOT):
+            self.assertIn(s, text, s)
+            self.assertIn(s, c, s)
+        for naqsh in C.TOLOV_SHEET_DEFAULT_NAQSHLAR:
+            self.assertIn("`%s`" % naqsh, text, naqsh)
+        for s in (C.TOLOV_SABAB_KOPRIK_KALIT, C.TOLOV_SABAB_KOPRIK_MANZIL, C.TOLOV_SABAB_KOPRIK_FORMAT,
+                  C.TOLOV_SABAB_SHEET_YOQ, C.TOLOV_KOPRIK_PREFIKS, C.TOLOV_SABAB_ANIQLANMADI + " — ",
+                  C.TOLOV_TUZ_SHEET_TPL.format(sheet="<sheet nomi>"),
+                  C.TOLOV_EKSPORT_ESKI_TPL.format(vaqt="<vaqt>", holat="<holat>", cron="<"),
+                  C.TOLOV_EKSPORT_HECH_TPL.split("{")[0], C.TOLOV_KOPRIK_YOL, C.TOLOV_KOPRIK_EKSPORT_YOL,
+                  C.TOLOV_KOPRIK_ENV_KEY, C.TOLOV_KOPRIK_ENV_URL):
+            self.assertIn(s, text, s)
+        for code, izoh in C.TOLOV_KOPRIK_HTTP_IZOH.items():
+            self.assertIn("HTTP %d (%s)" % (code, izoh), text)
+        for k in C.TOLOV_KOMPONENTLAR:
+            self.assertIn("`%s`" % k, text, k)
+            self.assertIn("`%s`" % k, c, k)
+        self.assertIn(", ".join("`%s`" % k for k in C.TOLOV_KOMPONENTLAR), c)
+        self.assertIn(C.TOLOV_SABAB_KOPRIK_KALIT, c)
+        self.assertIsNone(C.KIRILL_RE.search(c))
+        self.assertIsNone(re.search("[\U0001F300-\U0001FAFF☀-➿]", c))
+
     def test_index_md_chegarasi(self):
         """INDEX.md jim kesilmasin: har yangi qator chegaraga yaqinlashsa test yiqiladi."""
         path = config.REPO / C.MEMORY_FILES[0][0]
         if not path.exists():
             raise unittest.SkipTest("INDEX.md yo'q")
         self.assertLessEqual(len(path.read_text(encoding="utf-8")), C.MEMORY_FILES[0][1] - 50)
+
+
+# ---------------------------------------------------------------------------
+# 12. Panel ko'prigi (agent-bridge): payment-check + exports, tarmoqsiz (self.kop soxta)
+# ---------------------------------------------------------------------------
+KOP_KALIT = "".join(["ab", "Kp", "9Q", "zX", "31", "Lm", "Nv", "8r", "Tq", "Wy", "5e", "Hd", "0s", "Fg", "Uo", "2c"])
+OXIRGI_ISH = "2026-09-29T04:00:00.000Z"          # Toshkent 09:00
+
+
+def _kop_shartnoma(sh: str = SH, okv: Any = (("2026-08-20", 0, 6150000),),
+                   crm: Any = (("2026-08-20", 6150000, "monthly", "Ежемесячный"),),
+                   sheets: Any = (("s1", "Sotuv hisoboti", True, ((812, 0, 6150000),)),
+                                  ("s2", "Debitorlik", True, ((44, 0, 6150000),))),
+                   crm_found: bool = True, crm_error: str = "", all_match: Optional[bool] = None,
+                   narx: int = 250000000) -> Dict[str, Any]:
+    oi, om = sum(f for _d, f, _m in okv), sum(m for _d, _f, m in okv)
+    oplata = {"ok": True, "initial": oi, "monthly": om, "total": oi + om, "count": len(okv),
+              "payments": [{"date": d, "first": f, "monthly": m, "total": f + m} for d, f, m in okv]}
+    if crm_found:
+        ci = sum(a for _d, a, k, _t in crm if k == "initial")
+        cm = sum(a for _d, a, k, _t in crm if k != "initial")
+        crm_d: Dict[str, Any] = {
+            "ok": True, "found": True, "price": narx, "initialPlan": 50000000, "monthlyPlan": 200000000,
+            "initial": ci, "monthly": cm, "total": ci + cm, "remaining": narx - ci - cm, "count": len(crm),
+            "payments": [{"date": d, "amount": a, "kind": k, "type": t} for d, a, k, t in crm]}
+    else:
+        crm_d = {"ok": False, "found": False}
+        if crm_error:
+            crm_d["error"] = crm_error
+    sh_list = []
+    for sid, nom, bor, pays in sheets:
+        si, sm = sum(p[1] for p in pays), sum(p[2] for p in pays)
+        x = {"id": sid, "name": nom, "ok": bor, "available": bor, "initial": si, "monthly": sm, "total": si + sm,
+             "matchedRows": len(pays), "rowsScanned": 5000,
+             "payments": [{"row": r, "first": f, "monthly": m, "total": f + m} for r, f, m in pays]}
+        if not bor:
+            x["reason"] = "Google credential topilmadi"
+        sh_list.append(x)
+    if all_match is None:
+        jamilar_ = [oi + om] + ([crm_d["total"]] if crm_found else []) + [s["total"] for s in sh_list if s["available"]]
+        all_match = len(set(jamilar_)) == 1
+    return {"contract": sh, "allMatch": all_match, "oplata": oplata, "crm": crm_d, "sheets": sh_list}
+
+
+def _kop_javob(*res: Dict[str, Any], sheets: Any = (("s1", "Sotuv hisoboti"), ("s2", "Debitorlik"))) -> Dict[str, Any]:
+    return {"ok": True, "checkedAt": "2026-09-29T05:00:00.000Z",
+            "sources": {"oplata": True, "crm": True, "sheets": [{"id": i, "name": n} for i, n in sheets]},
+            "results": list(res) or [_kop_shartnoma()]}
+
+
+def _kop_eksport(sid: str = "s1", name: str = "Sotuv hisoboti", source: str = "oplatakv",
+                 date_from: Optional[str] = None, objects: Any = (), categories: Any = (), tx_types: Any = (),
+                 accounts: Any = (), sign: Optional[str] = None, cron: bool = True, days: Any = (),
+                 last_run: Optional[str] = OXIRGI_ISH, status: str = "ok") -> Dict[str, Any]:
+    return {"id": sid, "name": name, "source": source, "tabName": "Tab", "writeMode": "replace",
+            "hasPayColumns": True,
+            "cron": {"enabled": cron, "everyMinutes": 60, "hourFrom": 8, "hourTo": 20, "days": list(days)},
+            "dateFrom": date_from,
+            "filter": {"objects": list(objects), "categories": list(categories), "txTypes": list(tx_types),
+                       "accounts": list(accounts), "amountSign": sign},
+            "keyField": None, "fields": ["contractNo", "paymentAmount"],
+            "lastRun": None if last_run is None else {
+                "startedAt": last_run, "mode": "cron", "status": status, "rowsWritten": 1234, "durationMs": 900,
+                "triggeredBy": "cron", "error": "quota exceeded" if status == "error" else None}}
+
+
+def _kop_eksportlar(*items: Dict[str, Any]) -> Dict[str, Any]:
+    return {"ok": True, "credentialsAvailable": True,
+            "items": list(items) or [_kop_eksport(), _kop_eksport("s2", "Debitorlik")]}
+
+
+def _kop_marshrut(pc_javob: Any, eks_javob: Any) -> Any:
+    def f(req: urllib.request.Request) -> Any:
+        return pc_javob if urlsplit(req.full_url).path.endswith("/payment-check") else eks_javob
+    return f
+
+
+def _sarlavha(call: SimpleNamespace, nom: str) -> Optional[str]:
+    return next((v for k, v in call.headers.items() if k.lower() == nom.lower()), None)
+
+
+class KoprikTest(_CrmEnvBase):
+    env = {C.TOLOV_CRM_ENV_YOQ: None, C.TOLOV_KOPRIK_ENV_KEY: KOP_KALIT}
+
+    def _run(self, matn: str = SH, routes: Optional[Dict[str, Any]] = None, pc_javob: Any = None,
+             eks_javob: Any = None, **kw: Any) -> pc.Natija:
+        self.kop.default = _kop_marshrut(pc_javob if pc_javob is not None else _kop_javob(),
+                                         eks_javob if eks_javob is not None else _kop_eksportlar())
+        self.fake = FakeDb(routes if routes is not None else _marshrut())
+        with mock.patch.object(db, "tx", self.fake.tx):
+            return pc.prefetch(matn, **kw)
+
+    @staticmethod
+    def _bolim(n: pc.Natija, komp: str) -> pc.Bolim:
+        return next(b for b in n.bolimlar if b.komponent == komp)
+
+    @staticmethod
+    def _sheetlar(n: pc.Natija) -> List[pc.Bolim]:
+        return [b for b in n.bolimlar if b.komponent == "sheet"]
+
+    def _kalitsiz(self, *matnlar: str) -> None:
+        for m in matnlar:
+            self.assertNotIn(KOP_KALIT, m)
+            self.assertNotIn(KOP_KALIT[:16], m)
+
+    # --- ko'prik OK: CRM + 2 sheet ----------------------------------------
+    def test_koprik_ok_crm_va_ikki_sheet(self):
+        n = self._run()
+        self.assertEqual(self.net.calls, [])                       # eski to'g'ridan CRM GET default o'chiq
+        self.assertEqual(len(self.kop.calls), 2)                    # payment-check, keyin exports
+        c1, c2 = self.kop.calls
+        for c in (c1, c2):
+            self.assertEqual((c.method, c.data), ("GET", None))
+            self.assertEqual(_sarlavha(c, C.TOLOV_KOPRIK_HEADER), KOP_KALIT)   # kalit faqat header'da
+            self.assertNotIn(KOP_KALIT, c.url)
+            self.assertLessEqual(c.timeout, C.TOLOV_KOPRIK_TIMEOUT_S)
+            self.assertEqual(urlsplit(c.url).netloc, "127.0.0.1:3001")
+        self.assertEqual(urlsplit(c1.url).path, "/api/agent-bridge/payment-check")
+        self.assertEqual(parse_qs(urlsplit(c1.url).query), {"contracts": [SH]})
+        self.assertEqual((urlsplit(c2.url).path, urlsplit(c2.url).query), ("/api/agent-bridge/exports", ""))
+        blok = pc.format_block(n)
+        self.assertIn("[crm] UNKNOWN: " + C.TOLOV_SABAB_OCHIRILGAN, blok)
+        self.assertIn("[crm_panel] OK: narx 250 000 000; reja bosh. 50 000 000, oylik 200 000 000; to'lovlar 1 ta:"
+                      " bosh. 0, oylik 6 150 000, jami 6 150 000; qoldiq (narx - to'lovlar) 243 850 000; panel jami"
+                      " (grafik/tarix max): bosh. 0, oylik 6 150 000, jami 6 150 000", blok)
+        self.assertIn("  oxirgi to'lovlar: 2026-08-20 6 150 000 oylik (Ejemesyachniy)", blok)
+        sheetlar = self._sheetlar(n)
+        self.assertEqual([b.status for b in sheetlar], ["ok", "ok"])
+        self.assertIn("[sheet] OK: Sotuv hisoboti: bosh. 0, oylik 6 150 000, jami 6 150 000; 1 qator; oxirgi qator"
+                      " #812; oxirgi to'lov ~2026-08-20; OplatyKv bilan mos", blok)
+        self.assertIn("[sheet] OK: Debitorlik: ", blok)
+        self.assertIn("  eksport: manba oplatakv, replace; dateFrom yo'q; filtr: obyekt hammasi, kategoriya hammasi,"
+                      " tur hammasi, belgi hammasi; cron har 60 daq, 08-20, har kun; oxirgi ish 2026-09-29 09:00"
+                      " (ok, 1234 qator)", blok)
+        self.assertIn("[panel_solishtirish] OK: panel Mos; OplatyKv (aniq raqam) 1 qator, jami 6 150 000 (bosh. 0,"
+                      " oylik 6 150 000); CRM to'lovlar - OplatyKv = 0 (bosh. 0, oylik 0); Sotuv hisoboti - OplatyKv"
+                      " = 0 (bosh. 0, oylik 0); Debitorlik - OplatyKv = 0 (bosh. 0, oylik 0)", blok)
+        self.assertFalse({"CRM_FARQ", "CRM_SPLIT", "SHEET_YOQ", "SHEET_FARQ"} & set(_kodlar(n.farqlar)))
+        self.assertIn("XATO", _kodlar(n.farqlar))                  # DB tomoni ham ishladi
+        self.assertIn("CRM jami crm_panel da (CRM_FARQ)", self._bolim(n, "farqlar").xabar)
+        komp = [re.match(r"^\[(\w+)\]", x).group(1) for x in blok.split("\n") if re.match(r"^\[\w+\]", x)]
+        self.assertEqual(komp, [k for k in C.TOLOV_KOMPONENTLAR if k != "nomzodlar"
+                                for _ in range(2 if k == "sheet" else 1)])
+        self.assertIn("CRM 6 150 000 (panel)", pc.qisqa(n))
+        self._kalitsiz(blok, pc.format_owner(n), pc.qisqa(n), repr(n))
+
+    def test_tolov_jadvalida_bolimlar(self):
+        n = self._run()
+        text = pc.format_owner(n)
+        self.assertLessEqual(len(text), C.TELEGRAM_LIMIT)
+        pre = html.unescape(text.split("<pre>", 1)[1].split("</pre>", 1)[0])
+        for s in ("[crm_panel] OK: narx 250 000 000", "[sheet] OK: Sotuv hisoboti: ", "[sheet] OK: Debitorlik: ",
+                  "[panel_solishtirish] OK: panel Mos", "  oxirgi to'lovlar: 2026-08-20 6 150 000"):
+            self.assertIn(s, pre)
+
+    # --- ko'prik xatolari: UNKNOWN, qolgani ishlaydi ----------------------
+    def _unknown_va_qolgani(self, n: pc.Natija, sabab: str) -> None:
+        for komp in ("crm_panel", "sheet", "panel_solishtirish"):
+            b = self._bolim(n, komp)
+            self.assertEqual((b.status, b.xabar), ("unknown", C.TOLOV_KOPRIK_PREFIKS + sabab), komp)
+        blok = pc.format_block(n)
+        self.assertIn("[oplata_kv] ERROR: 2 qator; jami 12 300 000", blok)
+        self.assertIn("XATO", _kodlar(n.farqlar))
+        self.assertIn("CRM tekshirilmadi: CRM kodlari yo'q", self._bolim(n, "farqlar").xabar)
+
+    def test_403(self):
+        n = self._run(pc_javob=urllib.error.HTTPError("http://127.0.0.1:3001/x", 403, "Forbidden " + KOP_KALIT,
+                                                      {}, None))
+        self._unknown_va_qolgani(n, "HTTP 403 (%s)" % C.TOLOV_KOPRIK_HTTP_IZOH[403])
+        self.assertEqual(len(self.kop.calls), 1)                   # exports chaqirilmaydi
+        self._kalitsiz(pc.format_block(n))
+
+    def test_timeout_va_ulanish(self):
+        for xato, sabab in ((socket.timeout("timed out"), "timeout"),
+                            (urllib.error.URLError(socket.timeout("timed out")), "timeout"),
+                            (urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")),
+                             "ulanish rad etildi (backend ishlamayapti yoki PORT noto'g'ri)")):
+            self.kop.calls.clear()
+            n = self._run(pc_javob=xato)
+            self._unknown_va_qolgani(n, sabab)
+            self.assertEqual(len(self.kop.calls), 1)
+
+    def test_sekin_javob_umumiy_muddat(self):
+        soat = [1000.0]
+
+        class Sekin(FakeResp):
+            def read(self, n: int = -1) -> bytes:
+                soat[0] += 40.0
+                return b" "
+
+        def ochish(req: Any, timeout: float) -> Any:
+            self.assertLessEqual(timeout, C.TOLOV_KOPRIK_TIMEOUT_S)
+            return Sekin(b"", req.full_url)
+
+        with mock.patch.object(pc, "_mono", lambda: soat[0]), mock.patch.object(pc, "_koprik_urlopen", ochish):
+            kn = pc._koprik_collect([SH], soat[0] + 100)
+        self.assertEqual(kn.xato, "timeout")
+
+    def test_kalit_yoq(self):
+        with mock.patch.dict(os.environ, {C.TOLOV_KOPRIK_ENV_KEY: ""}):
+            n = self._run()
+        self.assertEqual(self.kop.calls, [])
+        self._unknown_va_qolgani(n, C.TOLOV_SABAB_KOPRIK_KALIT)
+
+    def test_koprik_ochirilgan_va_deadline(self):
+        n = self._run(koprik=False)
+        self.assertEqual(self.kop.calls, [])
+        self.assertEqual(self._bolim(n, "crm_panel").xabar, C.TOLOV_KOPRIK_PREFIKS + C.TOLOV_SABAB_OCHIRILGAN)
+        n = self._run(koprik_deadline_s=0.5)
+        self.assertEqual(self.kop.calls, [])
+        self.assertEqual(self._bolim(n, "sheet").xabar, C.TOLOV_KOPRIK_PREFIKS + C.TOLOV_SABAB_VAQT)
+
+    # --- manzil: faqat loopback ------------------------------------------
+    def test_non_loopback_rad(self):
+        for url in ("http://10.0.0.5:3001", "https://127.0.0.1:3001", "http://127.0.0.1.evil.example:3001",
+                    "http://u@127.0.0.1:3001", "http://localhost:3001/api/boshqa", "http://127.0.0.1:3001?x=1",
+                    "ftp://127.0.0.1/", "http://[::1]:3001", "http://127.0.0.1:99999", "http://example.com"):
+            with mock.patch.dict(os.environ, {C.TOLOV_KOPRIK_ENV_URL: url}):
+                self.assertEqual(pc._koprik_base(), "", url)
+                with self.assertRaises(pc.KoprikXato) as cm:
+                    pc._koprik_get(C.TOLOV_KOPRIK_YOL, {"contracts": SH}, pc._mono() + 30)
+                self.assertEqual(cm.exception.sabab, C.TOLOV_SABAB_KOPRIK_MANZIL)
+        with mock.patch.dict(os.environ, {C.TOLOV_KOPRIK_ENV_URL: "http://10.0.0.5:3001"}):
+            n = self._run()
+            self._unknown_va_qolgani(n, C.TOLOV_SABAB_KOPRIK_MANZIL)
+        self.assertEqual(self.kop.calls, [])
+        for url, kutilgan in (("http://localhost:3002", "http://localhost:3002"),
+                              ("http://127.0.0.1:4000/", "http://127.0.0.1:4000"),
+                              ("http://LOCALHOST:3003", "http://localhost:3003")):
+            with mock.patch.dict(os.environ, {C.TOLOV_KOPRIK_ENV_URL: url}):
+                self.assertEqual(pc._koprik_base(), kutilgan, url)
+        for port, kutilgan in (("3005", "http://127.0.0.1:3005"), ("", "http://127.0.0.1:3001"), ("x1", ""),
+                               ("70000", "")):
+            with mock.patch.dict(os.environ, {C.TOLOV_KOPRIK_ENV_PORT: port}):
+                self.assertEqual(pc._koprik_base(), kutilgan, port)
+
+    def test_redirect_host_va_javob_shakli(self):
+        hollar = (
+            (urllib.error.HTTPError("http://127.0.0.1:3001/x", 302, "Found", {}, None), "redirect taqiqlangan (302)"),
+            (urllib.error.HTTPError("http://127.0.0.1:3001/x", 404, "Not Found", {}, None),
+             "HTTP 404 (%s)" % C.TOLOV_KOPRIK_HTTP_IZOH[404]),
+            (urllib.error.HTTPError("http://127.0.0.1:3001/x", 500, "boom", {}, None), "HTTP 500"),
+            (b"<html>", "javob JSON emas"),
+            ({"ok": False, "results": []}, "javob shakli kutilmagan"),
+            ({"ok": True}, "javob shakli kutilmagan"),
+            (b"[" + b" " * C.TOLOV_KOPRIK_JAVOB_MAX + b"]", "javob 5 MB dan katta"),
+        )
+        for javob, sabab in hollar:
+            self.kop.default = lambda req, j=javob: j
+            self.assertEqual(pc._koprik_collect([SH], pc._mono() + 30).xato, sabab)
+
+        class Boshqa(FakeResp):
+            def geturl(self) -> str:
+                return "http://boshqa.example/api"
+
+        with mock.patch.object(pc, "_koprik_urlopen", lambda req, timeout: Boshqa(b"{}", req.full_url)):
+            self.assertEqual(pc._koprik_collect([SH], pc._mono() + 30).xato, "boshqa hostga yo'naltirildi")
+        with mock.patch.dict(os.environ, {"http_proxy": "http://proxy.example:8080",
+                                          "HTTP_PROXY": "http://proxy.example:8080"}):
+            opener = pc._opener()
+        self.assertTrue(any(isinstance(h, pc._RedirectTaqiq) for h in opener.handlers))
+        # ProxyHandler({}): env proxy ishlatilmaydi (X-Forwarded-* bilan ko'prik 403 berardi)
+        self.assertFalse([h for h in opener.handlers if getattr(h, "proxies", None)])
+
+    def test_shartnoma_formati(self):
+        kn = pc._koprik_collect(["821ZUR23V1/SH"], pc._mono() + 30)
+        self.assertEqual((kn.xato, kn.tashlangan, self.kop.calls), (C.TOLOV_SABAB_KOPRIK_FORMAT, ["821ZUR23V1/SH"], []))
+        self.kop.default = _kop_marshrut(_kop_javob(), _kop_eksportlar())
+        kn = pc._koprik_collect([SH, "5-ZUR-11/SH"], pc._mono() + 30)
+        self.assertEqual(parse_qs(urlsplit(self.kop.calls[0].url).query), {"contracts": [SH]})
+        _f, bolimlar = pc.koprik_tahlil(kn)
+        crm = next(b for b in bolimlar if b.komponent == "crm_panel")
+        self.assertEqual(crm.status, "unknown")
+        self.assertIn("5-ZUR-11/SH: " + C.TOLOV_SABAB_KOPRIK_FORMAT, crm.xabar)
+        self.assertIn(SH + ": narx 250 000 000", crm.xabar)
+
+    # --- kalit sizmasligi -------------------------------------------------
+    def test_kalit_sizmaydi(self):
+        for xato in (urllib.error.URLError("connect " + KOP_KALIT), RuntimeError("buzildi " + KOP_KALIT),
+                     OSError("x-agent-bridge-key: " + KOP_KALIT)):
+            with self.assertLogs("agents.payment_check", level="WARNING") as cm:
+                n = self._run(pc_javob=xato)
+            self._kalitsiz(pc.format_block(n), pc.format_owner(n), pc.qisqa(n), "\n".join(cm.output),
+                           n.koprik.xato)
+        with self.assertRaises(pc.KoprikXato) as ex:
+            self.kop.default = lambda req: RuntimeError(KOP_KALIT)
+            pc._koprik_get(C.TOLOV_KOPRIK_YOL, {"contracts": SH}, pc._mono() + 30)
+        self._kalitsiz(str(ex.exception), ex.exception.sabab, repr(ex.exception))
+        for nom, val in vars(pc).items():
+            if isinstance(val, str):
+                self.assertNotIn(KOP_KALIT, val, nom)
+        self.assertNotIn(KOP_KALIT, repr(pc._ENV_JONLI))
+        env = runner.build_agent_env(dict(os.environ), setup_token="x" * 10)
+        self.assertFalse([v for v in env.values() if KOP_KALIT in v])
+
+    # --- farq kodlari -----------------------------------------------------
+    def test_sheet_yoq_filtr_kategoriya(self):
+        res = _kop_shartnoma(sheets=(("s1", "Sotuv hisoboti", True, ((812, 0, 6150000),)),
+                                     ("s2", "Debitorlik", True, ())))
+        n = self._run(pc_javob=_kop_javob(res),
+                      eks_javob=_kop_eksportlar(_kop_eksport(), _kop_eksport("s2", "Debitorlik", categories=["FIRST"])))
+        f = [x for x in n.farqlar if x.kod == "SHEET_YOQ"]
+        self.assertEqual(len(f), 1)
+        f = f[0]
+        self.assertEqual((f.jiddiylik, f.summa, f.sana, f.dalil), ("warn", D("6150000"), "2026-08-20", SH + " sheet=Debitorlik"))
+        # 2 qator, izohlari farqli (MONTHLY va split yo'q): kod ma'nosi; har qator sheet bo'limida
+        self.assertEqual(f.sabab, "FILTR_KATEGORIYA — %s (2 qator)" % C.TOLOV_SHEET_SABABLAR["FILTR_KATEGORIYA"])
+        self.assertEqual(f.tuzatish, C.TOLOV_SHEET_SABAB_TUZATISH["FILTR_KATEGORIYA"].format(sheet="Debitorlik"))
+        sheet = [b for b in self._sheetlar(n) if b.xabar.startswith("Debitorlik")][0]
+        self.assertEqual(sheet.status, "warn")
+        self.assertIn("shartnoma qatori topilmadi (OplatyKv 1 qator, jami 6 150 000)", sheet.xabar)
+        self.assertTrue(any("sabab: 2026-09-20 6 150 000 FILTR_KATEGORIYA: kategoriya yo'q (split qilinmagan)" in q
+                            for q in sheet.qatorlar), sheet.qatorlar)
+        blok = pc.format_block(n)
+        self.assertRegex(blok, r"F\d+ SHEET_YOQ \| 2026-08-20 \| 6 150 000 \| 821ZUR23V1 sheet=Debitorlik \| .*"
+                               r"\| sabab: FILTR_KATEGORIYA — .* \| tuzatish: qatorni split qilish")
+        self.assertIn("[panel_solishtirish] WARN: panel Farqli", blok)
+
+    def test_sheet_farq_eksport_eski_va_xato_raqam(self):
+        routes = _marshrut()
+        routes[pc._SQL_OKV] = routes[pc._SQL_OKV] + [
+            {"id": "okv3", "contract_no": SH, "sana": date(2026, 9, 25), "payment_amount": D("3000000"),
+             "first_installment": D("0"), "monthly_amount": D("3000000"), "turi": "MONTHLY", "source_tx_id": None,
+             "import_batch_id": None, "created_at": datetime(2026, 9, 29, 6, 0), "updated_at": datetime(2026, 9, 29, 6, 30)}]
+        res = _kop_shartnoma(okv=(("2026-08-20", 0, 6150000), ("2026-09-25", 0, 3000000)),
+                             crm=(("2026-08-20", 6150000, "monthly", ""), ("2026-09-25", 3000000, "monthly", "")),
+                             sheets=(("s1", "Sotuv hisoboti", True, ((812, 0, 6150000),)),))
+        n = self._run(routes=routes, pc_javob=_kop_javob(res, sheets=(("s1", "Sotuv hisoboti"),)),
+                      eks_javob=_kop_eksportlar(_kop_eksport()))
+        f = [x for x in n.farqlar if x.kod == "SHEET_FARQ"]
+        self.assertEqual(len(f), 1)
+        f = f[0]
+        self.assertEqual((f.summa, f.sana, f.izoh), (D("-3000000"), "2026-09-25", "sheet - OKV: oylik -3 000 000, jami -3 000 000"))
+        self.assertEqual(f.sabab, "EKSPORT_ESKI — eksport oxirgi marta 2026-09-29 09:00 da ishlagan (ok), cron: har 60"
+                                  " daq, 08-20, har kun (1 qator); XATO_RAQAM — XATO: 821ZUR23VI CRM'da topilmagan,"
+                                  " sheetda XATO yoziladi (1 qator)")
+        self.assertEqual(f.tuzatish, C.TOLOV_SHEET_SABAB_TUZATISH["EKSPORT_ESKI"].format(sheet="Sotuv hisoboti"))
+        sheet = self._sheetlar(n)[0]
+        self.assertIn("sheet - OplatyKv: oylik -3 000 000, jami -3 000 000; sheetda yo'q: 2026-09-25 3 000 000 oylik",
+                      sheet.xabar)
+        self.assertIn("oxirgi to'lov ~2026-08-20", sheet.xabar)
+        self.assertIn("sabab: 2026-09-25 3 000 000 EKSPORT_ESKI: qator o'zgargan 2026-09-29 11:30 da, eksportdan keyin",
+                      sheet.qatorlar)
+        self.assertNotIn("CRM_FARQ", _kodlar(n.farqlar))
+        owner = html.unescape(pc.format_owner(n))
+        self.assertIn("SHEET_FARQ", owner)
+        self.assertIn("tuzatish: Admin > Export > Sotuv hisoboti > Bajarish", owner)
+
+    def test_crm_farq_royxat_juftlab(self):
+        res = _kop_shartnoma(crm=(("2026-08-21", 6150000, "monthly", "Ежемесячный"),
+                                  ("2026-09-25", 3000000, "initial", "Первоначальный")))
+        n = self._run(pc_javob=_kop_javob(res))
+        f = [x for x in n.farqlar if x.kod == "CRM_FARQ"]
+        self.assertEqual(len(f), 1)
+        f = f[0]
+        self.assertEqual((f.jiddiylik, f.summa, f.sana, f.dalil), ("error", D("3000000"), "2026-09-25", SH))
+        self.assertEqual(f.izoh, "CRM to'lovlar 9 150 000, OKV 6 150 000; faqat CRM 1, faqat OKV 0")
+        self.assertEqual(f.tuzatish, C.TOLOV_FARQ_TUZATISH["CRM_FARQ"])
+        crm = self._bolim(n, "crm_panel")
+        self.assertEqual(crm.status, "error")
+        self.assertIn("mos emas: faqat CRM: 2026-09-25 3 000 000 bosh. (Pervonachalniy); faqat OplatyKv: yo'q",
+                      crm.qatorlar)
+        self.assertIn("[panel_solishtirish] WARN: panel Farqli; OplatyKv (aniq raqam) 1 qator, jami 6 150 000"
+                      " (bosh. 0, oylik 6 150 000); CRM to'lovlar - OplatyKv = 3 000 000 (bosh. 3 000 000, oylik 0)",
+                      pc.format_block(n))
+        # CRM topilmadi / javob bermadi: CRM_FARQ yo'q
+        n = self._run(pc_javob=_kop_javob(_kop_shartnoma(crm_found=False, crm_error="CRM javob bermadi")))
+        self.assertNotIn("CRM_FARQ", _kodlar(n.farqlar))
+        self.assertEqual(self._bolim(n, "crm_panel").status, "unknown")
+        self.assertIn("CRM javob bermadi: CRM javob bermadi", self._bolim(n, "crm_panel").xabar)
+
+    def test_sheet_oqilmadi_va_eksport_xato(self):
+        res = _kop_shartnoma(sheets=(("s1", "Sotuv hisoboti", False, ()),
+                                     ("s2", "Debitorlik", True, ())))
+        n = self._run(pc_javob=_kop_javob(res),
+                      eks_javob=urllib.error.HTTPError("http://127.0.0.1:3001/x", 429, "Too Many", {}, None))
+        s1, s2 = self._sheetlar(n)
+        self.assertEqual((s1.status, s1.xabar), ("unknown", "Sotuv hisoboti: o'qilmadi: Google credential topilmadi"))
+        self.assertIn("eksport sozlamasi o'qilmadi: HTTP 429 (%s)" % C.TOLOV_KOPRIK_HTTP_IZOH[429], s1.qatorlar)
+        f = [x for x in n.farqlar if x.kod == "SHEET_YOQ"][0]
+        self.assertTrue(f.sabab.startswith(C.TOLOV_SABAB_ANIQLANMADI + " — eksport sozlamasi o'qilmadi: HTTP 429"))
+        self.assertEqual(f.tuzatish, C.TOLOV_TUZ_SHEET_TPL.format(sheet="Debitorlik"))
+        self.assertIn("Sotuv hisoboti o'qilmadi", self._bolim(n, "panel_solishtirish").xabar)
+
+    def test_baza_yiqilsa_koprik_ishlaydi(self):
+        res = _kop_shartnoma(crm=(("2026-09-25", 9150000, "monthly", ""),))
+        self.kop.default = _kop_marshrut(_kop_javob(res), _kop_eksportlar())
+        self.fake = FakeDb(fail=db.DbUnavailable("facts: ulanib bo'lmadi"))
+        with mock.patch.object(db, "tx", self.fake.tx):
+            n = pc.prefetch(SH)
+        blok = pc.format_block(n)
+        self.assertIn("[oplata_kv] UNKNOWN: " + C.TOLOV_SABAB_DB, blok)
+        self.assertIn("[crm_panel] ERROR: narx", blok)
+        self.assertIn("[farqlar] ERROR: 1 ta (error 1, warn 0, info 0); faqat panel kodlari (baza javob bermadi)", blok)
+        self.assertIn("F1 CRM_FARQ | 2026-09-25 | 3 000 000 | 821ZUR23V1", blok)
+
+    # --- sof: sabab zanjiri, ro'yxat juftlash, cron ------------------------
+    def test_har_sabab_kodi(self):
+        e = pc.KoprikEksport(id="s1", nomi="S", oxirgi_vaqt=config.parse_iso(OXIRGI_ISH), oxirgi_holat="ok")
+        eski = datetime(2026, 9, 1, 5, 0)
+
+        def o(**kw: Any) -> pc.Okv:
+            base = dict(id="o", shartnoma=SH, sana="2026-09-20", summa=D("100"), turi="MONTHLY", obyekt="ZUR",
+                        tx_type="Oplata", source_tx_id="k1", yaratilgan=eski)
+            base.update(kw)
+            return pc.Okv(**base)
+
+        top = {SH}
+        hollar = [
+            (dict(obyektlar=["MSO"]), o(), "FILTR_OBYEKT"),
+            (dict(kategoriyalar=["MONTHLY", "FIRST"]), o(turi=""), "FILTR_KATEGORIYA"),
+            (dict(turlar=["Vznos"]), o(), "FILTR_TUR"),
+            (dict(sana_dan="2026-09-21"), o(), "FILTR_SANA"),
+            (dict(belgi="pos"), o(summa=D("-100")), "FILTR_BELGI"),
+            (dict(belgi="neg"), o(), "FILTR_BELGI"),
+            ({}, o(yangilangan=datetime(2026, 9, 29, 5, 0)), "EKSPORT_ESKI"),
+            (dict(oxirgi_vaqt=None), o(), "EKSPORT_ESKI"),
+            (dict(oxirgi_holat="error"), o(), "EKSPORT_ESKI"),
+            ({}, o(shartnoma=XATO_SH), "XATO_RAQAM"),
+            ({}, o(shartnoma=SH + "/SH", source_tx_id=""), "XATO_RAQAM"),
+            ({}, o(), ""),
+            # tartib: birinchi mos kelgani (obyekt sanadan oldin)
+            (dict(obyektlar=["MSO"], sana_dan="2026-09-21"), o(), "FILTR_OBYEKT"),
+            (dict(kategoriyalar=["FIRST"], belgi="neg"), o(), "FILTR_KATEGORIYA"),
+        ]
+        for ust, qator, kod in hollar:
+            ee = pc.KoprikEksport(**{**e.__dict__, **ust})
+            self.assertEqual(pc._okv_sababi(qator, ee, SH, top)[0], kod, (ust, kod))
+            self.assertIn(kod, ("",) + tuple(C.TOLOV_SHEET_SABABLAR))
+        # XATO ammo tx qo'lda shartnoma (computeContractXato): XATO emas, kanonik emas bo'lsa XATO_RAQAM
+        self.assertEqual(pc._okv_sababi(o(shartnoma=XATO_SH, tx=_tx(manual=True)), e, XATO_SH, top), ("", ""))
+        # manba transaction: hisob, sana (UTC kuni), eski, raqam
+        et = pc.KoprikEksport(**{**e.__dict__, "manba": "transaction", "hisoblar": ["20208000900111112222"]})
+        self.assertEqual(pc._tx_sababi(_tx(hisob4="9999"), et, SH)[0], "FILTR_HISOB")
+        self.assertEqual(pc._tx_sababi(_tx(hisob4="2222"), et, SH), ("", ""))
+        ets = pc.KoprikEksport(**{**et.__dict__, "sana_dan": "2026-08-21"})
+        self.assertEqual(pc._tx_sababi(_tx(hisob4="2222"), ets, SH)[0], "FILTR_SANA")
+        self.assertEqual(pc._tx_sababi(_tx(hisob4="2222", sana="2026-09-30"), et, SH)[0], "EKSPORT_ESKI")
+        self.assertEqual(pc._tx_sababi(_tx(hisob4="2222", sh=XATO_SH), et, SH)[0], "XATO_RAQAM")
+
+    def test_eksport_holati_matni(self):
+        e = pc.KoprikEksport(id="s1", nomi="S", cron_yoq=True, cron_har=30, soat_dan=8, soat_gacha=20, kunlar=[2, 1])
+        self.assertEqual(pc._eksport_holati(e), C.TOLOV_EKSPORT_HECH_TPL.format(cron="har 30 daq, 08-20, kunlar dus, ses"))
+        e.oxirgi_vaqt, e.oxirgi_holat, e.oxirgi_xato = config.parse_iso(OXIRGI_ISH), "error", "quota"
+        self.assertEqual(pc._eksport_holati(e), "eksport oxirgi marta 2026-09-29 09:00 da ishlagan (error: quota),"
+                                                " cron: har 30 daq, 08-20, kunlar dus, ses")
+        self.assertEqual(pc._cron_matn(pc.KoprikEksport(id="x", nomi="x")), "o'chiq")
+        items = pc._koprik_eksportlar(_kop_eksportlar(_kop_eksport(days=[0, 6], date_from="2026-01-01",
+                                                                   status="error")))
+        x = items["s1"]
+        self.assertEqual((x.kunlar, x.sana_dan, x.oxirgi_holat, x.oxirgi_xato), ([0, 6], "2026-01-01", "error",
+                                                                                "quota exceeded"))
+        self.assertIn("kunlar yak, sha", pc._cron_matn(x))
+
+    def test_royxat_juftla(self):
+        kt = pc._KT
+        a = [kt("2026-08-20", D("100")), kt("2026-08-25", D("200")), kt("2026-09-10", D("300")), kt("2026-01-01", D("5"))]
+        b = [kt("2026-08-20", D("100.5")), kt("2026-08-28", D("200")), kt("2026-10-30", D("300")), kt("", D("5"), qator=7)]
+        juft, fa, fb = pc._royxat_juftla(a, b)
+        self.assertEqual([(x.sana, y.sana or y.qator) for x, y in juft],
+                         [("2026-01-01", 7), ("2026-08-20", "2026-08-20"), ("2026-08-25", "2026-08-28")])
+        self.assertEqual(([x.sana for x in fa], [x.sana for x in fb]), (["2026-09-10"], ["2026-10-30"]))
+        # sheet (sanasiz): eng eski OKV juftlanadi, eng yangisi ortib qoladi
+        okv = [kt("2026-09-20", D("10")), kt("2026-08-20", D("10"))]
+        sheet = [kt("", D("10"), qator=3)]
+        juft, fa, fb = pc._royxat_juftla(okv, sheet)
+        self.assertEqual((juft[0][0].sana, [x.sana for x in fa], fb), ("2026-08-20", ["2026-09-20"], []))
+
+    # --- serverdagi haqiqiy javob shakli (2592VTN26LM) -----------------------
+    REAL_SH = "2592VTN26LM"
+    REAL_SHEETLAR = (("sheet-1783928503664-0", "Сотув Булими отчети"), ("sheet-1783929063632-1", "Дебетор"),
+                     ("sheet-1787051997698-3", "Заявки"))
+
+    def _real_javob(self) -> Dict[str, Any]:
+        tolovlar = [{"row": 247673, "first": 2500000, "monthly": 0, "total": 2500000},
+                    {"row": 247674, "first": 347500000, "monthly": 2500000, "total": 350000000},
+                    {"row": 247675, "first": 0, "monthly": 9889000, "total": 9889000}]
+        sheet = lambda sid, nom: {"id": sid, "name": nom, "ok": True, "available": True, "initial": 350000000,  # noqa: E731
+                                  "monthly": 12389000, "total": 362389000, "matchedRows": 3, "rowsScanned": 269538,
+                                  "payments": tolovlar}
+        (s1, n1), (s2, n2), (s3, n3) = self.REAL_SHEETLAR
+        return {
+            "ok": True, "checkedAt": "2026-09-29T05:00:00.000Z",
+            "sources": {"oplata": True, "crm": True, "sheets": [{"id": i, "name": n} for i, n in self.REAL_SHEETLAR]},
+            "results": [{
+                "contract": self.REAL_SH, "allMatch": False,
+                "oplata": {"ok": True, "initial": 350000000, "monthly": 12389000, "total": 362389000, "count": 3,
+                           "payments": [{"date": "2026-07-20", "first": 2500000, "monthly": 0, "total": 2500000},
+                                        {"date": "2026-07-23", "first": 347500000, "monthly": 2500000,
+                                         "total": 350000000},
+                                        {"date": "2026-09-16", "first": 0, "monthly": 9889000, "total": 9889000}]},
+                "crm": {"ok": True, "found": True, "price": 646653800, "initialPlan": 350000000,
+                        "monthlyPlan": 296653800, "initial": 352500000, "monthly": 12389000, "total": 364889000,
+                        "remaining": 281764800, "count": 3,
+                        "payments": [{"date": "2026-09-16", "amount": 9889000, "kind": "monthly",
+                                      "type": "Ежемесячный платеж"},
+                                     {"date": "2026-07-23", "amount": 350000000, "kind": "initial",
+                                      "type": "Первоначальный взнос"},
+                                     {"date": "2026-07-20", "amount": 2500000, "kind": "initial",
+                                      "type": "Первоначальный взнос"}]},
+                "sheets": [sheet(s1, n1), sheet(s2, n2),
+                           {"id": s3, "name": n3, "ok": True, "available": True, "initial": 0, "monthly": 0,
+                            "total": 0, "matchedRows": 0, "rowsScanned": 7861, "payments": []}]}]}
+
+    def _real_eksport(self) -> Dict[str, Any]:
+        return _kop_eksportlar(*[_kop_eksport(i, n) for i, n in self.REAL_SHEETLAR])
+
+    def test_haqiqiy_javob_shakli(self):
+        n = self._run(self.REAL_SH, routes={}, pc_javob=self._real_javob(), eks_javob=self._real_eksport())
+        blok = pc.format_block(n)
+        # panel jamlari aralash to'lovni ikki sanaydi (364 889 000): CRM farqi to'lovlar ro'yxatidan, jami teng
+        self.assertNotIn("CRM_FARQ", _kodlar(n.farqlar))
+        self.assertEqual([f.kod for f in n.farqlar], ["CRM_SPLIT"])
+        f = n.farqlar[0]
+        self.assertEqual((f.jiddiylik, f.summa, f.sana, f.dalil), ("info", D("2500000"), "2026-07-23", self.REAL_SH))
+        self.assertEqual(f.izoh, "CRM bosh. 352 500 000, oylik 9 889 000; OKV bosh. 350 000 000, oylik 12 389 000")
+        self.assertIn(f.izoh, blok)                                   # 80 belgidan kesilmaydi
+        crm = self._bolim(n, "crm_panel")
+        self.assertEqual(crm.status, "ok")
+        self.assertEqual(crm.xabar, "narx 646 653 800; reja bosh. 350 000 000, oylik 296 653 800; to'lovlar 3 ta:"
+                                    " bosh. 352 500 000, oylik 9 889 000, jami 362 389 000; qoldiq (narx - to'lovlar)"
+                                    " 284 264 800; panel jami (grafik/tarix max): bosh. 352 500 000, oylik 12 389 000,"
+                                    " jami 364 889 000")
+        self.assertIn("split farqi: 2026-07-23 350 000 000 CRM bosh., OplatyKv bosh. 347 500 000, oylik 2 500 000",
+                      crm.qatorlar)
+        sheetlar = self._sheetlar(n)
+        self.assertEqual([(b.status, b.xabar.split(":")[0]) for b in sheetlar],
+                         [("ok", "Sotuv Bulimi otcheti"), ("ok", "Debetor"), ("ok", "Zayavki")])
+        self.assertIn("OplatyKv bilan mos", sheetlar[0].xabar)
+        self.assertIn("oxirgi to'lov ~2026-09-16", sheetlar[0].xabar)
+        # Zayavki: to'lov reestri emas: faqat ma'lumot, SHEET_YOQ hech qachon chiqmaydi
+        self.assertEqual(sheetlar[2].xabar, "Zayavki: %s: 0 qator, jami 0" % C.TOLOV_SHEET_MALUMOT)
+        self.assertEqual(sheetlar[2].qatorlar, [])
+        sol = self._bolim(n, "panel_solishtirish")
+        self.assertEqual(sol.status, "ok")
+        self.assertEqual(sol.xabar, "panel Farqli; OplatyKv (aniq raqam) 3 qator, jami 362 389 000 (bosh. 350 000 000,"
+                                    " oylik 12 389 000); CRM to'lovlar - OplatyKv = 0 (bosh. 2 500 000, oylik"
+                                    " -2 500 000); Sotuv Bulimi otcheti - OplatyKv = 0 (bosh. 0, oylik 0); Debetor -"
+                                    " OplatyKv = 0 (bosh. 0, oylik 0)")
+        self.assertIn("F1 CRM_SPLIT | 2026-07-23 | 2 500 000 | 2592VTN26LM |", blok)
+        self.assertIsNone(C.KIRILL_RE.search(blok))                 # sheet nomlari va CRM turlari lotinda
+        self.assertIn("To'lov tekshiruvi 2592VTN26LM: CRM 362 389 000 (panel)", pc.qisqa(n))
+
+    def test_sheetlar_env_tanlovi(self):
+        (s1, _n1), (s2, _n2), (s3, _n3) = self.REAL_SHEETLAR
+        for qiymat, tanlangan in (("Заявки", {s3}), ("zayavki", {s3}), (s2, {s2}), ("Debetor, " + s3, {s2, s3}),
+                                  ("yo'q-sheet", set())):
+            with mock.patch.dict(os.environ, {C.TOLOV_SHEETLAR_ENV: qiymat}):
+                n = self._run(self.REAL_SH, routes={}, pc_javob=self._real_javob(), eks_javob=self._real_eksport())
+                self.assertEqual(pc._sheet_tanlangan(n.koprik), tanlangan, qiymat)
+            yoq = [f for f in n.farqlar if f.kod == "SHEET_YOQ"]
+            self.assertEqual(len(yoq), 1 if s3 in tanlangan else 0, qiymat)
+            malumot = [b for b in self._sheetlar(n) if C.TOLOV_SHEET_MALUMOT in b.xabar]
+            self.assertEqual(len(malumot), 3 - len(tanlangan), qiymat)
+        # default: nomida "Sotuv" / "Debetor" (lotin, kichik-katta farqsiz)
+        kn = pc.KoprikNatija(sheetlar=[("a", "SOTUV bo'limi"), ("b", "Debitorlik"), ("c", "Zayavki"), ("d", "x")],
+                             sheet_xom={"a": "СОТУВ бўлими", "d": "ДЕБЕТОР 2026"})
+        self.assertEqual(pc._sheet_tanlangan(kn), {"a", "b", "d"})
+
+    def test_kop_shartnoma_prefiks(self):
+        a, b = "1ZUR11AA", "2ZUR22BB"
+        res = [_kop_shartnoma(sh=a), _kop_shartnoma(sh=b, okv=(("2026-08-21", 0, 5000000),),
+                                                     crm=(("2026-08-21", 5000000, "monthly", ""),),
+                                                     sheets=(("s1", "Sotuv hisoboti", True, ()),
+                                                             ("s2", "Debitorlik", True, ((9, 0, 5000000),))))]
+        self.kop.default = _kop_marshrut(_kop_javob(*res), _kop_eksportlar())
+        kn = pc._koprik_collect([a, b], pc._mono() + 30)
+        self.assertEqual(parse_qs(urlsplit(self.kop.calls[0].url).query), {"contracts": [a + "," + b]})
+        farqlar, bolimlar = pc.koprik_tahlil(kn, None, None)
+        self.assertEqual([(f.kod, f.dalil) for f in farqlar], [("SHEET_YOQ", b + " sheet=Sotuv hisoboti")])
+        self.assertTrue(farqlar[0].sabab.startswith(C.TOLOV_SABAB_ANIQLANMADI + " — oplata_kv qatorlari o'qilmadi"))
+        s1 = [x for x in bolimlar if x.komponent == "sheet"][0]
+        self.assertTrue(s1.xabar.startswith("Sotuv hisoboti: %s: bosh. 0" % a), s1.xabar)
+        self.assertIn(" | %s: shartnoma qatori topilmadi" % b, s1.xabar)
+        crm = [x for x in bolimlar if x.komponent == "crm_panel"][0]
+        self.assertTrue(any(q.startswith(a + " oxirgi to'lovlar: ") for q in crm.qatorlar))
 
 
 # ---------------------------------------------------------------------------

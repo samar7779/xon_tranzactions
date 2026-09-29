@@ -1,19 +1,19 @@
-# To'lov tekshiruvi (CRM ↔ transactions ↔ oplata_kv)
+# To'lov tekshiruvi (CRM ↔ transactions ↔ oplata_kv ↔ Google Sheet)
 
 ## Vazifasi
-Shartnoma yoki bitta to'lovni uch manbada solishtirish: bank (`transactions`), OplatyKv (`oplata_kv`) va XonSaroy CRM to'lov tarixi. Faqat o'qish: hech bir manbaga yozilmaydi, tuzatish panelda yoki CRM operatorida.
-Agentda DB ham, CRM ham yo'q. Jonli qatorlarni bot o'zi yig'adi (`agents/payment_check.py`): DB `db.tx("facts", readonly=True)`, CRM faqat `GET {XONSAROY_CLIENT_BASE}/payment-history`. Juftlash va farq kodlari Python'da hisoblanadi, agent faqat tushuntiradi.
+Shartnoma yoki bitta to'lovni manbalarda solishtirish: bank (`transactions`), OplatyKv (`oplata_kv`), XonSaroy CRM va ulangan Google Sheetlar (Sotuv hisoboti, Debitorlik va h.k.). Faqat o'qish: hech bir manbaga yozilmaydi, tuzatish panelda yoki CRM operatorida.
+Agentda DB ham, CRM ham yo'q. Jonli qatorlarni bot o'zi yig'adi (`agents/payment_check.py`): DB `db.tx("facts", readonly=True)`; CRM va sheetlar panel ko'prigi orqali: `GET http://127.0.0.1:<PORT>/api/agent-bridge/payment-check` (panel Chek payment bilan aynan bir xil hisob) va `GET /api/agent-bridge/exports` (eksport sozlamasi). Eski to'g'ridan `GET {XONSAROY_CLIENT_BASE}/payment-history` yo'li default o'chiq (prod'da 404). Juftlash va farq kodlari Python'da hisoblanadi, agent faqat tushuntiradi.
 Chaqiruv ikki yo'l: egasi `/tolov <shartnoma | ID | summa sana | mijoz ism>` yozadi (LLM'siz jadval) yoki Leader intent `payment_check` bilan Checker'ga topshiradi. Checker topshirig'i oxirida `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` ... `=== TUGADI ===` bloki keladi.
 Blok yo'q bo'lsa jonli ma'lumot ham yo'q: panelda qayerga qarashni ayt (8-bo'lim jadvali).
 
 ## Qisqa algoritm (agent uchun)
 1. Blokni o'qi: komponent qatorlari qat'iy tartibda (6-bo'lim).
 2. `UNKNOWN` qator bo'lsa, qaysi manba va sababini ayt. Shu manba bo'yicha "farq yo'q" dema.
-3. Jamilarni 3 qatorda ber: CRM, OplatyKv, bank (jami, boshlang'ich, oylik).
-4. Har `F<n>` farq uchun 7-bo'limdan kod qatorini top.
+3. Jamilarni 3 qatorda ber: CRM, OplatyKv, bank (jami, boshlang'ich, oylik). CRM jami `[crm_panel]` dagi `to'lovlar N ta: ...` dan (`panel jami` emas; `[crm]` eski yo'l, odatda `UNKNOWN: o'chirilgan`). Sheetlar `[sheet]` qatorlarida, har biri nomi bilan; `ma'lumot uchun, solishtirilmaydi` sheetni farq deb aytma.
+4. Har `F<n>` farq uchun 7-bo'limdan kod qatorini top. `SHEET_YOQ`, `SHEET_FARQ` da `sabab:` qismini 7.1 dan izohla.
 5. Sabab va kim, qayerda tuzatishini ayt: panel yo'li, ruxsat nomi yoki "CRM operatori".
 6. `KUCHSIZ_MOSLIK` bo'lsa ogohlantir: juft faqat summa va sana bo'yicha, "aniq" dema.
-7. "To'langan" summaning qaysi hisobi ekanini ayt (8-bo'lim): blok CRM to'lov tarixi yig'indisini beradi, `/order/show` ni emas.
+7. "To'langan" summaning qaysi hisobi ekanini ayt (8-bo'lim): `[crm_panel]` panel Chek payment hisobi (`/order/show`, topmasa payment-history zaxirasi); eski `[crm]` qatori CRM to'lov tarixi yig'indisi.
 8. Hech narsa yozma va tuzatishni bajarma: faqat yo'lini ayt.
 
 ## 1. Manbalar
@@ -21,11 +21,12 @@ Blok yo'q bo'lsa jonli ma'lumot ham yo'q: panelda qayerga qarashni ayt (8-bo'lim
 |---|---|---|---|---|
 | Bank | `transactions` | `sync.service.ts::tick` (Kapital, Ipak Yo'li, Hamkor API), importlar (Excel, Hamkor vipiska) | hisob `sync_interval_minutes` (default 5 daq), oxirgi `TXN_SYNC_DAYS_BACK` (default 10) kun | kirim − chiqim: `amount` ishorasiz, ishora `direction` dan, har `status` |
 | OplatyKv | `oplata_kv` | `oplata-kv.service.ts::syncFromTransactions` (CLIENT + `contract_number`, IN va OUT, `status` filtri yo'q), Excel import, qo'lda, perebroska, vznos | kunduz har `oplatykv.txAutoSyncMinutes` daq (limit 1000), tun 01:00 to'liq; faqat `oplatykv.txMinDate` dan keyingi tx | `SUM(payment_amount)` ishorali; split `first_installment`, `monthly_amount` |
-| CRM to'lov tarixi | `GET {XONSAROY_CLIENT_BASE}/payment-history?contract=` (INDEX) | XonSaroy: CRM operatori, XonPay, bizning `/api/v1/oplata-kv/changes` feed'i (CRM uni o'qiydi, `api.md`) | jonli | `SUM(amount)`, qaytarim manfiy; split `initial_amount`, `monthly_amount`, `other_amount` |
+| Panel ko'prigi (asosiy CRM va Sheet manbasi) | `GET http://127.0.0.1:<PORT>/api/agent-bridge/payment-check?contracts=A,B,C` (`agent-bridge.service.ts::paymentCheck` → `chek-order.service.ts::paymentCheck`) va `GET /api/agent-bridge/exports` | backend: OplatyKv (aniq `contract_no`), CRM (`crmPaymentPart`: `/order/show`, topmasa payment-history zaxirasi), sheetlar (`readContractsPayments`) | jonli | panel Chek payment bilan aynan bir xil; `allMatch` = panel "Mos/Farqli" |
+| CRM to'lov tarixi (eski yo'l, default o'chiq) | `GET {XONSAROY_CLIENT_BASE}/payment-history?contract=` (INDEX); prod'da 404, `AGENTS_TOLOV_CRM=1` bo'lsagina | XonSaroy: CRM operatori, XonPay, bizning `/api/v1/oplata-kv/changes` feed'i (CRM uni o'qiydi, `api.md`) | jonli | `SUM(amount)`, qaytarim manfiy; split `initial_amount`, `monthly_amount`, `other_amount` |
 | CRM shartnoma keshi | `crm_contracts` | `crm-contract-cache.service.ts::lookup` | `found=true` 24 soat, `found=false` 4 soat | to'lov yo'q: shartnoma bor-yo'qligi (XATO ta'rifi), `status`, `object_name`, `crm_order_id` |
 | XonPay | `xonpay_transactions` | `xonpay.service.ts` (CRM `/payment-history/excel`, `payment_method` Xon Pay) | 07-23 soatlari, default har 60 daq | CRM'ning faqat XonPay qismi; `is_matched`, `matched_tx_id` |
 | CRM sverka | `settings` `crmSverka.snapshot` | `crm-sverka.service.ts` | 07:00, 12:00, 17:00 (14 soatgacha eski) | to'lov tarixi yig'indisi, shartnoma kesimi. Bot ham, agent ham o'qimaydi |
-| Google Sheet | eksport jadvali | `google-export.service.ts` | eksport jadvali bo'yicha | `oplata_kv` nusxasi, mustaqil manba emas |
+| Google Sheet | eksport jadvali (ko'prik orqali o'qiladi, faqat to'lov ustunli sheetlar) | `google-export.service.ts::run` (`oplataKv.getRowsForExport` filtrlari bilan) | eksport cron'i yoki Admin > Export > Bajarish | `oplata_kv` nusxasi (filtrdan keyin), mustaqil manba emas. XATO qatorda shartnoma o'rniga `XATO` yoziladi |
 
 CRM feed'dan faqat faol qatorni oladi: `payment_category` yoki `perereboska_group_id` bor qator (`public-api.controller.ts::changesOplataKv`). Qolgani tombstone (`reason: 'inactive'`). XATO qatorning spliti tozalanadi (`cleanupSplitsForXatoContracts`), shuning uchun XATO va split yo'q qator CRM'ga bormaydi.
 
@@ -102,20 +103,24 @@ CRM alohida: operator, XonPay va bizning feed. Biz CRM'ga yozmaymiz.
 |---|---|
 | `kirish` | nima so'ralgan (shartnoma, ID, summa+sana yoki mijoz), variantlar soni, so'rov vaqti (Toshkent) |
 | `crm_kesh` | `crm_contracts`: found, holat, obyekt, order, oxirgi tekshiruv; dublikat raqamda mijozning to'liq ismi |
-| `crm` | jonli CRM to'lov tarixi: soni, jami, boshlang'ich, oylik, boshqa, qaytarim |
-| `crm_xonpay` | CRM ishlamaganda zaxira: faqat `xonpay_transactions` (CRM'ning XonPay qismi) |
+| `crm` | eski yo'l (default o'chiq): jonli CRM to'lov tarixi, soni, jami, boshlang'ich, oylik, boshqa, qaytarim. Odatda `UNKNOWN: o'chirilgan`: CRM ma'lumoti `crm_panel` da |
+| `crm_xonpay` | `crm` ishlamaganda zaxira: faqat `xonpay_transactions` (CRM'ning XonPay qismi) |
+| `crm_panel` | CRM panel yo'li (ko'prik): narx, reja bosh./oylik, `to'lovlar N ta: bosh., oylik, jami` (CRM to'lovlar ro'yxati yig'indisi, turi bo'yicha), `qoldiq (narx - to'lovlar)`, `panel jami (grafik/tarix max)` (faqat ma'lumot: panel aralash to'lovni ikki sanashi mumkin, farq hisobiga kirmaydi). Ostida `oxirgi to'lovlar: <sana> <summa> <tur>` (5 ta, eng yangisi birinchi); `CRM_FARQ` bo'lsa `mos emas: faqat CRM: ...; faqat OplatyKv: ...`; `CRM_SPLIT` bo'lsa `split farqi: <sana> <summa> CRM <tur>, OplatyKv bosh. <n>, oylik <n>`. `zaxira: payment-history (narx, reja, qoldiq yo'q)`: order topilmagan. `CRM'da topilmadi` (WARN), `CRM javob bermadi: <sabab>` (UNKNOWN) |
 | `oplata_kv` | qatorlar soni, jami, boshlang'ich, oylik, split yo'q, XATO soni. `XATO ?` (qatorlar o'qilmadi) yoki `XATO va KANONIK_EMAS tekshirilmadi (crm_kesh o'qilmadi)` bo'lsa XATO sanalmagan: "XATO yo'q" dema |
+| `sheet` | har ulangan sheet uchun alohida qator, nomi bilan (lotinda). Solishtiriladigan sheet: `<nomi>: bosh. <n>, oylik <n>, jami <n>; <N> qator; oxirgi qator #<n>; oxirgi to'lov ~<sana>; OplatyKv bilan mos` yoki `sheet - OplatyKv: <ustun> <farq>; sheetda yo'q: ...; OplatyKv'da yo'q: ...; split farqi: ...`. Boshqa sheet: `<nomi>: ma'lumot uchun, solishtirilmaydi: <N> qator, jami <n>` (STATUS doim OK, SHEET_* chiqmaydi). `o'qilmadi: <sabab>` (UNKNOWN). Ostida `eksport: manba, rejim; dateFrom; filtr; cron; oxirgi ish` va SHEET_* bo'lsa `sabab: <sana> <summa> <kod>: <izoh>` qatorlari. Ko'prik sheet to'loviga sana bermaydi: `~<sana>` OplatyKv qatori bilan summa bo'yicha juftlab olingan |
 | `transactions` | tx soni, kirim, chiqim, `status` kesimi. `izoh qidiruvi o'qilmadi: <sabab>` (WARN): faqat izohdagi raqam qidiruvi ishlamagan, tx ma'lumoti o'qilgan |
 | `bank_izi` | `transaction_change_logs` (DELETED, MOVED, EDITED) va `oplata_kv_history` (`deleted`, `edited`) izlari; oyna qatorda yoziladi |
 | `kontekst` | vznos, perebroska, kutilayotgan ariza, XonPay soni va moslangani |
-| `solishtirish` | `CRM - OplatyKv = <jami> (bosh. <n>, oylik <n>)` (CRM tekshirilmagan bo'lsa `CRM tekshirilmadi`); `OplatyKv(bank) - bank = <n>`. 2-3 shartnomada avval har shartnoma alohida (`<shartnoma>: CRM - OplatyKv = ..., OplatyKv(bank) - bank = ...`), keyin `jami: ...`: bir shartnomadagi ortiqcha ikkinchisidagi kamni yopmaydi, har birini alohida ayt |
-| `farqlar` | soni va jiddiylik kesimi (CRM tekshirilmagan bo'lsa `; CRM tekshirilmadi: CRM kodlari yo'q`; `qisman: ... qatorlari o'qilmadi, BIZDA_YOQ ... tekshirilmadi` bo'lsa "CRM'da bor, bizda yo'q" tekshirilmagan); ostida farq qatorlari |
+| `solishtirish` | `CRM - OplatyKv = <jami> (bosh. <n>, oylik <n>)` (eski `crm` tekshirilmagan bo'lsa `CRM tekshirilmadi`); `OplatyKv(bank) - bank = <n>`. 2-3 shartnomada avval har shartnoma alohida (`<shartnoma>: CRM - OplatyKv = ..., OplatyKv(bank) - bank = ...`), keyin `jami: ...`: bir shartnomadagi ortiqcha ikkinchisidagi kamni yopmaydi, har birini alohida ayt |
+| `panel_solishtirish` | `panel Mos` yoki `panel Farqli` (panelning o'z belgisi, faqat ma'lumot: panel CRM jamlari MAX bilan); `OplatyKv (aniq raqam) <N> qator, jami ...`; `CRM to'lovlar - OplatyKv = <jami> (bosh. <n>, oylik <n>)`; har solishtiriladigan sheet `<nomi> - OplatyKv = <jami> (bosh. <n>, oylik <n>)`. STATUS faqat `CRM_FARQ`, `SHEET_*` dan (`CRM_SPLIT` info, ko'tarmaydi). OplatyKv bu yerda aniq `contract_no` bo'yicha (XATO shakldagi qatorlar kirmaydi), `oplata_kv` qatori variantlar bilan: ikkalasi farq qilishi mumkin |
+| `farqlar` | soni va jiddiylik kesimi (CRM tekshirilmagan bo'lsa `; CRM tekshirilmadi: CRM kodlari yo'q`; panel CRM ishlagan bo'lsa `; CRM to'lov kodlari yo'q, CRM jami crm_panel da (CRM_FARQ)`; `qisman: ... qatorlari o'qilmadi, BIZDA_YOQ ... tekshirilmadi` bo'lsa "CRM'da bor, bizda yo'q" tekshirilmagan); ostida farq qatorlari |
 | `tolovlar` | juftlar jadvali |
 | `nomzodlar` | faqat summa+sana yoki mijoz qidiruvida, nomzod bir nechta bo'lsa (≤ 10) |
 
-- STATUS: `OK` farq yo'q; `WARN` kamida bitta warn farq yoki natija `qisman`; `ERROR` kamida bitta error farq; `UNKNOWN` manba javob bermagan. `UNKNOWN` asosiy sabablari (`contract.py::TOLOV_SABAB_*`): `o'chirilgan` (`AGENTS_TOLOV_CRM=0`), `kalit yo'q`, `manzil yaroqsiz`, `vaqt tugadi` (umumiy deadline), `kunlik cheklov tugadi`, `so'rov chegarasi` (7 ta), `kirish o'qilmadi`, `baza javob bermadi` (ortidan xato matni bo'lishi mumkin). Boshqa matn ham keladi: CRM'da `HTTP <kod>`, `timeout` (bitta GET), `javob JSON emas`, `javob 5 MB dan katta`, `redirect taqiqlangan (<kod>)`, `boshqa hostga yo'naltirildi`, tarmoq xatosi (`<Xato>: <sabab>`); baza bo'limida SQL xato matni; `[solishtirish] UNKNOWN: tekshiruv yiqildi: <Xato>`. Bunday matn aynan keltiriladi, sabab to'qilmaydi.
-- `[crm] UNKNOWN` bo'lsa `CRM_YOQ`, `BIZDA_YOQ`, `SPLIT_FARQ` hisoblanmaydi. Bu "CRM mos" emas, "CRM tekshirilmadi" degani. `[solishtirish]` va `[farqlar]` qatorida ham `CRM tekshirilmadi` yoziladi.
-- Farq qatori: `F<n> KOD | sana | summa | dalil | izoh | tuzatish: ...`. Dalil: `okv=`, `tx=`, `crm=` yoki `ariza=` va qisqa ID; `KANONIK_EMAS` da `<bizdagi> ≈ <CRM kanonik>`; dalil bo'lmasa `-`.
+- Panel bo'limlari (`crm_panel`, `sheet`, `panel_solishtirish`) ko'prik ishlamasa uchalasi `UNKNOWN: ko'prik: <sabab>`, qolgan tekshiruv (DB) davom etadi. Sabablar: `ko'prik kaliti yo'q (AGENT_BRIDGE_KEY)`, `ko'prik manzili yaroqsiz (faqat http://127.0.0.1 yoki http://localhost)`, `shartnoma formati ko'prikka mos emas (A-Z, 0-9, 3-20 belgi)` (masalan `/SH` li raqam so'ralmaydi), `vaqt tugadi`, `timeout`, `ulanish rad etildi (backend ishlamayapti yoki PORT noto'g'ri)`, `HTTP 403 (kalit mos emas yoki backend'da ko'prik yopiq)`, `HTTP 404 (backend'da agent-bridge yo'q)`, `HTTP 400 (so'rov rad etildi: shartnoma yoki sheet formati)`, `HTTP 429 (so'rov chegarasi, keyinroq)`, `javob JSON emas`, `javob shakli kutilmagan`, `javob 5 MB dan katta`, `redirect taqiqlangan (<kod>)`, `boshqa hostga yo'naltirildi`. `[sheet] UNKNOWN: to'lov ustunli sheet ulanmagan`: tekshiradigan sheet yo'q. `ko'prik: o'chirilgan`: bot ko'prikni chaqirmagan.
+- STATUS: `OK` farq yo'q; `WARN` kamida bitta warn farq yoki natija `qisman`; `ERROR` kamida bitta error farq; `UNKNOWN` manba javob bermagan. `UNKNOWN` asosiy sabablari (`contract.py::TOLOV_SABAB_*`): `o'chirilgan` (eski CRM yo'li: `AGENTS_TOLOV_CRM` default `0`), `kalit yo'q`, `manzil yaroqsiz`, `vaqt tugadi` (umumiy deadline), `kunlik cheklov tugadi`, `so'rov chegarasi` (7 ta), `kirish o'qilmadi`, `baza javob bermadi` (ortidan xato matni bo'lishi mumkin). Boshqa matn ham keladi: CRM'da `HTTP <kod>`, `timeout` (bitta GET), `javob JSON emas`, `javob 5 MB dan katta`, `redirect taqiqlangan (<kod>)`, `boshqa hostga yo'naltirildi`, tarmoq xatosi (`<Xato>: <sabab>`); baza bo'limida SQL xato matni; `[solishtirish] UNKNOWN: tekshiruv yiqildi: <Xato>`. Bunday matn aynan keltiriladi, sabab to'qilmaydi.
+- `[crm] UNKNOWN` bo'lsa to'lov darajasidagi CRM kodlari (`CRM_YOQ`, `BIZDA_YOQ`, `SPLIT_FARQ`) hisoblanmaydi. `[crm_panel]` ishlagan bo'lsa CRM jami solishtirilgan (`CRM_FARQ`), faqat har to'lov alohida juftlanmagan. Ikkalasi ham `UNKNOWN` bo'lsa "CRM mos" DEMA: "CRM tekshirilmadi".
+- Farq qatori: `F<n> KOD | sana | summa | dalil | izoh | sabab: ... | tuzatish: ...` (`sabab:` faqat `SHEET_YOQ`, `SHEET_FARQ` da). Dalil: `okv=`, `tx=`, `crm=` yoki `ariza=` va qisqa ID; `KANONIK_EMAS` da `<bizdagi> ≈ <CRM kanonik>`; `CRM_FARQ` da shartnoma; `SHEET_*` da `<shartnoma> sheet=<nomi>`; dalil bo'lmasa `-`. `CRM_FARQ` summasi = CRM jami - OplatyKv jami; `SHEET_FARQ` summasi = sheet jami - OplatyKv jami; `SHEET_YOQ` summasi = OplatyKv jami.
 - Jadval sarlavhasi `sana | summa | tur | CRM | OKV | TX | moslik | kod`. Ustunlar:
 
 | Ustun | Qiymat |
@@ -136,7 +141,7 @@ CRM alohida: operator, XonPay va bizning feed. Biz CRM'ga yozmaymiz.
 - `(kesildi: yana N qator; jamilar to'liq)`: jadval yoki izohlar kesilgan. Komponent qatorlari va jamilar hech qachon kesilmaydi. `(yana N farq: <kod>×n, ...)`: 25 dan ortiq farq jamlangan.
 - `[crm]` qatorida `500 chegarasi, ro'yxat to'liq bo'lmasligi mumkin` bo'lsa (STATUS `WARN`, error farq bo'lsa `ERROR`): CRM ro'yxati to'liq bo'lmasligi mumkin, CRM jamini "to'liq" dema.
 - Blok ichida faqat `(tolov tekshiruvi yiqildi: <Xato>)` yoki `(payment_check yuklanmadi)`: blok qurilmagan, jonli ma'lumot yo'q.
-- `/tolov` tarixida bir qator qoladi: `To'lov tekshiruvi <kirish>: CRM ...; OplatyKv ...; bank ...; farq: ...` yoki `To'lov tekshiruvi <kirish>: N nomzod, shartnoma tanlanmadi`.
+- `/tolov` tarixida bir qator qoladi: `To'lov tekshiruvi <kirish>: CRM ...; OplatyKv ...; bank ...; farq: ...` (CRM jami panel ko'prigidan bo'lsa `<summa> (panel)`) yoki `To'lov tekshiruvi <kirish>: N nomzod, shartnoma tanlanmadi`.
 
 ## 7. Farq kodlari → sabab → kim va qayerda tuzatadi
 Kodlar `agents/contract.py::TOLOV_FARQ_KODLARI` bilan bir xil. "Odatiymi" = ha bo'lsa tuzatish kerak emas.
@@ -152,6 +157,7 @@ Kodlar `agents/contract.py::TOLOV_FARQ_KODLARI` bilan bir xil. "Odatiymi" = ha b
 | `TX_YOQ` | error | OplatyKv bank qatori, tx yo'q (yetim) | bank o'chirgan (DELETED kaskadi), sana ko'chib eski nusxa qolgan (2026-09-24 gacha) | noto'g'ri o'chgan bo'lsa O'zgargan to'lovlar > Tiklash (`changed_txn:check`, `changed_txn:restore`); yetim dublikat: egasi qarori | yo'q |
 | `SUMMA_FARQ` | error | juft, summa farqli | bank summani o'zgartirgan (EDITED), qo'lda tahrir, kuchsiz juft | bank EDITED: keyingi sync kaskad qiladi; qolsa qo'lda tekshirish | yo'q |
 | `DUBLIKAT` | error | bir yadro guruhida 2+ OplatyKv qatori | sana ko'chishi dublikati, qayta import | egasi qarori, zaxira jadvali bilan tozalash (dasturchi REJA). O'chirishni taklif qilma | yo'q |
+| `CRM_FARQ` | error | panel yo'li: CRM to'lovlar ro'yxati yig'indisi (`sum(amount)`, panel jamlari EMAS) OplatyKv jamidan (aniq raqam) ≥ 1 so'm farq qiladi yoki juftlanmagan to'lov bor (OplatyKv to'lovi jami = CRM summasi, avval bir sana, keyin ≤ 7 kun). Izoh: `CRM to'lovlar <jami>, OKV <jami>; faqat CRM <n>, faqat OKV <n>` | bizda XATO yoki boshqa shartnomada, CRM'da naqd yoki operator yozuvi, perebroska CRM grafigida, bank o'chirgan | qaysi to'lovlar mos emasligi `[crm_panel]` ostida `mos emas: faqat CRM: ...; faqat OplatyKv: ...` (sana, summa, tur; summa teng va sana ≤ 7 kun bo'yicha juftlangan). Bizda: OplatyKv > XATO → CRM yoki tx shartnomasi; CRM tomoni CRM operatori | naqd yoki perebroskada ha |
 | `SPLIT_FARQ` | warn | CRM boshlang'ich yoki oylik ≠ OplatyKv (≥ 1 so'm) | waterfall CRM turi bilan zid, CRM `type` xato | CRM qiymatini aynan qo'yish: `POST /oplata-kv/:id/assign-from-crm` `initialAmount`, `monthlyAmount` bilan (`applyCrmSplit`, `oplatakv:edit` yoki `oplatakv:xato_crm`); CRM turi xato bo'lsa CRM operatori | yo'q |
 | `SPLIT_YOQ` | warn | OplatyKv `payment_category` NULL (perebroska va XATO emas) | split ishlamagan, CRM grafigi topilmagan | `POST /oplata-kv/:id/split` yoki `split-installments` (`force`), `oplatakv:split`; XATO → CRM > Split yo'q. Split bo'lmaguncha feed CRM'ga bermaydi | yo'q |
 | `DRIFT` | warn | OplatyKv ↔ tx: shartnoma, ishorali summa, Toshkent sanasi, kategoriya yoki holat farqli | tx o'zgargan, sync hali o'tmagan; yarim tun tuzog'i (5-bo'lim) | keyingi sync tenglaydi (`txMinDate` dan keyingi qatorlar); qolsa tx'da tuzatish | ko'pincha |
@@ -161,8 +167,11 @@ Kodlar `agents/contract.py::TOLOV_FARQ_KODLARI` bilan bir xil. "Odatiymi" = ha b
 | `BANK_KOCHIRGAN` | warn | `transaction_change_logs` MOVED | bank boshqa kunga ko'chirgan, OplatyKv bog'lanishi qoladi | kerak emas; sana xato bo'lsa Sverka `fixTxDate` (`transactions:sverka_fix`) | ha |
 | `BANK_TAHRIRLAGAN` | warn | `transaction_change_logs` EDITED | bank summa, holat yoki sanani o'zgartirgan | sync kaskadi; qolsa qo'lda | ko'pincha |
 | `OKV_OCHIRILGAN` | warn | `oplata_kv_history` da `deleted` yoki shartnoma tozalangan | kaskad o'chirish, qo'lda o'chirish, shartnomani bo'shatish (`contract_no='xato'`) | tarixni ko'rish: `GET /oplata-kv/:id/history` (kim, qachon) | yo'q |
+| `SHEET_YOQ` | warn | OplatyKv'da to'lov bor, sheetda shartnoma qatori topilmadi (`matchedRows` 0) | 7.1 sabab kodlari: eksport filtri, `dateFrom`, eksport eskirgan, XATO | `sabab:` bo'yicha (7.1); umumiy: `eksport eskirgan bo'lishi mumkin: Admin > Export > <sheet nomi> > Bajarish` | filtrda ha |
+| `SHEET_FARQ` | warn | sheet summasi OplatyKv'dan farq qiladi; izohda qaysi ustunda qancha: `sheet - OKV: <ustun> <farq>` | 7.1 sabab kodlari; sheetga qo'lda qator qo'shilgan | `sabab:` bo'yicha (7.1); sheet bo'limida `sheetda yo'q:` (OplatyKv'da bor, sheetda yo'q to'lovlar) va `OplatyKv'da yo'q:` (sheet qatorlari) | filtrda ha |
 | `ARIZA_KUTMOQDA` | info | `xato_correction_requests` `status='pending'` | tuzatish arizasi berilgan | ariza tasdig'ini kutish (`/correction/:id/approve`, `categories:manage`) | ha |
 | `SANA_SILJIGAN` | info | juft, sana 1-3 kun farqli | Hamkor settlement, XonPay, bank ko'chirishi | kerak emas | ha |
+| `CRM_SPLIT` | info | panel yo'li: CRM va OplatyKv jami va to'lovlari mos, faqat boshlang'ich/oylik taqsimoti farqli. Izoh: `CRM bosh. <n>, oylik <n>; OKV bosh. <n>, oylik <n>` | CRM to'lovni turi bo'yicha (butun summa bosh. yoki oylik), bizda reja waterfall bo'yicha bo'lingan (bitta to'lov ikkala qismga) | kerak emas; CRM bo'linishi kerak bo'lsa XATO → CRM > Split (`applyCrmSplit`). Qaysi to'lov: `[crm_panel]` ostida `split farqi:` | ha |
 | `QAYTARIM` | info | CRM manfiy, bizda manfiy jufti yo'q | shartnoma bekor yoki qayta rasmiylashtirilgan, storno | bizda OUT qator bo'lsa mos; bo'lmasa storno yoki perebroska: egasi qarori | ko'pincha |
 | `PEREBROSKA` | info | perebroska qatori, CRM jufti yo'q | perebroska CRM tarixida bo'lmasligi mumkin, grafikda bor | kerak emas | ha |
 | `VZNOS` | info | vznos qatori, CRM jufti yo'q | o'z shartnomamiz, ko'pincha CRM'da yo'q | kerak emas | ha |
@@ -178,11 +187,36 @@ Muhim tuzoqlar:
 - XATO → CRM (`matchComposites`, `bulkMatch`) bekor shartnomani ko'rmaydi (trashed paramsiz) va sana ko'chgan to'lovni ko'rmaydi (sana va yadro eski). U yerda "topilmadi" = "CRM'da yo'q" emas.
 - Shartnomani bo'shatish `contract_no='xato'`, `source_tx_id=NULL` qiladi: bog'lanish uziladi, qator shartnoma bo'yicha qidiruvda chiqmaydi.
 
+### Qaysi sheetlar solishtiriladi
+- `SHEET_YOQ` va `SHEET_FARQ` faqat solishtiriladigan sheetlarda chiqadi. Env `AGENTS_TOLOV_SHEETLAR` (vergul bilan sheet id yoki nomi) bo'lsa faqat shular. Bo'lmasa default: nomi (lotinga o'girilgan, kichik-katta harf farqsiz) `sotuv`, `debetor` yoki `debitor` ni o'z ichiga olgan sheetlar (Sotuv bo'limi hisoboti, Debetor).
+- Qolgan sheetlar (masalan `Zayavki`: arizalar, to'lov reestri emas) blokda faqat ma'lumot: `<nomi>: ma'lumot uchun, solishtirilmaydi: <N> qator, jami <n>`. Ular uchun farq kodi HECH QACHON chiqmaydi, "sheetda yo'q" dema.
+- Sheet to'lovlarida sana yo'q (faqat qator raqami): OplatyKv bilan juftlash summa bo'yicha (avval jami + bosh. + oylik teng, keyin faqat jami).
+
+### 7.1 Sheet sabab kodlari (nega sheetda ko'rinmayapti)
+`SHEET_YOQ` yoki `SHEET_FARQ` da bot shu shartnoma guruhining har OplatyKv qatorini (eksport manbasi `transaction` bo'lsa tx qatorini) eksport sozlamasi (`GET /api/agent-bridge/exports`) bilan tekshiradi. Tartib quyidagicha, qator uchun birinchi mos kelgani olinadi (`contract.py::TOLOV_SHEET_SABABLAR`). Farq qatorida `sabab: <kod> — <izoh> (<n> qator); ...`, tuzatish esa birinchi (eng yuqori) kod bo'yicha. Har qator `[sheet]` ostida `sabab: <sana> <summa> <kod>: <izoh>`.
+
+| Kod | Ma'nosi (`TOLOV_SHEET_SABABLAR`) | Tuzatish (`TOLOV_SHEET_SABAB_TUZATISH`) |
+|---|---|---|
+| `FILTR_OBYEKT` | qator obyekti eksport filtrida yo'q | odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: obyekt |
+| `FILTR_KATEGORIYA` | qator payment_category eksport filtrida yo'q (split qilinmagan qator ham tushmaydi) | qatorni split qilish (oplatakv:split) yoki Admin > Export > {sheet} > filtr: kategoriya |
+| `FILTR_TUR` | qator tx_type eksport filtrida yo'q | odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: tur |
+| `FILTR_HISOB` | tranzaksiya hisobi eksport filtrida yo'q (manba transaction) | odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: hisob |
+| `FILTR_SANA` | qator sanasi eksport dateFrom dan oldin | odatiy (dateFrom); kerak bo'lsa Admin > Export > {sheet} > sana |
+| `FILTR_BELGI` | summa belgisi eksport amountSign filtriga mos emas | odatiy (summa belgisi filtri); kerak bo'lsa Admin > Export > {sheet} > filtr |
+| `EKSPORT_ESKI` | qator eksportning oxirgi ishidan keyin yaratilgan yoki o'zgargan, yoki oxirgi ish xato | Admin > Export > {sheet} > Bajarish (yoki keyinroq bot orqali, Ha tugmasi bilan) |
+| `XATO_RAQAM` | qator XATO yoki contract_no kanonik emas: sheet shartnoma bo'yicha topmaydi | OplatyKv > XATO → CRM yoki tx shartnomasini kanonik shaklga, keyin eksport |
+
+- `{sheet}` blokda sheet nomi bilan almashadi. Filtrlar backend nusxasi: `oplataKv.getRowsForExport` (obyekt, `payment_category`, `tx_type` aniq `in`, bo'sh ro'yxat = hammasi; `date >= dateFrom`; `amountSign` pos `> 0`, neg `< 0`). Manba `transaction`: `transactions.getRowsForExport` faqat hisob (oxirgi 4 raqam bilan solishtiriladi) va sana (`txn_date` UTC kuni) filtrini qo'llaydi.
+- `EKSPORT_ESKI` izohi: `eksport oxirgi marta <vaqt> da ishlagan (<holat>), cron: <har N daq, HH-HH, kunlar ...>` yoki `eksport hech ishlamagan, cron: ...` (vaqt Toshkent). Qator vaqti: `oplata_kv` `created_at` va `updated_at` (UTC → Toshkent); tx uchun `txn_date`.
+- `XATO_RAQAM`: eksport XATO qatorida (`computeContractXato`: tx `is_contract_manual` bo'lsa XATO emas) shartnoma o'rniga `XATO` yozadi; `contract_no` sheet normallashtirishida (`[\s\-_./№]` olinadi, upper) kanonikdan farq qilsa ham sheet topmaydi.
+- `aniqlanmadi — ...`: eksport sozlamasi o'qilmadi yoki topilmadi, qatorlar o'qilmadi, yoki hamma qator mos (sheet qo'lda o'zgargan bo'lishi mumkin). Unda tuzatish umumiy: `eksport eskirgan bo'lishi mumkin: Admin > Export > <sheet nomi> > Bajarish`.
+- `FILTR_*` sababi odatiy: sheet shu qatorni ataylab olmaydi. Faqat egasi filtrni o'zgartirishni xohlasa tuzatiladi.
+
 ## 8. "To'langan" summaning uch xil hisobi
 | Hisob | Kim ishlatadi | Qoida | Panelda qayerda |
 |---|---|---|---|
-| CRM `/order/show` | Chek payment (`chek-order.service.ts::crmPaymentPart`), contract-info | har tur uchun MAX(`total.paid`, grafik `schedules[].amount_paid`, `payment_histories`); `other_amount` kirmaydi; hammasi 0 bo'lsa `paymentsByContract` zaxira | `/chek-order` Chek payment (`chekorder:view`) |
-| CRM to'lov tarixi yig'indisi | CRM sverka (`/payment-history/excel`, bekor ham, tur `type.key` bo'yicha) va shu blok (INDEX, `initial_amount`/`monthly_amount`/`other_amount`) | `SUM(amount)`, qaytarim jamida | `/check-crm` drill-down (`transactions:sverka_crm_view`) |
+| CRM `/order/show` | Chek payment (`chek-order.service.ts::crmPaymentPart`), contract-info va shu blokning `[crm_panel]` qatorida `panel jami (grafik/tarix max)` (faqat ma'lumot; `CRM_FARQ` va `CRM_SPLIT` CRM to'lovlar ro'yxatidan: MAX aralash to'lovni ikki sanashi mumkin) | har tur uchun MAX(`total.paid`, grafik `schedules[].amount_paid`, `payment_histories`); `other_amount` kirmaydi; hammasi 0 bo'lsa `paymentsByContract` zaxira; order topilmasa payment-history zaxira (`zaxira:` belgisi) | `/chek-order` Chek payment (`chekorder:view`) |
+| CRM to'lov tarixi yig'indisi | CRM sverka (`/payment-history/excel`, bekor ham, tur `type.key` bo'yicha) va shu blokning eski `[crm]` qatori (INDEX, `initial_amount`/`monthly_amount`/`other_amount`; default o'chiq) | `SUM(amount)`, qaytarim jamida | `/check-crm` drill-down (`transactions:sverka_crm_view`) |
 | Bizning tomon | OplatyKv, bank | `SUM(oplata_kv.payment_amount)`; bank kirim − chiqim. Akt Sverka (`GET /oplata-kv/by-contract`) XATO qatorni chiqaradi, Chek payment va CRM sverka hammasini oladi | OplatyKv > Akt Sverka; XATO → CRM; ID inspektor |
 
 - Perebroska CRM grafigida bor, to'lov tarixida bo'lmasligi mumkin. `total.paid` yuk ostida 0 kelishi mumkin: Chek payment shuning uchun MAX oladi.
@@ -216,9 +250,18 @@ Muhim tuzoqlar:
 **6) CRM UNKNOWN.** Blok: `[crm] UNKNOWN: o'chirilgan`, `[solishtirish] OK: CRM tekshirilmadi; OplatyKv(bank) - bank = 0`, `[farqlar] OK: farq yo'q; CRM tekshirilmadi: CRM kodlari yo'q`.
 - To'g'ri: "CRM so'rovi o'chirilgan, CRM bilan solishtirilmadi. OplatyKv va bank o'zaro mos. CRM tomoni panelda: Sverka CRM yoki Chek payment."
 - Noto'g'ri: "Hammasi mos, farq yo'q."
+- Agar `[crm_panel] OK` bo'lsa: CRM jami panel yo'lidan solishtirilgan; faqat to'lov darajasidagi CRM kodlari yo'q.
+
+**7) Sheet eskirgan.** Blok: `[sheet] WARN: Sotuv hisoboti: ...; sheet - OplatyKv: oylik -3 000 000, jami -3 000 000; sheetda yo'q: 2026-09-25 3 000 000 oylik`, `F2 SHEET_FARQ | 2026-09-25 | -3 000 000 | 821ZUR23V1 sheet=Sotuv hisoboti | sheet - OKV: oylik -3 000 000, jami -3 000 000 | sabab: EKSPORT_ESKI — eksport oxirgi marta 2026-09-29 09:00 da ishlagan (ok), cron: har 60 daq, 08-20, har kun (1 qator) | tuzatish: Admin > Export > Sotuv hisoboti > Bajarish ...`.
+- To'g'ri: "Sotuv hisobotida 25.09 dagi 3 000 000 yo'q. Qator eksportning oxirgi ishidan (09:00) keyin qo'shilgan, cron keyingi ishda oladi. Hozir kerak bo'lsa: Admin > Export > Sotuv hisoboti > Bajarish."
+- Noto'g'ri: "Sheet buzilgan, to'lov yo'qolgan."
+
+**8) Sheetda filtr tufayli yo'q.** Blok: `F3 SHEET_YOQ | ... | 821ZUR23V1 sheet=Debitorlik | ... | sabab: FILTR_KATEGORIYA — kategoriya yo'q (split qilinmagan); filtr MONTHLY, FIRST (1 qator) | tuzatish: qatorni split qilish ...`.
+- To'g'ri: "Debitorlik faqat MONTHLY va FIRST qatorlarni oladi. Bu to'lov split qilinmagan, shuning uchun sheetga tushmaydi. Split qilinsa keyingi eksportda chiqadi."
+- Noto'g'ri: "Eksportni qayta ishga tushiring" (filtr sabab bo'lsa qayta eksport yordam bermaydi).
 
 ## 10. Nima qilinmaydi
-- CRM'ga yozish yo'q. Bot faqat GET qiladi, agent CRM'ga umuman ulanmaydi. Hech bir kod "CRM'da tuzat" amalini bot yoki agentga bermaydi: faqat "CRM operatori ishi" deyiladi.
+- CRM'ga yozish yo'q. Bot faqat GET qiladi (ko'prikda ham faqat `payment-check` va `exports`; Sheets'ga yozadigan `exports/:id/run` chaqirilmaydi), agent CRM'ga umuman ulanmaydi. Hech bir kod "CRM'da tuzat" amalini bot yoki agentga bermaydi: faqat "CRM operatori ishi" deyiladi.
 - Bot ham, agent ham tuzatmaydi. Tekshiruv tushuntiradi va tuzatish yo'lini aytadi. So'ralmagan tuzatish yo'q: tuzatish panelda yoki Support REJAsi orqali.
 - `settings` dagi `crmSverka.snapshot` o'qilmaydi (bir necha MB, 266k qator).
 - Taxmin ro'yxati yo'q. Blokda dalil bo'lmasa: "Yo'q, topilmadi."
@@ -231,6 +274,7 @@ Muhim tuzoqlar:
 - `agents/payment_check.py` ↔ `agents/contract.py::TOLOV_FARQ_KODLARI` (va `TOLOV_FARQ_TUZATISH` lug'ati) ↔ shu faylning 7-bo'limi. `agents/tests/test_payment_check.py` uchalasini sinxron tutadi: yangi kod uchala joyga birga qo'shiladi.
 - Blok sarlavhasi `contract.py::TOLOV_BLOK_BOSH`, oxiri `TOLOV_BLOK_OXIR` ↔ `agents/checker.md` "To'lov tekshiruvi rejimi" bo'limi.
 - Intent `contract.py::INTENT_TOLOV` (`payment_check`) va `TOLOV_TOPSHIRIQ_RE` (`TOLOV:` qatori) ↔ `agents/leader.md` 4 va 5-bo'lim.
+- Panel ko'prigi: `backend/src/agent-bridge/` (`agent-bridge.types.ts` javob shakli, `agent-bridge.guard.ts` kalit + loopback + proxy header'siz, `agent-bridge.validation.ts` shartnoma 1-3 ta, `[A-Za-z0-9]{3,20}`). Bot tomoni: `payment_check.py::_koprik_get` (yagona tarmoq funksiyasi), `koprik_tahlil`, `contract.py::TOLOV_KOPRIK_*`, `TOLOV_SHEET_SABABLAR`. Kalit `AGENT_BRIDGE_KEY` (backend `.env`, bot shu faylni o'qiydi), manzil `http://127.0.0.1:<PORT>` (default 3001) yoki `AGENT_BRIDGE_URL` (faqat `http://127.0.0.1` yoki `http://localhost`, yo'lsiz).
 - Backend manbalari (Python nusxasi shulardan, parity):
   - `crm/crm.service.ts`: `paymentsByContract` (param, konvert, aniq filtr), `findByComposite`, `parseComposite`, `compositeCore`, `ruName`.
   - `crm-sverka/crm-sverka.service.ts`: `crmKindOf`, `normContract`, `contractDetail` (aniq, ±3 kun, sana bir xil summa boshqa, qaytarim).
@@ -251,6 +295,10 @@ Muhim tuzoqlar:
 - `oplata_kv.contract_no` VarChar(50), `transactions.contract_number` VarChar(128). 50+ belgili raqam `createMany` ning 500 talik bo'lagini yiqitadi, bo'lakdagi boshqa to'lovlar ham tushmaydi (koddan xulosa, hodisa qayd etilmagan).
 - Feed faolligi: `payment_category` ham, `perereboska_group_id` ham bo'lmasa qator CRM'ga tombstone (`inactive`) bo'lib boradi.
 - `crmSverka.snapshot` ni SELECT qilma, CRM excel skaneri yo'q.
+- Ko'prik muddati 90 s (CRM show sekin), prefetch boshidan 100 s gacha; Leader tashqarida 120 s kutadi. Ko'prik kaliti faqat header'da, logga, xato matniga va blokka tushmaydi. Proxy ishlatilmaydi (nginx headerlari bo'lsa ko'prik 403 beradi).
+- Ko'prik sheet to'lovlariga sana bermaydi (faqat qator raqami): `oxirgi to'lov ~<sana>` va `sheetda yo'q` OplatyKv bilan summa bo'yicha juftlab topilgan, aniq emas.
+- Ko'prik OplatyKv'ni aniq `contract_no` bo'yicha oladi, `[oplata_kv]` esa variantlar (O/0, I/1, `/SH`) bilan: XATO shakldagi qator `[panel_solishtirish]` ga kirmaydi.
+- Sheet summasi panel mantiqida: ulanmagan ustun 0 bo'ladi (masalan faqat jami ustuni bo'lsa bosh. va oylik 0), `SHEET_FARQ` shu ustunda chiqishi mumkin.
 
 ## Tez-tez qilinadigan o'zgarishlar
 | Vazifa | Qayerda |
@@ -259,4 +307,5 @@ Muhim tuzoqlar:
 | Yangi obyekt kodi | `backend/src/categorization/contract-parser.ts::OBJECT_CODES` va `payment_check.py` dagi nusxa, shu fayl 4-bo'lim |
 | CRM param yoki maydon o'zgarishi | `payment_check.py` allowlist (`_crm_get`), `crm.service.ts::paymentsByContract`, shu fayl 1-bo'lim va Xavfli joylar |
 | Chegaralar (so'rov soni, kunlik, kesh) | `contract.py::TOLOV_*`, env `AGENTS_TOLOV_CRM_KUNLIK` |
-| CRM so'rovini o'chirish | env `AGENTS_TOLOV_CRM=0`, kod o'zgarmaydi. Restart shart emas: env fayli (`AGENTS_ENV_FILE`) o'zgarsa keyingi so'rovda qayta o'qiladi (`AGENTS_TOLOV_CRM_KUNLIK` ham) |
+| Eski CRM GET'ni yoqish yoki o'chirish | env `AGENTS_TOLOV_CRM` (default `0`, `1` yoqadi), kod o'zgarmaydi. Restart shart emas: env fayli (`AGENTS_ENV_FILE`) o'zgarsa keyingi so'rovda qayta o'qiladi (`AGENTS_TOLOV_CRM_KUNLIK` ham) |
+| Panel ko'prigi | kalit `AGENT_BRIDGE_KEY` (backend va bot bir xil `.env`), port `PORT`, ixtiyoriy `AGENT_BRIDGE_URL`; yangi sabab kodi: `contract.py::TOLOV_SHEET_SABABLAR` + `TOLOV_SHEET_SABAB_TUZATISH`, `payment_check.py::_okv_sababi`, shu fayl 7.1, `checker.md` |

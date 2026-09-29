@@ -544,30 +544,32 @@ _NEWLINES_RE = re.compile("[\r\n\x85" + chr(0x2028) + chr(0x2029) + "]+")
 
 # ---------------------------------------------------------------------------
 # 18. To'lov tekshiruvi (payment_check.py; /tolov; Leader intent payment_check -> checker)
-#     CRM <-> transactions <-> oplata_kv, faqat o'qish. Satrlar checker.md, leader.md va
+#     CRM <-> transactions <-> oplata_kv (+ panel ko'prigi: CRM panel yo'li, Google Sheet), faqat o'qish.
+#     Satrlar checker.md, leader.md va
 #     knowledge/tolov_tekshirish.md bilan HARFMA-HARF.
 # ---------------------------------------------------------------------------
 TOLOV_TOPSHIRIQ_RE = re.compile(r"(?im)^\s*TOLOV:\s*(.+)$")
 TOLOV_BLOK_BOSH = "=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ==="
 TOLOV_BLOK_OXIR = CHECKER_BLOK_OXIR  # "=== TUGADI ===" (ikki blok bir topshiriqda birga kelmaydi)
 TOLOV_KOMPONENTLAR: Tuple[str, ...] = (
-    "kirish", "crm_kesh", "crm", "crm_xonpay", "oplata_kv", "transactions", "bank_izi", "kontekst",
-    "solishtirish", "farqlar", "tolovlar", "nomzodlar",
+    "kirish", "crm_kesh", "crm", "crm_xonpay", "crm_panel", "oplata_kv", "sheet", "transactions", "bank_izi",
+    "kontekst", "solishtirish", "panel_solishtirish", "farqlar", "tolovlar", "nomzodlar",
 )
 TOLOV_JADVAL_SARLAVHA = "sana | summa | tur | CRM | OKV | TX | moslik | kod"
 TOLOV_KESILDI_TPL = "(kesildi: yana {n} qator; jamilar to'liq)"
 TOLOV_FARQ_JAMLANGAN_TPL = "(yana {n} farq: {royxat})"
 
 # Hajm va vaqt (dizayn 1.9)
-TOLOV_PREFETCH_DEADLINE_S = 45
-TOLOV_TASHQI_TIMEOUT_S = 60     # leader_bot: asyncio.wait_for (thread o'zi ichki deadline bilan tugaydi)
+TOLOV_PREFETCH_DEADLINE_S = 45  # DB va eski CRM GET
+TOLOV_KOPRIK_DEADLINE_S = 100   # panel ko'prigi so'rovi prefetch boshidan shu soniyagacha tugaydi
+TOLOV_TASHQI_TIMEOUT_S = 120    # leader_bot: asyncio.wait_for (thread o'zi ichki deadline bilan tugaydi)
 TOLOV_CRM_TIMEOUT_S = 20
 TOLOV_CRM_MAX_SOROV = 7         # bir prefetch'da tarmoq so'rovlari (qayta urinish ham sanaladi)
 TOLOV_CRM_KUNLIK_DEFAULT = 300
 TOLOV_CRM_KESH_S = 600          # jarayon xotirasida, diskka yozilmaydi
 TOLOV_CRM_JAVOB_MAX = 5 * 1024 * 1024
 TOLOV_CRM_LIMIT_MAX = 500
-TOLOV_BLOK_MAX = 9000
+TOLOV_BLOK_MAX = 12000         # panel bo'limlari (crm_panel, sheet, panel_solishtirish) bilan
 TOLOV_JADVAL_MAX = 40
 TOLOV_JADVAL_OWNER_MAX = 15
 TOLOV_FARQ_MAX = 25
@@ -575,11 +577,13 @@ TOLOV_QATOR_MAX = 400           # Q2/Q3; jamilar alohida SUM bilan, doim to'liq
 TOLOV_SHARTNOMA_MAX = 3
 TOLOV_VARIANT_MAX = 16
 
-# CRM: faqat GET {XONSAROY_CLIENT_BASE}/payment-history. Env faqat NOMLARI (qiymat kodda yo'q).
+# Eski yo'l, CRM: faqat GET {XONSAROY_CLIENT_BASE}/payment-history. Env faqat NOMLARI (qiymat kodda yo'q).
+# Default O'CHIQ (prod'da HTTP 404): CRM ma'lumoti panel ko'prigidan. Kod saqlanadi, "1" yoqadi.
 TOLOV_CRM_ENV_BASE = "XONSAROY_CLIENT_BASE"
 TOLOV_CRM_ENV_KEY = "XONSAROY_API_KEY"
 TOLOV_CRM_ENV_SECRET = "XONSAROY_API_SECRET"
-TOLOV_CRM_ENV_YOQ = "AGENTS_TOLOV_CRM"            # "0" -> CRM chaqirilmaydi (default yoqilgan)
+TOLOV_CRM_ENV_YOQ = "AGENTS_TOLOV_CRM"            # "1" -> eski GET yoqiladi (default "0")
+TOLOV_CRM_YOQ_DEFAULT = "0"
 TOLOV_CRM_ENV_KUNLIK = "AGENTS_TOLOV_CRM_KUNLIK"  # default 300
 TOLOV_CRM_BASE_DEFAULT = "https://app-api.xonsaroy.uz/api/v4/client"  # backend crm.service.ts bilan bir xil
 TOLOV_CRM_YOL = "/payment-history"
@@ -587,6 +591,61 @@ TOLOV_CRM_PARAMLAR: Tuple[str, ...] = (
     "contract", "transaction_id", "limit", "is_trashed", "trashed_status", "with_trashed",
 )
 KV_TOLOV_CRM_KUN = "tolov_crm_{sana}"  # sana = YYYYMMDD (Toshkent)
+
+# Panel ko'prigi (backend agent-bridge): panel Chek payment bilan aynan bir xil hisob (OplatyKv + CRM
+# panel yo'li + Google Sheet). Faqat GET, faqat loopback, kalit faqat header'da. Env faqat NOMLARI.
+TOLOV_KOPRIK_ENV_KEY = "AGENT_BRIDGE_KEY"
+TOLOV_KOPRIK_ENV_URL = "AGENT_BRIDGE_URL"         # ixtiyoriy: http://127.0.0.1:<port> yoki http://localhost:<port>
+TOLOV_KOPRIK_ENV_PORT = "PORT"                    # backend porti (URL berilmasa)
+TOLOV_KOPRIK_PORT_DEFAULT = 3001
+TOLOV_KOPRIK_HOSTLAR: Tuple[str, ...] = ("127.0.0.1", "localhost")
+TOLOV_KOPRIK_YOL = "/api/agent-bridge/payment-check"
+TOLOV_KOPRIK_EKSPORT_YOL = "/api/agent-bridge/exports"   # faqat GET (sozlama + oxirgi ish); run chaqirilmaydi
+TOLOV_KOPRIK_HEADER = "x-agent-bridge-key"
+TOLOV_KOPRIK_TIMEOUT_S = 90                       # CRM show sekin bo'lishi mumkin
+TOLOV_KOPRIK_JAVOB_MAX = 5 * 1024 * 1024
+TOLOV_KOPRIK_SHARTNOMA_RE = re.compile(r"^[A-Za-z0-9]{3,20}$")   # backend CONTRACT_RE bilan bir xil
+TOLOV_KOPRIK_OXIRGI = 5                           # [crm_panel] oxirgi to'lovlar va mos emas ro'yxati
+TOLOV_KOPRIK_SANA_OYNA = 7                        # ro'yxat juftlash: summa teng, sana farqi <= 7 kun
+TOLOV_KOPRIK_PREFIKS = "ko'prik: "
+TOLOV_KOPRIK_HTTP_IZOH: Dict[int, str] = {
+    400: "so'rov rad etildi: shartnoma yoki sheet formati",
+    403: "kalit mos emas yoki backend'da ko'prik yopiq",
+    404: "backend'da agent-bridge yo'q",
+    429: "so'rov chegarasi, keyinroq",
+}
+TOLOV_TUZ_SHEET_TPL = "eksport eskirgan bo'lishi mumkin: Admin > Export > {sheet} > Bajarish"
+# Qaysi sheetlar OplatyKv bilan solishtiriladi (SHEET_YOQ / SHEET_FARQ faqat shularda): env ro'yxati (id yoki
+# nom, vergul bilan), bo'lmasa nomi (lotinga o'girilgan, kichik harf) shu qismlardan birini o'z ichiga olganlar.
+# Qolganlari (masalan "Zayavki": arizalar, to'lov reestri emas) blokda faqat ma'lumot.
+TOLOV_SHEETLAR_ENV = "AGENTS_TOLOV_SHEETLAR"
+TOLOV_SHEET_DEFAULT_NAQSHLAR: Tuple[str, ...] = ("sotuv", "debetor", "debitor")
+TOLOV_SHEET_MALUMOT = "ma'lumot uchun, solishtirilmaydi"
+# "Nega sheetda ko'rinmayapti": SHEET_YOQ / SHEET_FARQ da har OplatyKv (manba transaction: tx) qatori shu
+# tartibda tekshiriladi, birinchi mos kelgani qator sababi. Farq qatorida "sabab: <kod> — <izoh>".
+TOLOV_SHEET_SABABLAR: Dict[str, str] = {
+    "FILTR_OBYEKT": "qator obyekti eksport filtrida yo'q",
+    "FILTR_KATEGORIYA": "qator payment_category eksport filtrida yo'q (split qilinmagan qator ham tushmaydi)",
+    "FILTR_TUR": "qator tx_type eksport filtrida yo'q",
+    "FILTR_HISOB": "tranzaksiya hisobi eksport filtrida yo'q (manba transaction)",
+    "FILTR_SANA": "qator sanasi eksport dateFrom dan oldin",
+    "FILTR_BELGI": "summa belgisi eksport amountSign filtriga mos emas",
+    "EKSPORT_ESKI": "qator eksportning oxirgi ishidan keyin yaratilgan yoki o'zgargan, yoki oxirgi ish xato",
+    "XATO_RAQAM": "qator XATO yoki contract_no kanonik emas: sheet shartnoma bo'yicha topmaydi",
+}
+TOLOV_SHEET_SABAB_TUZATISH: Dict[str, str] = {
+    "FILTR_OBYEKT": "odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: obyekt",
+    "FILTR_KATEGORIYA": "qatorni split qilish (oplatakv:split) yoki Admin > Export > {sheet} > filtr: kategoriya",
+    "FILTR_TUR": "odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: tur",
+    "FILTR_HISOB": "odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: hisob",
+    "FILTR_SANA": "odatiy (dateFrom); kerak bo'lsa Admin > Export > {sheet} > sana",
+    "FILTR_BELGI": "odatiy (summa belgisi filtri); kerak bo'lsa Admin > Export > {sheet} > filtr",
+    "EKSPORT_ESKI": "Admin > Export > {sheet} > Bajarish (yoki keyinroq bot orqali, Ha tugmasi bilan)",
+    "XATO_RAQAM": "OplatyKv > XATO → CRM yoki tx shartnomasini kanonik shaklga, keyin eksport",
+}
+TOLOV_EKSPORT_ESKI_TPL = "eksport oxirgi marta {vaqt} da ishlagan ({holat}), cron: {cron}"
+TOLOV_EKSPORT_HECH_TPL = "eksport hech ishlamagan, cron: {cron}"
+TOLOV_SABAB_ANIQLANMADI = "aniqlanmadi"
 
 # UNKNOWN sabablari (blokda "[crm] UNKNOWN: <sabab>")
 TOLOV_SABAB_OCHIRILGAN = "o'chirilgan"
@@ -597,6 +656,10 @@ TOLOV_SABAB_KUNLIK = "kunlik cheklov tugadi"
 TOLOV_SABAB_SOROV = "so'rov chegarasi"
 TOLOV_SABAB_KIRISH = "kirish o'qilmadi"
 TOLOV_SABAB_DB = "baza javob bermadi"
+TOLOV_SABAB_KOPRIK_KALIT = "ko'prik kaliti yo'q (AGENT_BRIDGE_KEY)"
+TOLOV_SABAB_KOPRIK_MANZIL = "ko'prik manzili yaroqsiz (faqat http://127.0.0.1 yoki http://localhost)"
+TOLOV_SABAB_KOPRIK_FORMAT = "shartnoma formati ko'prikka mos emas (A-Z, 0-9, 3-20 belgi)"
+TOLOV_SABAB_SHEET_YOQ = "to'lov ustunli sheet ulanmagan"
 
 # Farq kodlari -> jiddiylik (dizayn 1.7). Tartib: blokda va bilim faylida shu tartib.
 TOLOV_FARQ_KODLARI: Dict[str, str] = {
@@ -609,6 +672,7 @@ TOLOV_FARQ_KODLARI: Dict[str, str] = {
     "TX_YOQ": "error",
     "SUMMA_FARQ": "error",
     "DUBLIKAT": "error",
+    "CRM_FARQ": "error",
     "SPLIT_FARQ": "warn",
     "SPLIT_YOQ": "warn",
     "DRIFT": "warn",
@@ -618,8 +682,11 @@ TOLOV_FARQ_KODLARI: Dict[str, str] = {
     "BANK_KOCHIRGAN": "warn",
     "BANK_TAHRIRLAGAN": "warn",
     "OKV_OCHIRILGAN": "warn",
+    "SHEET_YOQ": "warn",
+    "SHEET_FARQ": "warn",
     "ARIZA_KUTMOQDA": "info",
     "SANA_SILJIGAN": "info",
+    "CRM_SPLIT": "info",
     "QAYTARIM": "info",
     "PEREBROSKA": "info",
     "VZNOS": "info",
@@ -642,6 +709,7 @@ TOLOV_FARQ_TUZATISH: Dict[str, str] = {
     "TX_YOQ": "bank o'chirgan bo'lsa: O'zgargan to'lovlar > Tiklash",
     "SUMMA_FARQ": "bank EDITED: sync kaskad; aks holda qo'lda tekshirish",
     "DUBLIKAT": "egasi qarori, zaxira jadvali bilan tozalash (dasturchi)",
+    "CRM_FARQ": "mos emas to'lovlar crm_panel qatorida; bizda XATO → CRM, CRM tomoni operator",  # to'lovlar ro'yxati
     "SPLIT_FARQ": "XATO → CRM > Split (applyCrmSplit); CRM type xato bo'lsa operator",
     "SPLIT_YOQ": "/oplata-kv/:id/split yoki split-installments (force)",
     "DRIFT": "keyingi sync tenglaydi; qolsa tx'da tuzatish",
@@ -651,8 +719,11 @@ TOLOV_FARQ_TUZATISH: Dict[str, str] = {
     "BANK_KOCHIRGAN": _TUZ_BANK_IZI,
     "BANK_TAHRIRLAGAN": _TUZ_BANK_IZI,
     "OKV_OCHIRILGAN": "tarixni ko'rish: kim, qachon",
+    "SHEET_YOQ": TOLOV_TUZ_SHEET_TPL.format(sheet="<sheet nomi>"),    # blokda haqiqiy nom bilan
+    "SHEET_FARQ": TOLOV_TUZ_SHEET_TPL.format(sheet="<sheet nomi>"),
     "ARIZA_KUTMOQDA": "ariza tasdig'ini kutish (correction)",
     "SANA_SILJIGAN": "odatiy (Hamkor settlement, XonPay)",
+    "CRM_SPLIT": "odatiy: CRM turi bo'yicha, bizda reja waterfall; kerak bo'lsa XATO → CRM > Split",
     "QAYTARIM": "bizda OUT bo'lsa mos; bo'lmasa storno yoki perebroska",
     "PEREBROSKA": _TUZ_KUTILGAN,
     "VZNOS": _TUZ_KUTILGAN,

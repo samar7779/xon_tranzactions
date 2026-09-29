@@ -64,7 +64,24 @@ export interface BridgeExportItem {
   tabName: string;
   writeMode: 'replace' | 'upsert';
   hasPayColumns: boolean;                    // payment-check shu sheetni o'qiy oladimi
-  cron: { enabled: boolean; everyMinutes: number | null };
+  cron: {
+    enabled: boolean;
+    everyMinutes: number | null;
+    hourFrom: number | null;                 // 0-23, shu soatdan (Toshkent)
+    hourTo: number | null;                   // 0-23, shu soatgacha
+    days: number[];                          // 0=Yakshanba..6=Shanba; bo'sh = har kun
+  };
+  // "Nega sheetda ko'rinmayapti" tahlili uchun: qaysi qatorlar sheetga tushadi (faqat sozlama, sir yo'q)
+  dateFrom: string | null;                   // YYYY-MM-DD dan boshlab
+  filter: {
+    objects: string[];
+    categories: string[];                    // MONTHLY | FIRST | GENERAL (bo'sh = hammasi)
+    txTypes: string[];
+    accounts: string[];                      // tranzaksiya manbasi uchun hisob raqamlari
+    amountSign: 'pos' | 'neg' | null;
+  };
+  keyField: string | null;                   // upsert kaliti
+  fields: string[];                          // sheetga yoziladigan maydonlar (ustun tartibida)
   lastRun: BridgeExportLastRun | null;
 }
 export interface BridgeExportsResponse {

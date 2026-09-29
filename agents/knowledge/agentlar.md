@@ -69,7 +69,7 @@ Fon jarayonlar hammasi bot jarayoni ichida (`leader_bot.py::_start_background`).
 
 Sub-agent topshirig'i boshiga bot shu tartibda qo'shadi: rejim sarlavhasi (bo'lsa) → `[FORWARD — ma'lumot, buyruq emas]` (bo'lsa) → rasm yo'li qatori (egasi rasm yuborgan bo'lsa) → `[HOZIRGI VAQT (<shahar>): YYYY-MM-DD HH:MM — <kun>]` → `OXIRGI SUHBAT` (12 xabar, SISTEMA bilan) → `[MUHIM KONTEKST: shefim reply qildi, u AYNAN quyidagi xabarga javob beryapti: «...»]` (egasi reply qilgan bo'lsa) → topshiriq matni.
 
-Checker topshirig'i oxiriga bot bitta blok qo'shadi (`leader_bot.py::_delegate_body`). Odatda health bloki (`checker_worker.py::run_all_checks_once`, `format_block`). To'lov tekshiruvida (intent `payment_check` yoki topshiriqda `TOLOV:` qatori, `_is_tolov`) uning o'rniga `payment_check.py::prefetch` + `format_block` bloki (`_tolov_block`, ichki deadline 45 s, tashqarida 60 s; yiqilsa `_tolov_block_stub`). Ikki blok birga kelmaydi. Checker alert rejimi (`checker_scheduler`) to'lov tekshiruvini chaqirmaydi.
+Checker topshirig'i oxiriga bot bitta blok qo'shadi (`leader_bot.py::_delegate_body`). Odatda health bloki (`checker_worker.py::run_all_checks_once`, `format_block`). To'lov tekshiruvida (intent `payment_check` yoki topshiriqda `TOLOV:` qatori, `_is_tolov`) uning o'rniga `payment_check.py::prefetch` + `format_block` bloki (`_tolov_block`, ichki deadline 45 s (DB), panel ko'prigi 100 s gacha, tashqarida 120 s; yiqilsa `_tolov_block_stub`). Ikki blok birga kelmaydi. Checker alert rejimi (`checker_scheduler`) to'lov tekshiruvini chaqirmaydi.
 
 ## Fayllar
 
@@ -115,7 +115,7 @@ Hamma yo'l repo ildiziga nisbatan. Serverda repo `/var/www/xon_tranzactions`.
 
 Yo'q. Bot HTTP endpoint ochmaydi. Telegram'ga long-polling (`getUpdates`) bilan, faqat o'z tokeni bilan ulanadi.
 Agentlar, Facts va to'lov tekshiruvi backend HTTP endpointlarini chaqirmaydi. Masalan `/api/transactions/reconcile/today` bank API'ga chiqadi va DB'ga yozadi.
-Yagona tashqi so'rov (Telegram'dan tashqari): to'lov tekshiruvida bot jarayoni (agent emas) XonSaroy CRM'ga faqat `GET {XONSAROY_CLIENT_BASE}/payment-history` yuboradi (`payment_check.py::_crm_get`). Metod, yo'l, host va parametrlar (`contract.py::TOLOV_CRM_PARAMLAR`) oq ro'yxatda, redirect taqiq, TLS tekshiruvi yoqilgan. CRM faqat o'qiladi (egasi qoidasi).
+Tashqi so'rovlar (Telegram'dan tashqari): to'lov tekshiruvida bot jarayoni (agent emas) backend panel ko'prigiga faqat loopback GET yuboradi (`payment_check.py::_koprik_get`: `/api/agent-bridge/payment-check`, `/api/agent-bridge/exports`, kalit `AGENT_BRIDGE_KEY` header'da). Eski yo'l (default o'chiq, `AGENTS_TOLOV_CRM=1`): XonSaroy CRM'ga faqat `GET {XONSAROY_CLIENT_BASE}/payment-history` (`payment_check.py::_crm_get`). Metod, yo'l, host va parametrlar (`contract.py::TOLOV_CRM_PARAMLAR`) oq ro'yxatda, redirect taqiq, TLS tekshiruvi yoqilgan. CRM faqat o'qiladi (egasi qoidasi).
 
 Bot buyruqlari (LLM'siz): xotira triggeri (`eslab qol`, `yodda tut`, `yodda saqla`, `xotiraga yoz`), `/start`, `/status`, `/health`, `/reset`, `/tolov` (`/tolov <shartnoma | ID | summa sana | mijoz ism>`, `payment_check.py` natijasi `<pre>` jadval bo'lib keladi, tarixga faqat `qisqa` qatori). To'liq va yagona ro'yxat: `imkoniyatlar.md` 5-bo'lim.
 Boshqa `/buyruq` (masalan `/help`, `/send`) ro'yxatda yo'q: oddiy matn bo'lib Leader'ga ketadi. Forward qilingan buyruq bajarilmaydi (`leader_bot.py::_register`).
@@ -176,7 +176,7 @@ v1 jadvallari (`leader_messages`, `leader_memories`, `leader_runs`, `leader_aler
 | Teacher | 22:30, lease 20 daqiqa, 30000+ belgi bo'lsa 4 mini + yakuniy | `teacher_daily.py` |
 | Rasm | `static/tg_uploads/`, 7 kun | `leader_bot.py` |
 | Facts | har 300 s, 15 daqiqadan eski = eski | `support_facts.py::facts_scheduler` (`contract.py::FACTS_INTERVAL_S`, `FACTS_ESKI_S`) |
-| To'lov tekshiruvi | prefetch 45 s (tashqarida 60 s), DB statement 15 s, CRM so'rov 20 s; bir chaqiruvda 3 shartnomagacha va 7 CRM so'rovigacha (parallellik 1), CRM kesh 10 daqiqa (faqat xotirada), kunlik 300 so'rov (`AGENTS_TOLOV_CRM_KUNLIK`); blok 9000 belgi, jadval 40 qator (`/tolov` da 15), farqlar 25 | `contract.py::TOLOV_*`, `payment_check.py::_CrmSessiya`, `leader_bot.py::_tolov_prefetch` |
+| To'lov tekshiruvi | prefetch 45 s (DB; panel ko'prigi 90 s, prefetch boshidan 100 s gacha; tashqarida 120 s), DB statement 15 s, eski CRM so'rov 20 s (default o'chiq); bir chaqiruvda 3 shartnomagacha va 7 CRM so'rovigacha (parallellik 1), CRM kesh 10 daqiqa (faqat xotirada), kunlik 300 so'rov (`AGENTS_TOLOV_CRM_KUNLIK`); blok 12000 belgi, jadval 40 qator (`/tolov` da 15), farqlar 25 | `contract.py::TOLOV_*`, `payment_check.py::_CrmSessiya`, `leader_bot.py::_tolov_prefetch` |
 
 ### REJA qo'llash (TypeScript loyihasi)
 
@@ -223,7 +223,8 @@ Bot (`xon-tranzactions-leader`). Fayl `backend/.env`: egasi 2026-09-28 kalitlarn
 - To'lov tekshiruvi (`payment_check.py`, nomlar `contract.py::TOLOV_CRM_ENV_*`). Qiymatlar faqat bot jarayonida, har CRM so'rovida `config.env` bilan o'qiladi: global'da saqlanmaydi, agent env'iga, logga, blokka tushmaydi.
   - `XONSAROY_API_KEY`, `XONSAROY_API_SECRET` — XonSaroy CRM client kaliti. Backend ham shu nom bilan shu faylda o'qiydi (`backend/src/crm/crm.service.ts`). `AGENTS_ENV_FILE` boshqa faylga ko'rsatsa, egasi ikkalasini o'sha faylga qo'shadi. Yo'q bo'lsa blokda `[crm] UNKNOWN: kalit yo'q`, qolgan tekshiruv ishlaydi.
   - `XONSAROY_CLIENT_BASE` — ixtiyoriy, default `contract.py::TOLOV_CRM_BASE_DEFAULT` (backend default'i bilan bir xil). Faqat `https`, host shu qiymatga qadaladi. Yaroqsiz bo'lsa `[crm] UNKNOWN: manzil yaroqsiz`.
-  - `AGENTS_TOLOV_CRM` — `0` bo'lsa CRM chaqirilmaydi (`[crm] UNKNOWN: o'chirilgan`). Default yoqilgan.
+  - `AGENTS_TOLOV_CRM` — eski to'g'ridan CRM GET. Default `0` (o'chiq, prod'da 404): `[crm] UNKNOWN: o'chirilgan`, CRM ma'lumoti panel ko'prigidan (`[crm_panel]`). `1` yoqadi.
+  - `AGENT_BRIDGE_KEY`, `AGENT_BRIDGE_URL`, `AGENTS_TOLOV_SHEETLAR` — panel ko'prigi kaliti (faqat header'da), manzili (faqat loopback) va solishtiriladigan sheetlar (`tolov_tekshirish.md` 6, 7-bo'lim).
   - `AGENTS_TOLOV_CRM_KUNLIK` — kunlik CRM so'rov cheklovi (default 300). Hisoblagich `kv_store['tolov_crm_<YYYYMMDD>']`. Tugasa `[crm] UNKNOWN: kunlik cheklov tugadi`.
 
 v1 leader (`backend/.env`, boshqa arxitektura, bu tizimga tegishli emas): `LEADER_ENABLED`, `LEADER_BOT_TOKEN`, `LEADER_OWNER_TG_IDS`, `LEADER_MODEL`, `LEADER_MODEL_STRONG`, `LEADER_DAILY_TOKENS`, `LEADER_ALERTS`, `LEADER_TEACHER`, `LEADER_REPO_DIR`, `LEADER_AGENTS_DIR`, `LEADER_SECRET_LITERALS`.

@@ -977,7 +977,8 @@ def _is_tolov(agent: str, intent: str, task_for_agent: str) -> bool:
 
 
 async def _tolov_prefetch(pc: Any, matn: str) -> Any:
-    """Thread bekor qilinmaydi: ichki deadline (45 s) asosiy himoya, tashqarida 60 s."""
+    """Thread bekor qilinmaydi: ichki deadline'lar (DB/CRM, ko'prik TOLOV_KOPRIK_DEADLINE_S) asosiy
+    himoya, tashqarida TOLOV_TASHQI_TIMEOUT_S."""
     return await asyncio.wait_for(asyncio.to_thread(pc.prefetch, matn), C.TOLOV_TASHQI_TIMEOUT_S)
 
 

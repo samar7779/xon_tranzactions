@@ -3,7 +3,7 @@
 ## Qisqasi
 
 - Bash cheklangan: faqat `git log/show/diff/status/blame` va `python3 -m py_compile <repo ichidagi .py>` ishlaydi. Qolganini `agents/bin/bash_guard.py` hook rad etadi. `sudo`, `curl`, `cat`, shell `grep`, `systemctl`, `mysql`, `/etc`, `/var/log`, `/tmp`ga URINMA.
-- Ma'lumot Facts'dan olinadi: `agents/state/support_facts.json` (Read, Grep). DB'ga to'g'ridan-to'g'ri yo'l yo'q. Istisno: shartnoma yoki to'lov tekshiruvida bot o'zi DB'dan (faqat o'qish) va CRM'dan (faqat `GET /payment-history`) yig'ib, tayyor blok beradi (4.2).
+- Ma'lumot Facts'dan olinadi: `agents/state/support_facts.json` (Read, Grep). DB'ga to'g'ridan-to'g'ri yo'l yo'q. Istisno: shartnoma yoki to'lov tekshiruvida bot o'zi DB'dan (faqat o'qish) va panel ko'prigidan (CRM panel yo'li va Google Sheet, faqat GET, faqat loopback) yig'ib, tayyor blok beradi (4.2).
 - Kod faqat `[REQUEST_APPROVAL]` blokidagi `edits:` (find/replace) orqali o'zgaradi. Egasi [Ha] bosgach, tahrir, commit va `main`ga push'ni bot o'zi qiladi. [Ha] egasining push ruxsati (egasi qarori, 2026-09-28).
 - Edit/Write hech bir agentda yo'q, Teacher'da ham. Teacher xotiraga faqat `[WRITE_MEMORY]` blok bilan yozadi, blokni bot qo'llaydi.
 - "yozildi", "saqlandi" kabi 7 so'zni blokdan tashqari matnda ishlatma. Bot bloklarni olib tashlab tekshiradi va javobni almashtiradi (8-bo'lim).
@@ -108,8 +108,9 @@ Fayl katta: avval Grep bilan kalit yoki ismni top, keyin Read'ni `offset/limit` 
 - Checker topshirig'iga bot `checker_worker.run_all_checks_once()` natijasini qo'shadi: `=== CHECKER_WORKER OLDINDAN OLINGAN NATIJALAR ===` bloki.
 - To'lov tekshiruvi (`agents/payment_check.py`). Leader intent `payment_check` bo'lsa (yoki topshiriqda `TOLOV:` qatori bo'lsa), bot health bloki o'rniga `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` ... `=== TUGADI ===` blokini qo'shadi. Egasining `/tolov` buyrug'i shu natijani LLM'siz jadval qilib beradi (5-bo'lim).
   - Bot o'z jarayonida yig'adi: DB `db.tx("facts", readonly=True)` (statement 15 s), `transactions`, `oplata_kv`, `crm_contracts`, o'zgarish izlari, vznos, perebroska, arizalar, `xonpay_transactions`.
-  - CRM faqat `GET {XONSAROY_CLIENT_BASE}/payment-history`: metod, yo'l va parametrlar oq ro'yxatda, redirect taqiq, bir chaqiruvda 7 so'rovgacha, kesh 10 daqiqa. Kunlik cheklov `AGENTS_TOLOV_CRM_KUNLIK` (default 300), `AGENTS_TOLOV_CRM=0` bo'lsa CRM chaqirilmaydi. Modulda CRM'ga POST, PUT, DELETE kodi yo'q: CRM faqat o'qiladi.
-  - Kalit (`XONSAROY_API_KEY`, `XONSAROY_API_SECRET`) faqat bot jarayonida. Agent env'iga, logga, blokka tushmaydi.
+  - CRM va Google Sheet panel ko'prigi orqali: `GET http://127.0.0.1:<PORT>/api/agent-bridge/payment-check` (panel Chek payment hisobi) va `GET /api/agent-bridge/exports` (eksport sozlamasi, "nega sheetda yo'q" sababi uchun). Faqat loopback, redirect va proxy yo'q, 90 s. Kalit `AGENT_BRIDGE_KEY` faqat header'da. Sheets'ga yozadigan run chaqirilmaydi.
+  - Eski yo'l `GET {XONSAROY_CLIENT_BASE}/payment-history` default o'chiq (prod'da 404), `AGENTS_TOLOV_CRM=1` yoqadi: oq ro'yxat, redirect taqiq, bir chaqiruvda 7 so'rovgacha, kesh 10 daqiqa, kunlik cheklov `AGENTS_TOLOV_CRM_KUNLIK` (default 300). Modulda CRM'ga POST, PUT, DELETE kodi yo'q: CRM faqat o'qiladi.
+  - Kalitlar (`AGENT_BRIDGE_KEY`, `XONSAROY_API_KEY`, `XONSAROY_API_SECRET`) faqat bot jarayonida. Agent env'iga, logga, blokka tushmaydi.
   - Blokda mijoz telefoni, pasporti, hisob raqami yo'q, ism to'liq (egasi qarori). Bir chaqiruvda 3 shartnomagacha.
   - Juftlash va farq kodlari bot kodida. Agent faqat tushuntiradi. Blokni o'qish va kodlar: `tolov_tekshirish.md`.
 - Egasi yuborgan rasm (`photo` yoki `image/*` hujjat, jpg, png, webp, gif): `static/tg_uploads/` ga saqlanadi, yo'li topshiriq matnida `[Foydalanuvchi rasm yubordi. Uni Read tool bilan ko'r: <yo'l>]` qatorida keladi, Read bilan ko'riladi. Boshqa hujjat, video va ovozni bot qabul qilmaydi, agentga yetmaydi.

@@ -134,18 +134,24 @@ describe('AgentBridgeService', () => {
     it('sirlar javobda yo\'q; credentialsAvailable faqat boolean', async () => {
       const r = await svc.listExports();
       const json = JSON.stringify(r);
-      for (const s of ['SECRET_SHEET_ID', 'SECRET2', 'SECRET_OBJ', 'x@y.iam', 'private_key', 'columns', 'filter', 'spreadsheetId', 'keyField', 'lastRowColumn', 'proj']) {
+      for (const s of ['SECRET_SHEET_ID', 'SECRET2', 'x@y.iam', 'private_key', 'columns', 'spreadsheetId', 'lastRowColumn', 'proj']) { // filtr/cron — sabab tahlili uchun ochiq
         expect(json).not.toContain(s);
       }
       expect(r.credentialsAvailable).toBe(true);
       expect(r.items).toEqual([
         {
           id: 's1', name: 'Заявки', source: 'oplatakv', tabName: 'Tab1', writeMode: 'upsert', hasPayColumns: true,
-          cron: { enabled: true, everyMinutes: 15 }, lastRun: null,
+          cron: { enabled: true, everyMinutes: 15, hourFrom: null, hourTo: null, days: [] },
+          dateFrom: '2026-01-01',
+          filter: { objects: ['SECRET_OBJ'], categories: [], txTypes: [], accounts: [], amountSign: null },
+          keyField: 'id', fields: ['contractNo', 'paymentAmount'], lastRun: null,
         },
         {
           id: 's2', name: 'Tx', source: 'transaction', tabName: 'T', writeMode: 'replace', hasPayColumns: false,
-          cron: { enabled: false, everyMinutes: null }, lastRun: null,
+          cron: { enabled: false, everyMinutes: null, hourFrom: null, hourTo: null, days: [] },
+          dateFrom: null,
+          filter: { objects: [], categories: [], txTypes: [], accounts: [], amountSign: null },
+          keyField: null, fields: ['externalId'], lastRun: null,
         },
       ]);
     });
