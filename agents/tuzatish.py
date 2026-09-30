@@ -222,7 +222,7 @@ def savol_matni(q: Qator, opt: Optional[Dict[str, Any]]) -> str:
         n += 1
     if "shartnoma" in kerak:
         qator.append("%d) Shartnoma raqami (CRM'da tekshiriladi; yoki \"qolsin\", \"tozalash\"; XATO ro'yxatiga"
-                     " tushirish uchun \"XATO:<izohdagi raqam>\")" % n)
+                     " tushirish uchun \"XATO\")" % n)
         n += 1
     if "tasdiq" in kerak:
         qator.append("%d) Kim tasdiqlaydi (ism)" % n)

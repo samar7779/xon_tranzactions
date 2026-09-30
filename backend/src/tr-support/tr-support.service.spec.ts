@@ -200,28 +200,30 @@ describe('TrSupportService', () => {
   });
 
   describe('XATO rejimi (to\'lovni XATO ro\'yxatiga tushirish)', () => {
-    it('shartnoma=XATO:<raqam>: CRM\'da yo\'q raqam CRM\'siz (qo\'lda) yoziladi, sync bitta', async () => {
+    it('shartnoma=XATO: aynan "XATO" CRM\'siz (qo\'lda) yoziladi, CRM so\'ralmaydi, sync bitta', async () => {
       tx.categoryId = null; tx.subcategoryId = null;
-      const p = await svc.preview('ctx1', { kontragent: 'CLIENT', kategoriya: 'CLIENT_VZNOS_KV', shartnoma: 'XATO:467RZM26HA' });
+      const p = await svc.preview('ctx1', { kontragent: 'CLIENT', kategoriya: 'CLIENT_VZNOS_KV', shartnoma: 'XATO' });
       expect(p.valid).toBe(true);
-      expect(p.changes).toContainEqual({ field: 'shartnoma', from: null, to: '467RZM26HA (XATO)' });
-      expect(p.plan).toMatchObject({ contract: '467RZM26HA', contractXato: true });
-      const r = await svc.apply([{ tx: 'ctx1', kontragent: 'CLIENT', kategoriya: 'CLIENT_VZNOS_KV', shartnoma: 'XATO 467RZM26HA' }], { approvedBy: 'Samar' });
+      expect(p.changes).toContainEqual({ field: 'shartnoma', from: null, to: 'XATO' });
+      expect(p.plan).toMatchObject({ contract: 'XATO', contractXato: true });
+      expect(crmCache.lookup).not.toHaveBeenCalled();
+      const r = await svc.apply([{ tx: 'ctx1', kontragent: 'CLIENT', kategoriya: 'CLIENT_VZNOS_KV', shartnoma: 'xato' }], { approvedBy: 'Samar' });
       expect(r.results[0].status).toBe('applied');
-      expect(cat.setContractManual).toHaveBeenCalledWith('ctx1', '467RZM26HA', null, 'TR Support · tasdiq: Samar');
+      expect(cat.setContractManual).toHaveBeenCalledWith('ctx1', 'XATO', null, 'TR Support · tasdiq: Samar');
       expect(cat.setContract).not.toHaveBeenCalled();
       expect(oplataKv.syncNowRespectingSettings).toHaveBeenCalledTimes(1);
-      expect(rows[0].after).toMatchObject({ contractNumber: '467RZM26HA', isContractManual: true });
+      expect(rows[0].after).toMatchObject({ contractNumber: 'XATO', isContractManual: true });
     });
 
-    it("raqam CRM'da bor bo'lsa XATO emas; kontragent CLIENT emas bo'lsa rad; raqamsiz — 'XATO'", async () => {
-      let p = await svc.preview('ctx1', { shartnoma: 'XATO:206FZO25A2' });
-      expect(p.errors[0]).toContain("CRM'da bor (ISM) — bu XATO emas");
-      p = await svc.preview('ctx1', { kontragent: 'Зарплата', shartnoma: 'XATO:467RZM26HA' });
-      expect(p.errors[0]).toContain("faqat \"Клиент / Физ.Л / Юр.Л\" kontragentli");
-      p = await svc.preview('ctx1', { shartnoma: 'xato' });
-      expect(p.valid).toBe(true);
+    it("raqam qo'shilsa ham 'XATO' saqlanadi; kontragent CLIENT emas bo'lsa rad", async () => {
+      let p = await svc.preview('ctx1', { shartnoma: 'XATO:467RZM26HA' });
       expect(p.plan).toMatchObject({ contract: 'XATO', contractXato: true });
+      expect(crmCache.lookup).not.toHaveBeenCalled();
+      p = await svc.preview('ctx1', { kontragent: 'Зарплата', shartnoma: 'XATO' });
+      expect(p.errors[0]).toContain("faqat \"Клиент / Физ.Л / Юр.Л\" kontragentli");
+      // oddiy shartnoma baribir CRM'da tekshiriladi
+      p = await svc.preview('ctx1', { shartnoma: '999XXX99' });
+      expect(p.errors[0]).toContain("CRM'da topilmadi");
     });
   });
 

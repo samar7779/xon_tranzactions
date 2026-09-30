@@ -25,7 +25,7 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
 - Tahrirda avval kategoriya, keyin shartnoma (shartnoma OplatyKv'ga faqat CLIENT to'lovda o'tadi).
 
 ## XATO deb belgilash
-- `shartnoma=XATO:<raqam>` (yoki `XATO`): shartnomasiz yoki noto'g'ri raqamli to'lovni XATO ro'yxatiga tushirish (keyin ariza olinadi). Raqam CRM'siz, panelning qo'lda shartnoma yo'li (`setContractManual`, `is_contract_manual=true`) bilan yoziladi; kontragent `CLIENT` bo'lishi shart (OplatyKv sync faqat CLIENT'ni oladi). Raqam CRM'da bor bo'lsa rad: u XATO emas. Sync'dan keyin OplatyKv qatori (`contract_no` CRM'da yo'q) XATO ro'yxatida chiqadi.
+- `shartnoma=XATO`: shartnomasiz yoki noto'g'ri raqamli to'lovni XATO ro'yxatiga tushirish (keyin ariza olinadi). Shartnomaga AYNAN "XATO" yoziladi (egasi qarori: raqam qo'shilsa ham "XATO"), CRM tekshirilmaydi; panelning qo'lda shartnoma yo'li (`setContractManual`, `is_contract_manual=true`). Kontragent `CLIENT` bo'lishi shart (OplatyKv sync faqat CLIENT'ni oladi). Boshqa har qanday shartnoma CRM'da tekshiriladi. Sync'dan keyin OplatyKv qatori (`contract_no` = XATO) XATO ro'yxatida chiqadi.
 
 ## Matn bilan tasdiq
 - Tugmadan tashqari egasining qisqa javobi: "tasdiqlayman", "ha", "bajaring" = [Ha]; "yo'q", "bekor" = [Yo'q] (`C.TASDIQ_HA_RE` / `TASDIQ_YOQ_RE`, 40 belgigacha). Tasdiq xabariga reply bo'lsa o'sha so'rov; reply bo'lmasa faqat bitta kutilayotgan so'rov bo'lsa. Bir nechta bo'lsa bot "qaysi biri — reply qilib yozing" deydi. Uzun matn hech qachon tasdiq emas (Leader'ga ketadi).

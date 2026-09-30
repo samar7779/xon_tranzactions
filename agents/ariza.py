@@ -182,7 +182,7 @@ async def _handle(a: Ariza, outbox: Any, reply_to: Optional[int], rasmlar: List[
     if not kands:
         await say(outbox, "XATO to'lovlar ro'yxatida bunday to'lov topilmadi (%s). To'lov shartnomasiz bo'lsa, avval"
                           " uni XATO ro'yxatiga tushirish kerak: \"shu to'lovni XATO deb belgila\" (shartnoma"
-                          " XATO:<izohdagi raqam>), keyin ariza." % qidiruv, reply_to=reply_to)
+                          " XATO), keyin ariza." % qidiruv, reply_to=reply_to)
         return
     if len(kands) > 1:
         q = ["XATO ro'yxatida %d ta mos to'lov bor (%s). Qaysi biri? ID bilan qayta yozing:" % (len(kands), qidiruv)]

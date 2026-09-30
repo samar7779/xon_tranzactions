@@ -77,8 +77,10 @@ export interface TrPreview {
 const norm = (s: any) => String(s ?? '').replace(APOS, "'").toLowerCase().replace(/[\s./]+/g, ' ').trim();
 const isQolsin = (v: any) => v == null || QOLSIN.has(norm(v));
 const isYoq = (v: any) => YOQ.has(norm(v));
-// shartnoma=XATO:<raqam> (yoki "XATO <raqam>", "XATO") — to'lovni XATO ro'yxatiga tushirish: raqam CRM'siz yoziladi
+// shartnoma=XATO — to'lovni XATO ro'yxatiga tushirish: shartnomaga AYNAN "XATO" yoziladi (CRM tekshiruvisiz).
+// Egasi qarori (2026-09-30): raqam qo'shilsa ham (masalan "XATO:467RZM26HA") baribir "XATO" saqlanadi.
 const XATO_RE = /^xato(?:\s*[:=\s]\s*(.*))?$/i;
+export const XATO_SHARTNOMA = 'XATO';
 export const normContract = (s: string) => s.replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
 
 @Injectable()
@@ -250,17 +252,11 @@ export class TrSupportService {
     const xm = !isQolsin(choice.shartnoma) ? XATO_RE.exec(String(choice.shartnoma).trim()) : null;
     if (xm) {
       contractXato = true;
-      const raw = normContract(xm[1] || '') || 'XATO';
-      if (!/^[A-Z0-9/]{3,64}$/.test(raw)) out.errors.push(`XATO uchun raqam noto'g'ri: "${xm[1]}"`);
-      else if ((newTop?.code || '') !== 'CLIENT') {
+      if ((newTop?.code || '') !== 'CLIENT') {
         out.errors.push("XATO ro'yxatiga faqat \"Клиент / Физ.Л / Юр.Л\" kontragentli to'lov tushadi — kontragentni ham tanlang");
-      } else if (raw !== 'XATO') {
-        const c: any = await this.crmCache.lookup(raw, { forceRefresh: true });
-        if (c?.found) {
-          out.errors.push(`${raw} CRM'da bor (${c.customerName || 'mijoz'}) — bu XATO emas. Oddiy shartnoma sifatida qo'ying yoki boshqa raqam bering`);
-        }
+      } else {
+        newContract = XATO_SHARTNOMA === (tx.contractNumber || null) ? undefined : XATO_SHARTNOMA;
       }
-      if (!out.errors.length) newContract = raw === (tx.contractNumber || null) ? undefined : raw;
     } else if (!isQolsin(choice.shartnoma)) {
       newContract = isYoq(choice.shartnoma) ? null : normContract(String(choice.shartnoma)) || null;
       if (newContract && !/^[A-Z0-9/]{3,64}$/.test(newContract)) {
@@ -291,7 +287,7 @@ export class TrSupportService {
       out.changes.push({ field: 'kategoriya', from: tx.subcategory?.name || null, to: nameOf(newSubId, newTop?.children || []) });
     }
     if (newContract !== undefined) {
-      out.changes.push({ field: 'shartnoma', from: tx.contractNumber || null, to: contractXato ? `${newContract} (XATO)` : newContract });
+      out.changes.push({ field: 'shartnoma', from: tx.contractNumber || null, to: newContract });
     }
     if (!out.errors.length && !out.changes.length) {
       out.errors.push("Hech narsa o'zgarmaydi: tanlangan qiymatlar hozirgisi bilan bir xil");
