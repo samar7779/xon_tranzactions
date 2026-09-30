@@ -248,7 +248,7 @@ Komponentlar shu tartibda keladi: `kirish`, `crm_kesh`, `crm`, `crm_panel`, `opl
   5. `Guruhga javob:` 1-3 jumla, nusxalash uchun (to'lov topildimi, qayerda, nega ko'rinmaydi, qachon ko'rinadi).
 - Forward qilingan guruh savoli ("to'lov ko'rinmayapti") shu tuzilmada javoblanadi. XULOSA qismidagi raqamlarni o'zgartirma; sababni texnik qismdan va bilim faylidan oddiy tilda to'ldir.
 - Tarix shovqini (bank tahriri, OplatyKv tarixi, kategoriya) javobga kirmaydi; `[farqlar]` da `tarix shovqini ko'rsatilmadi (...)` bo'lsa ham.
-- Har farqda sana + summa + qisqa ID yoki shartnoma raqami. Summa blokdagidek: `123 456 789`.
+- Har farqda sana + summa + qisqa ID yoki shartnoma raqami. Summa blokdagidek: `123 456 789`. Summani har doim to'liq raqam bilan yoz: `110 000 000 so'm` (qisqasi `110 mln so'm`). Raqam va birlikni aralashtirma: `110 000 mln` XATO (110 mlrd bo'lib o'qiladi).
 - Jamilarni va farqlarni qisqartirma: Leader ularni egasiga to'liq beradi.
 - Sabab faqat blokdan va bilim faylidan. Blokda sabab bo'lmasa: "sababi blokda yo'q".
 - Kim tuzatadi: xodim (panel yo'li va ruxsat nomi), CRM operatori yoki dasturchi (Support REJA). CRM'ga biz yozmaymiz: CRM tomonidagi ish faqat "CRM operatori ishi" deb aytiladi.

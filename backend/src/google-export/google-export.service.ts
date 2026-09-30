@@ -11,6 +11,7 @@ import { CryptoService } from '../common/crypto/crypto.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { serialize, FORMATS, Dataset, ExportColumn } from './data-formats';
 import { planUpsertRows } from './google-export.plan';
+import { withRetry, formatExportFailureAlert } from './google-export.retry';
 
 // ─── Config tuzilishi ───────────────────────────────────────────────
 export interface SheetColumn {
@@ -981,13 +982,16 @@ export class GoogleExportService {
         clearedRanges = up.clearedRanges;
         upsertDebug = up.debug;
       } else {
-        // REPLACE (default) — ustunlarni tozalab qayta yozamiz
-        step = 'clear';
-        await sheetsApi.spreadsheets.values.batchClear({
-          spreadsheetId,
-          requestBody: { ranges: columns.map((c) => `${quotedTab}!${c.col}${startRow}:${c.col}`) },
+        // REPLACE (default) — XAVFSIZ tartib: avval YOZAMIZ (eski qatorlar ustiga), keyin faqat
+        // ortib qolgan PASTKI qatorlarni tozalaymiz. Ilgari avval butun ustun tozalanib keyin
+        // yozilardi — Google yozishda yiqilsa (503 "service unavailable") sheet keyingi cron'gacha
+        // BO'SH qolardi. Endi yozish yiqilsa eski ma'lumot joyida qoladi.
+        // Ikkala amal ham idempotent → vaqtinchalik Google xatosida qayta urinamiz (2s/5s/15s).
+        const retry = <T>(what: string, fn: () => Promise<T>) => withRetry(fn, {
+          onRetry: (n, ms, err) => this.log.warn(
+            `Export "${target.name}" ${what}: vaqtinchalik Google xatosi (${this.extractApiError(err)}) — ${n}-qayta urinish ${ms / 1000}s dan keyin`,
+          ),
         });
-        clearedRanges = columns.map((c) => `${target.tabName}!${c.col}${startRow}:${c.col}`);
 
         step = 'write';
         if (rows.length > 0) {
@@ -998,14 +1002,23 @@ export class GoogleExportService {
           }));
           // Grid yetarli bo'lsin — "exceeds grid limits" xatosining oldini olamiz.
           const maxColIdx = Math.max(...columns.map((c) => this.colToIdx(c.col)));
-          await this.ensureGrid(sheetsApi, spreadsheetId, target.tabName, startRow + rows.length - 1, maxColIdx + 1);
-          await sheetsApi.spreadsheets.values.batchUpdate({
+          await retry('grid', () => this.ensureGrid(sheetsApi, spreadsheetId, target.tabName, startRow + rows.length - 1, maxColIdx + 1));
+          await retry('yozish', () => sheetsApi.spreadsheets.values.batchUpdate({
             spreadsheetId,
             requestBody: { valueInputOption: 'USER_ENTERED', data },
-          });
+          }));
           const cols = columns.map((c) => c.col);
           writtenRange = `${target.tabName}!${cols[0]}${startRow}:${cols[cols.length - 1]}${startRow + rows.length - 1}`;
         }
+
+        // Yozilgan qatorlardan PASTDAGI eski qoldiqni tozalaymiz (qatorlar kamaygan bo'lsa).
+        step = 'clear';
+        const tailStart = startRow + rows.length;
+        await retry('tozalash', () => sheetsApi.spreadsheets.values.batchClear({
+          spreadsheetId,
+          requestBody: { ranges: columns.map((c) => `${quotedTab}!${c.col}${tailStart}:${c.col}`) },
+        }));
+        clearedRanges = columns.map((c) => `${target.tabName}!${c.col}${tailStart}:${c.col}`);
         // REPLACE ham yozgan kalitlarini eslaydi — keyin filtrlangan UPSERT'da
         // eski (filtrga tushmagan) qatorlarni tozalay olsin.
         const keyF = target.keyField || columns.find((c) => c.field === 'id' || c.field === 'externalId')?.field || columns[0]?.field;
@@ -1087,7 +1100,47 @@ export class GoogleExportService {
   async runAndLog(target: SheetTarget, mode: 'cron' | 'manual', triggeredBy: string) {
     const result = await this.run(target);
     await this.logExportRun(target, result, mode, triggeredBy);
+    // Avtomatik (cron) run yiqilsa — egaga Telegram. Qo'lda run'da xato ekranda ko'rinadi.
+    if (!result?.ok && mode === 'cron') await this.notifyExportFailure(target, result, mode);
     return result;
+  }
+
+  // ═══ Telegram ogohlantirish — export yiqilganda (sheet uchun soatiga 1 marta) ═══
+  private alertLastSent: Record<string, number> = {}; // sheetId → oxirgi ogohlantirish (epoch ms)
+  private readonly ALERT_THROTTLE_MS = 60 * 60 * 1000;
+
+  private async notifyExportFailure(target: SheetTarget, result: any, mode: 'cron' | 'manual'): Promise<void> {
+    try {
+      if (String(this.config.get('EXPORT_ALERT_ENABLED') ?? '1').trim() === '0') return;
+      // Alohida sozlanmasa — @TRanSupport_bot va egasining chat'i (backend/.env).
+      const token = String(this.config.get('EXPORT_ALERT_BOT_TOKEN') || this.config.get('LEADER_BOT_TOKEN') || '').trim();
+      const chatId = String(this.config.get('EXPORT_ALERT_CHAT_ID') || this.config.get('LEADER_TG_ID') || '').trim();
+      if (!token || !chatId) return;
+      const key = target?.id || target?.name || '?';
+      const now = Date.now();
+      if (now - (this.alertLastSent[key] || 0) < this.ALERT_THROTTLE_MS) return;
+      this.alertLastSent[key] = now;
+      const text = formatExportFailureAlert({
+        name: target?.name || key, tabName: target?.tabName || null,
+        writeMode: target?.writeMode || 'replace', mode,
+        step: String(result?.step || '?'), error: String(result?.error || ''), nowMs: now,
+      });
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 10_000);
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+          signal: ac.signal,
+        });
+        if (!res.ok) this.log.warn(`Export ogohlantirish Telegram javobi: HTTP ${res.status}`);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (e: any) {
+      this.log.warn(`Export ogohlantirish yuborilmadi: ${e?.message}`); // token hech qachon logga chiqmaydi
+    }
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
