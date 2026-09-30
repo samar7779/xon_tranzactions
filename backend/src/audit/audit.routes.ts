@@ -20,6 +20,7 @@ const MODULE_MAP: Record<string, string> = {
   shmitd: 'export',
   correction: 'correction',
   'agent-bridge': 'agent-bridge',
+  'tr-support': 'tr-support',
 };
 
 // Eng muhim marshrutlar uchun aniq o'zbekcha nomlar (kalit = "METHOD normalized/path").
@@ -47,6 +48,9 @@ const KNOWN: Record<string, string> = {
   'PATCH bank-credentials/:id': 'Bank ulanishi yangilandi',
   'POST import': 'Fayl import qilindi',
   'POST agent-bridge/exports/:id/run': 'Agent: Google eksport ishga tushirildi',
+  'POST agent-bridge/tx-edit/apply': "Agent: to'lov tahrirlandi (TR Support)",
+  'POST tr-support/edits/:id/rollback': 'TR Support: tahrir ortga qaytarildi',
+  'POST tr-support/unlock': 'TR Support: kod bilan kirish',
 };
 
 export function describeRoute(method: string, rawUrl: string): { module: string; action: string } {

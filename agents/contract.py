@@ -35,7 +35,8 @@ AGENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")  # nomda / \ .. taqiq
 
 LEADER_JSON_KEYS: Tuple[str, ...] = ("intent", "delegate_to", "task_for_agent", "human_reply")
 INTENT_TOLOV = "payment_check"  # checker'ga: bot TOLOV bloki qo'shadi (18-bo'lim)
-INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV)
+INTENT_TUZATISH = "tx_edit"  # to'lov ustunlarini tahrirlash: bot TUZATISH qatorini o'zi bajaradi (19-bo'lim)
+INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV, INTENT_TUZATISH)
 JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S | re.I)
 
 DELEG_HUMAN_REPLY = "Qabul qildim."
@@ -374,9 +375,10 @@ SEZGIR_PREFIKSLAR: Tuple[str, ...] = (
     "agents/__init__.py", "agents/runner.py", "agents/leader_bot.py", "agents/leader_logic.py",
     "agents/reja.py", "agents/config.py", "agents/contract.py", "agents/db.py",
     "agents/db_migrations.py", "agents/history.py", "agents/memory_blocks.py", "agents/notify.py",
-    "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py",
+    "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py", "agents/tuzatish.py",
     "agents/bin", "agents/deploy", "agents/requirements.txt", "agents/.gitignore", ".gitignore",
-    "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth",
+    "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth", "backend/src/agent-bridge",
+    "backend/src/tr-support",
     "backend/prisma/schema.prisma",
 )
 # Naqsh bo'yicha sezgir (prefiks bilan ifodalab bo'lmaydi): agents/ ildizidagi yangi *.py va
@@ -400,6 +402,8 @@ CB_SUP_OK = "sup_ok:"
 CB_SUP_NO = "sup_no:"
 CB_TW_OK = "tw_ok:"
 CB_TW_NO = "tw_no:"
+CB_TZ_OK = "tz_ok:"          # TR Support: to'lov tahririni tasdiqlash
+CB_TZ_NO = "tz_no:"
 KNOPKA_HA = "Ha"
 KNOPKA_YOQ = "Yo'q"
 
@@ -408,6 +412,8 @@ KV_HISTORY = "leader_chat_history"
 KV_SUP_APPR = "sup_appr_{token}"
 KV_SUP_RUN = "sup_run_{token}"
 KV_SUP_DONE = "sup_done_{token}"
+KV_TZ_APPR = "tz_appr_{token}"
+KV_TZ_RUN = "tz_run_{token}"
 KV_SUP_EXEC_LOCK = "sup_exec_lock"
 KV_SUP_EXEC_ACTIVE = "sup_exec_active"
 KV_TW_APPR = "tw_appr_{token}"
@@ -963,3 +969,24 @@ def kv_key(template: str, **fields: object) -> str:
     if len(key) > KV_KEY_MAX:
         raise ValueError("kv kalit 64 belgidan uzun: " + key[:80])
     return key
+
+
+# ---------------------------------------------------------------------------
+# 19. To'lovni tuzatish — TR Support (tuzatish.py; /tuzat; Leader intent tx_edit)
+#     Tranzaksiyaning 3 ustuni: Kontragent (top kategoriya), Kategoriya (subkategoriya), Shartnoma (CRM'da
+#     bo'lishi SHART). Egasi [Ha] bosgach backend agent-bridge tx-edit/apply; keyin bitta OplatyKv sync.
+#     Tarix va "Ortga qaytarish": panel Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi).
+# ---------------------------------------------------------------------------
+TUZATISH_RE = re.compile(r"(?im)^\s*TUZATISH:\s*(.+)$")
+TUZATISH_MAX = 20                                  # bir tasdiqda (backend ham 20)
+TUZATISH_KOPRIK_OPTIONS = "/api/agent-bridge/tx-edit/options"
+TUZATISH_KOPRIK_PREVIEW = "/api/agent-bridge/tx-edit/preview"
+TUZATISH_KOPRIK_APPLY = "/api/agent-bridge/tx-edit/apply"
+TUZATISH_APPLY_TIMEOUT_S = 240                     # CRM tekshiruvi + OplatyKv sync (1-bosqich sinxron)
+TUZATISH_QOLSIN = "qolsin"
+KNOPKA_TZ_HA = "Ha, tahrirla"
+MSG_TUZATISH_FOYDALANISH = ("Foydalanish: /tuzat <to'lov ID>. Bot to'lovning hozirgi holatini va variantlarni ko'rsatadi,"
+                            " keyin Kontragent, Kategoriya, Shartnoma, kim tasdiqlaydi va izohni so'raydi.")
+MSG_TUZATISH_QABUL = "Qabul qilindi, tahrirlanmoqda..."
+MSG_TUZATISH_BEKOR = "Bekor qilindi. Hech narsa o'zgarmadi."
+MSG_TUZATISH_PANEL = "Tarix va ortga qaytarish: panel > Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi bilan)."

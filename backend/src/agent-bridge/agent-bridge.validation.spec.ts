@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
-import { assertExportId, parseChekFind, parseContracts, parseCrmLookup, parseSheetIds } from './agent-bridge.validation';
+import {
+  assertExportId, parseChekFind, parseContracts, parseCrmLookup, parseSheetIds, parseTxApply, parseTxChoice, parseTxRef,
+} from './agent-bridge.validation';
 
 const expect400 = (fn: () => unknown, mustNotEcho?: string) => {
   let err: any;
@@ -105,5 +107,23 @@ describe('parseChekFind', () => {
     [{ order: '1', contract: 'a-b' }],
   ])('yaroqsiz %p → 400', (q) => {
     expect(() => parseChekFind(q as any)).toThrow(BadRequestException);
+  });
+});
+
+describe('tx-edit validatsiya', () => {
+  it('tx ref, qiymatlar va apply body', () => {
+    expect(parseTxRef('ck3q9x0000abcd')).toBe('ck3q9x0000abcd');
+    expect(() => parseTxRef('a b')).toThrow(BadRequestException);
+    expect(() => parseTxRef(['x'])).toThrow(BadRequestException);
+    expect(parseTxChoice({ kontragent: '', kategoriya: ' Взносы за квартиры ', shartnoma: undefined }))
+      .toEqual({ kontragent: null, kategoriya: 'Взносы за квартиры', shartnoma: null });
+    expect(() => parseTxChoice({ shartnoma: 'x'.repeat(81) })).toThrow(BadRequestException);
+    expect(() => parseTxChoice({ shartnoma: 'a\nb' })).toThrow(BadRequestException);
+    expect(parseTxApply({ items: [{ tx: 'ck3q9x0000abcd', shartnoma: 'X1' }], approvedBy: ' Samar ' }))
+      .toEqual({ items: [{ tx: 'ck3q9x0000abcd', kontragent: null, kategoriya: null, shartnoma: 'X1' }], approvedBy: 'Samar', comment: null });
+    for (const bad of [null, 'x', { items: 'x', approvedBy: 'Samar' }, { items: [null], approvedBy: 'Samar' },
+      { items: [{ tx: 'ck3q9x0000abcd' }], approvedBy: 'Samar', comment: 5 }]) {
+      expect(() => parseTxApply(bad)).toThrow(BadRequestException);
+    }
   });
 });

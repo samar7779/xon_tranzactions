@@ -25,6 +25,9 @@ describe('AgentBridgeController (HTTP)', () => {
     runExport: jest.fn(async (id: string) => ({ ok: true, sheet: { id, name: 'N', tabName: 'T' } })),
     crmLookup: jest.fn(async () => ({ ok: true, via: null, checkedDate: null, exact: [], sameAmount: [] })),
     chekFind: jest.fn(async () => ({ ok: true, result: 'not_found', conditions: null, tx: null })),
+    txEditOptions: jest.fn(async () => ({ ok: true, tx: null, kontragentlar: [] })),
+    txEditPreview: jest.fn(async () => ({ ok: true, valid: false, errors: [], tx: null, changes: [], crm: null })),
+    txEditApply: jest.fn(async () => ({ ok: true, batchId: 'b', results: [], sync: null })),
   };
   const auditMock = { record: jest.fn() };
 
@@ -128,6 +131,33 @@ describe('AgentBridgeController (HTTP)', () => {
     expect((await http().get('/api/agent-bridge/chek-find?amount=8132000').set(H, KEY)).status).toBe(400);
     expect((await http().get('/api/agent-bridge/chek-find?order=10904304')).status).toBe(403);
     expect(svcMock.chekFind).toHaveBeenCalledTimes(1);
+  });
+
+  const TX = '1069900024938_10904304_29.09.2026_A_B_813200000_-';
+  it('tx-edit options/preview: kalit bilan servisga tozalangan qiymatlar; kalitsiz 403', async () => {
+    expect((await http().get(`/api/agent-bridge/tx-edit/options?tx=${TX}`)).status).toBe(403);
+    expect((await http().get(`/api/agent-bridge/tx-edit/options?tx=${TX}`).set(H, KEY)).status).toBe(200);
+    expect(svcMock.txEditOptions).toHaveBeenCalledWith(TX);
+    const q = `tx=${TX}&shartnoma=${encodeURIComponent('206FZO25A2')}&kategoriya=${encodeURIComponent('Взносы за квартиры')}`;
+    expect((await http().get(`/api/agent-bridge/tx-edit/preview?${q}`).set(H, KEY)).status).toBe(200);
+    expect(svcMock.txEditPreview).toHaveBeenCalledWith(TX, { kontragent: null, kategoriya: 'Взносы за квартиры', shartnoma: '206FZO25A2' });
+    expect((await http().get('/api/agent-bridge/tx-edit/preview?tx=a%20b').set(H, KEY)).status).toBe(400);
+  });
+
+  it('tx-edit apply: 200 + audit nomi; yaroqsiz body 400 (servis chaqirilmaydi)', async () => {
+    const body = { items: [{ tx: TX, shartnoma: '206FZO25A2' }], approvedBy: 'Samar', comment: 'chek' };
+    const r = await http().post('/api/agent-bridge/tx-edit/apply').set(H, KEY).send(body);
+    expect(r.status).toBe(200);
+    expect(svcMock.txEditApply).toHaveBeenCalledWith({
+      items: [{ tx: TX, kontragent: null, kategoriya: null, shartnoma: '206FZO25A2' }], approvedBy: 'Samar', comment: 'chek',
+    });
+    expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: "Agent: to'lov tahrirlandi (TR Support)" }));
+    for (const bad of [{}, { items: [], approvedBy: 'Samar' }, { items: [{ tx: TX }], approvedBy: 'S' },
+      { items: Array.from({ length: 21 }, () => ({ tx: TX })), approvedBy: 'Samar' }]) {
+      expect((await http().post('/api/agent-bridge/tx-edit/apply').set(H, KEY).send(bad)).status).toBe(400);
+    }
+    expect(svcMock.txEditApply).toHaveBeenCalledTimes(1);
+    expect((await http().post('/api/agent-bridge/tx-edit/apply').send(body)).status).toBe(403);
   });
 
   it('POST run → 200 va audit (actor: agent-bridge) yoziladi', async () => {

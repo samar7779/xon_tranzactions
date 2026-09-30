@@ -662,7 +662,8 @@ export class CategorizationService {
   async setManual(
     txId: string,
     body: { categoryId: string | null; subcategoryId?: string | null },
-    actorId: string,
+    actorId: string | null,
+    actorLabel?: string, // panel foydalanuvchisi bo'lmasa (TR Support agenti) — tarixdagi "kim"
   ): Promise<{ ok: true; oplataKvUpdated?: boolean }> {
     // Subkategoriya parent'i — top kategoriya bo'lishi kerak
     if (body.subcategoryId) {
@@ -695,12 +696,13 @@ export class CategorizationService {
     await this.logHistory(txId, {
       action: 'manual',
       actorId,
+      actorLabel,
       oldCategoryId: old?.categoryId || null,
       oldSubcategoryId: old?.subcategoryId || null,
       newCategoryId: body.categoryId,
       newSubcategoryId: body.subcategoryId || null,
       contractNumber: old?.contractNumber || null,
-      reason: "qo'lda o'zgartirildi",
+      reason: actorLabel ? `qo'lda o'zgartirildi (${actorLabel})` : "qo'lda o'zgartirildi",
     });
 
     // ─── OplataKv'ni sinxronlash (CLIENT subcategory o'zgargan bo'lsa) ───
@@ -825,7 +827,7 @@ export class CategorizationService {
    * Shartnoma raqamini qo'lda o'zgartirish — CRM'da tasdiqlanmasa rad etadi.
    * Faqat verified shartnomalarni qabul qiladi (yoki null — o'chirish).
    */
-  async setContract(txId: string, contractNumber: string | null, actorId: string): Promise<{
+  async setContract(txId: string, contractNumber: string | null, actorId: string | null, actorLabel?: string): Promise<{
     ok: true;
     verified: boolean;
     customerName: string | null;
@@ -867,7 +869,10 @@ export class CategorizationService {
       },
     });
 
-    const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+    const u = actorId
+      ? await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } })
+      : null;
+    const actorName = actorLabel || u?.email || null;
 
     // Tarixga to'g'ridan-to'g'ri yozish (logHistory'da kategoriya o'zgarmagani uchun skip bo'lar edi)
     if (old.contractNumber !== newContract) {
@@ -877,7 +882,7 @@ export class CategorizationService {
             txId,
             action: 'manual',
             actorId,
-            actorName: u?.email || null,
+            actorName,
             oldCategoryId: old.categoryId,
             oldSubcategoryId: old.subcategoryId,
             newCategoryId: old.categoryId,
@@ -899,11 +904,93 @@ export class CategorizationService {
       externalId: old.externalId,
       oldContract: old.contractNumber,
       newContract,
-      actorEmail: u?.email || null,
+      actorEmail: actorName,
       reason: 'setContract',
     });
 
     return { ok: true, verified, customerName, oplataKvSync };
+  }
+
+  /**
+   * TR Support "Ortga qaytarish": tranzaksiyaning kategoriya/subkategoriya/shartnoma holatini AYNAN
+   * saqlangan nusxaga qaytaradi (CRM tekshiruvisiz — eski holat XATO raqam bo'lishi mumkin).
+   * Tarix (transaction_category_history) va OplatyKv propagation panel yo'llari bilan bir xil:
+   * syncCategoryChangeToOplataKv (subkategoriya o'zgarsa), syncContractChangeToOplataKv (shartnoma o'zgarsa).
+   */
+  async restoreSnapshot(
+    txId: string,
+    snap: { categoryId: string | null; subcategoryId: string | null; contractNumber: string | null; isContractManual: boolean },
+    actorLabel: string,
+  ): Promise<{ ok: true; oplataKvSync?: any }> {
+    const cur = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { categoryId: true, subcategoryId: true, contractNumber: true, isContractManual: true, externalId: true },
+    });
+    if (!cur) throw new BadRequestException('Tranzaksiya topilmadi');
+    const catChanged = (cur.categoryId || null) !== (snap.categoryId || null)
+      || (cur.subcategoryId || null) !== (snap.subcategoryId || null);
+    const contractChanged = (cur.contractNumber || null) !== (snap.contractNumber || null);
+
+    await this.prisma.transaction.update({
+      where: { id: txId },
+      data: {
+        categoryId: snap.categoryId,
+        subcategoryId: snap.subcategoryId,
+        contractNumber: snap.contractNumber,
+        isContractManual: !!snap.isContractManual,
+        ...(catChanged ? { categorizedAt: new Date(), categorizedBy: 'manual', categorizedById: null } : {}),
+      },
+    });
+
+    if (catChanged) {
+      await this.logHistory(txId, {
+        action: 'manual',
+        actorId: null,
+        actorLabel,
+        oldCategoryId: cur.categoryId || null,
+        oldSubcategoryId: cur.subcategoryId || null,
+        newCategoryId: snap.categoryId,
+        newSubcategoryId: snap.subcategoryId,
+        contractNumber: snap.contractNumber,
+        reason: `ortga qaytarildi (${actorLabel})`,
+      });
+      if ((cur.subcategoryId || null) !== (snap.subcategoryId || null)) {
+        try {
+          await this.syncCategoryChangeToOplataKv({
+            txId, externalId: cur.externalId || null,
+            newCategoryId: snap.categoryId, newSubcategoryId: snap.subcategoryId,
+          });
+        } catch (e: any) {
+          this.log.warn(`restoreSnapshot: syncCategoryChangeToOplataKv xato (${txId}): ${e?.message}`);
+        }
+      }
+    }
+
+    let oplataKvSync: any;
+    if (contractChanged) {
+      try {
+        await this.prisma.transactionCategoryHistory.create({
+          data: {
+            txId, action: 'manual', actorId: null, actorName: actorLabel,
+            oldCategoryId: snap.categoryId, oldSubcategoryId: snap.subcategoryId,
+            newCategoryId: snap.categoryId, newSubcategoryId: snap.subcategoryId,
+            contractNumber: snap.contractNumber ? snap.contractNumber.slice(0, 32) : null,
+            reason: `shartnoma ortga qaytarildi → ${snap.contractNumber || "yo'q"} (${actorLabel})`.slice(0, 500),
+          },
+        });
+      } catch (e: any) {
+        this.log.warn(`restoreSnapshot history xato (${txId}): ${e?.message}`);
+      }
+      oplataKvSync = await this.syncContractChangeToOplataKv({
+        txId,
+        externalId: cur.externalId,
+        oldContract: cur.contractNumber,
+        newContract: snap.contractNumber,
+        actorEmail: actorLabel,
+        reason: 'tr-support-rollback',
+      });
+    }
+    return { ok: true, oplataKvSync };
   }
 
   /**
@@ -1384,6 +1471,7 @@ export class CategorizationService {
     p: {
       action: string;
       actorId?: string | null;
+      actorLabel?: string;           // panel foydalanuvchisi bo'lmasa (agent) — actorName shu bo'ladi
       oldCategoryId: string | null;
       oldSubcategoryId: string | null;
       newCategoryId: string | null;
@@ -1408,8 +1496,10 @@ export class CategorizationService {
     const nameById = new Map(cats.map((c) => [c.id, c.name]));
 
     // Actor email olamiz (manual uchun)
-    let actorName: string | null = null;
-    if (p.action === 'manual' && p.actorId) {
+    let actorName: string | null = p.actorLabel || null;
+    if (actorName) {
+      // yorliq berilgan (TR Support agenti) — email qidirilmaydi
+    } else if (p.action === 'manual' && p.actorId) {
       const u = await this.prisma.adminUser.findUnique({ where: { id: p.actorId }, select: { email: true } });
       actorName = u?.email || null;
     } else if (p.action === 'sync') actorName = 'sync';

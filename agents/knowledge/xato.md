@@ -1,7 +1,7 @@
 # XATO to'lovlar va tuzatish
 
 ## Vazifasi
-XATO = to'lovdagi shartnoma raqami `crm_contracts` dagi `found=true` raqamlarga ANIQ mos emas. Oqim: XATO ro'yxati → ariza (fayl bilan) → AI agent yoki xodim tasdiqlaydi yoki rad etadi → shartnoma qo'lda qo'yiladi, `oplata_kv` yangilanadi. Boshqa yo'llar: XATO → CRM tabi, Telegram tuzatish boti. Agentlar tasdiq, rad, biriktirishni qilmaydi: panel yoki bot ishi.
+XATO = to'lovdagi shartnoma raqami `crm_contracts` dagi `found=true` raqamlarga ANIQ mos emas. Oqim: XATO ro'yxati → ariza (fayl bilan) → AI agent yoki xodim tasdiqlaydi yoki rad etadi → shartnoma qo'lda qo'yiladi, `oplata_kv` yangilanadi. Boshqa yo'llar: XATO → CRM tabi, Telegram tuzatish boti, TR Support (egasi @TRanSupport_bot'da [Ha] bosgach kontragent, kategoriya, shartnoma tahriri; `tuzatish.md`). Agentlar arizani tasdiqlamaydi va rad etmaydi; to'lovni faqat TR Support orqali, egasi tasdig'i bilan tahrirlaydi.
 
 ## Fayllar
 Yo'llar `backend/src/` ichida.

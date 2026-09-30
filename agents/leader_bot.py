@@ -57,7 +57,8 @@ _MAX_DOWNLOAD = 20 * 1024 * 1024          # Bot API getFile chegarasi
 _IMG_EXT = frozenset({"jpg", "jpeg", "png", "webp", "gif"})
 _MIME_EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 _TOKEN_RE = re.compile(r"^[0-9a-f]{6,32}$")
-_TOLOV_CMD_RE = re.compile(r"^\s*/tolov(?:@\S+)?\s*", re.I)  # /tolov yoki /tolov@bot_nomi
+_TOLOV_CMD_RE = re.compile(r"^\s*/tolov(?:@\S+)?\s*", re.I)
+_TUZAT_CMD_RE = re.compile(r"^\s*/tuzat(?:@\S+)?\s*", re.I)  # /tuzat <to'lov ID> [kalit=qiymat ...]  # /tolov yoki /tolov@bot_nomi
 _JAVOB_TURLARI = frozenset({"sticker", "video", "animation", "document", "location", "contact",
                             "venue", "poll", "dice", "story"})
 _WATCH_INTERVAL_S = 15
@@ -909,6 +910,18 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
         return
     human_reply, emoji = await _clean_reply(data["human_reply"])
 
+    # 6b. To'lovni tuzatish (TR Support): TUZATISH qatori bo'lsa bot o'zi so'raydi / tekshiradi / [Ha] so'raydi.
+    #     Leader'ning delegatsiyasi va human_reply o'rniga (tahrirni faqat bot, egasi tasdig'i bilan qiladi).
+    tz_matn = "\n".join(str(x) for x in (data.get("task_for_agent"), data.get("human_reply")) if x)
+    if C.TUZATISH_RE.search(tz_matn):
+        tz = _mod("tuzatish")
+        if tz is None:
+            await _say(_MSG_MODUL_YOQ_TPL.format(modul="tuzatish"), escape=True, reply_to=reply_to)
+            return
+        state["react"] = emoji
+        await tz.handle(tz_matn, _outbox(), reply_to=reply_to)
+        return
+
     # 7. Delegat oq ro'yxati
     agent = L.normalize_delegate(data.get("delegate_to"))
     if agent and agent not in C.DELEGATE_AGENTS:
@@ -1177,6 +1190,16 @@ async def on_callback(cb: CallbackQuery) -> None:
                 toast = _MSG_MODUL_YOQ_TPL.format(modul="reja")
             else:
                 toast = await rj.decide(token, approve, _outbox(), message_id)
+        elif data.startswith(C.CB_TZ_OK) or data.startswith(C.CB_TZ_NO):
+            approve = data.startswith(C.CB_TZ_OK)
+            token = data[len(C.CB_TZ_OK if approve else C.CB_TZ_NO):]
+            tz = _mod("tuzatish")
+            if not _TOKEN_RE.match(token):
+                toast = C.MSG_MUDDAT_OTGAN
+            elif tz is None:
+                toast = _MSG_MODUL_YOQ_TPL.format(modul="tuzatish")
+            else:
+                toast = await tz.decide(token, approve, _outbox(), message_id)
         elif data.startswith(C.CB_TW_OK) or data.startswith(C.CB_TW_NO):
             approve = data.startswith(C.CB_TW_OK)
             token = data[len(C.CB_TW_OK if approve else C.CB_TW_NO):]
@@ -1301,6 +1324,27 @@ async def cmd_tolov(msg: Message) -> None:
     await _say(text, hist=qisqa)
 
 
+async def cmd_tuzat(msg: Message) -> None:
+    """/tuzat <to'lov ID> [kontragent=.. kategoriya=.. shartnoma=.. tasdiq=.. izoh=..]: to'lov ustunlarini
+    tahrirlash (LLM'siz). Yetishmagan ma'lumotni bot variantlar bilan so'raydi; tahrir faqat [Ha] bilan."""
+    if not _is_owner_private(msg):
+        return
+    if _is_forwarded(msg):
+        await on_text(msg)
+        return
+    arg = _TUZAT_CMD_RE.sub("", _mask_secrets(getattr(msg, "text", None) or ""), count=1).strip()
+    await _hist(C.ROLE_OWNER, ("/tuzat " + C.short(arg, 60)).strip())
+    if not arg:
+        await _say(C.MSG_TUZATISH_FOYDALANISH, escape=True)
+        return
+    tz = _mod("tuzatish")
+    if tz is None:
+        await _say(_MSG_MODUL_YOQ_TPL.format(modul="tuzatish"), escape=True)
+        return
+    matn = "TUZATISH: " + (arg if "=" in arg.split()[0] else "tx=" + arg)
+    await tz.handle(matn, _outbox(), reply_to=msg.message_id)
+
+
 async def cmd_reset(msg: Message) -> None:
     if not _is_owner_private(msg):
         return
@@ -1308,7 +1352,7 @@ async def cmd_reset(msg: Message) -> None:
         await on_text(msg)
         return
     await asyncio.to_thread(history.clear_history)
-    for name in ("reja", "memory_blocks"):
+    for name in ("reja", "memory_blocks", "tuzatish"):
         module = _mod(name)
         if module is None:
             continue
@@ -1545,6 +1589,7 @@ def _register(dp: Dispatcher) -> None:
     dp.message.register(cmd_status, Command("status"), ~F.forward_origin)
     dp.message.register(cmd_health, Command("health"), ~F.forward_origin)
     dp.message.register(cmd_tolov, Command("tolov"), ~F.forward_origin)
+    dp.message.register(cmd_tuzat, Command("tuzat"), ~F.forward_origin)
     dp.message.register(cmd_reset, Command("reset"), ~F.forward_origin)
     dp.message.register(on_text)
     dp.callback_query.register(on_callback)

@@ -151,3 +151,27 @@ export interface BridgeChekFindResponse {
   conditions: { order: boolean | null; account: boolean | null; date: boolean | null; amount: boolean | null; contract: boolean | null } | null;
   tx: BridgeChekTx | null;
 }
+
+// ── tx-edit (TR Support: egasi [Ha] bosgach to'lov ustunlarini tahrirlash) ──
+export interface BridgeTxView {
+  id: string; externalId: string | null; date: string | null; amount: number; direction: string | null;
+  editable: boolean; description: string | null;               // bank izohi, 300 belgigacha (bot faqat egasiga)
+  kontragent: { code: string; name: string } | null;           // top kategoriya
+  kategoriya: { code: string; name: string } | null;           // subkategoriya
+  shartnoma: string | null; isContractManual: boolean;
+}
+export interface BridgeTxOptions {
+  ok: true;
+  tx: BridgeTxView | null;
+  kontragentlar: Array<{ code: string; name: string; kategoriyalar: Array<{ code: string; name: string }> }>;
+}
+export interface BridgeTxChange { field: 'kontragent' | 'kategoriya' | 'shartnoma'; from: string | null; to: string | null }
+export interface BridgeTxPreview {
+  ok: true; valid: boolean; errors: string[]; tx: BridgeTxView | null; changes: BridgeTxChange[];
+  crm: { contract: string; found: boolean; customerName: string | null; objectName: string | null } | null;
+}
+export interface BridgeTxApply {
+  ok: true; batchId: string;
+  results: Array<{ tx: string; id: string | null; status: 'applied' | 'failed' | 'skipped'; errors: string[]; changes: BridgeTxChange[] }>;
+  sync: { ok: boolean; added?: number; updated?: number; skipped?: number; error?: string } | null;
+}

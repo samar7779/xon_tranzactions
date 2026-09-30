@@ -213,6 +213,20 @@ SELECT (txn_date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tashkent' AS sana, amoun
  ORDER BY txn_date;
 ```
 
+## 5.1 To'lovni tuzatish (TR Support)
+
+To'lov topilgach uni bot orqali to'g'rilash mumkin. O'zgaradigan 3 ustun: **Kontragent** (masalan "Клиент / Физ.Л / Юр.Л"),
+**Kategoriya** (masalan "Взносы за квартиры") va **Shartnoma** (CRM'da bo'lishi shart).
+
+1. Botga yozing: "shu to'lovni to'g'irla" yoki `/tuzat <to'lov ID>`.
+2. Bot to'lovning hozirgi holatini va barcha variantlarni ko'rsatadi, so'raydi: kontragent, kategoriya, shartnoma,
+   **kim tasdiqlaydi** va **izoh**. O'zgarmaydigan ustun uchun "qolsin" deng.
+3. Shartnoma CRM'da topilmasa bot aytadi: "boshqa shartnoma bering". Tahrir qilinmaydi.
+4. Bot oldin/keyin ko'rinishini ko'rsatadi: **[Ha, tahrirla]** bosilsa tahrir bo'ladi, keyin OplatyKv sync bir marta
+   ishlaydi (bir nechta to'lov bo'lsa ham bitta sync).
+5. Tarix: panel > Tranzaksiyalar > Klient · XATO shartnoma > **TR Support** (kirish kodi bilan): qachon, kim tasdiqladi,
+   nima o'zgardi, izoh. **Ortga qaytarish** tugmasi to'lovni eski holiga qaytaradi va sync'ni yana ishlatadi.
+
 ## 6. Eslatmalar
 
 - Vaqtlar bazada UTC (tz'siz), Toshkent = UTC+5.

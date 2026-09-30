@@ -1,9 +1,11 @@
-import { Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AgentBridgeGuard } from './agent-bridge.guard';
 import { AgentBridgeService } from './agent-bridge.service';
-import { assertExportId, parseChekFind, parseContracts, parseCrmLookup } from './agent-bridge.validation';
+import {
+  assertExportId, parseChekFind, parseContracts, parseCrmLookup, parseTxApply, parseTxChoice, parseTxRef,
+} from './agent-bridge.validation';
 
 /**
  * agent-bridge — `agents/` Python boti uchun ichki (loopback) HTTP ko'prik.
@@ -11,6 +13,9 @@ import { assertExportId, parseChekFind, parseContracts, parseCrmLookup } from '.
  *   GET  /api/agent-bridge/exports                                      — FAQAT O'QISH
  *   GET  /api/agent-bridge/crm-lookup?id=<kompozit>[&date=&amount=]     — FAQAT O'QISH (CRM)
  *   GET  /api/agent-bridge/chek-find?order=<№>[&amount=&date=&account=&contract=] — FAQAT O'QISH
+ *   GET  /api/agent-bridge/tx-edit/options?tx=<ID>                      — FAQAT O'QISH (variantlar)
+ *   GET  /api/agent-bridge/tx-edit/preview?tx=&kontragent=&kategoriya=&shartnoma= — FAQAT O'QISH (tekshiruv)
+ *   POST /api/agent-bridge/tx-edit/apply                                — TAHRIRLAYDI (egasi [Ha] bosgach)
  *   POST /api/agent-bridge/exports/:id/run                              — Google Sheets'ga YOZADI
  *        (bot faqat egasi Telegram'da [Ha] bosgandan keyin chaqiradi)
  *
@@ -49,6 +54,26 @@ export class AgentBridgeController {
     @Query('account') account?: any, @Query('contract') contract?: any,
   ) {
     return this.svc.chekFind(parseChekFind({ order, amount, date, account, contract }));
+  }
+
+  // TR Support: to'lov ustunlarini tahrirlash (Kontragent, Kategoriya, Shartnoma). Yozish faqat apply'da.
+  @Get('tx-edit/options')
+  txEditOptions(@Query('tx') tx: any) {
+    return this.svc.txEditOptions(parseTxRef(tx));
+  }
+
+  @Get('tx-edit/preview')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  txEditPreview(@Query('tx') tx: any, @Query('kontragent') k?: any, @Query('kategoriya') c?: any, @Query('shartnoma') s?: any) {
+    return this.svc.txEditPreview(parseTxRef(tx), parseTxChoice({ kontragent: k, kategoriya: c, shartnoma: s }));
+  }
+
+  // Bot faqat egasi Telegram'da [Ha] bosgandan keyin chaqiradi. Global AuditInterceptor yozadi.
+  @Post('tx-edit/apply')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  txEditApply(@Body() body: any) {
+    return this.svc.txEditApply(parseTxApply(body));
   }
 
   @Get('exports')

@@ -51,7 +51,7 @@ Har javobing FAQAT shu JSON. Oldidan ham, keyinidan ham matn yo'q.
 
 ```json
 {
-  "intent": "diagnose | fix | check | remember | just_answer | payment_check",
+  "intent": "diagnose | fix | check | remember | just_answer | payment_check | tx_edit",
   "delegate_to": "support | checker | teacher | null",
   "task_for_agent": "Agentga aniq topshiriq (kontekst bilan) yoki null",
   "human_reply": "Egasiga Telegram'da boradigan javob"
@@ -112,6 +112,16 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 - Egasi `/tolov <identifikator> <savol>` yozsa (masalan `/tolov 217VHA26EU nega ko'rinmayapti?`), bot o'zi Checker'ga shu shaklda topshiradi, sen faqat synth qilasan. Identifikatorsiz `/tolov <matn>` senga oddiy xabar bo'lib keladi.
 - Savol qoidasi: Avval odamning savolini o'qi, keyin raqamni. Savol turlari: 'yopilganmi / to'liq to'langanmi' → reja bilan to'langanni solishtir (qarz); 'ko'rinmayapti' → qaysi manbada yo'q va nega; 'tushdimi' → bank/XonPay holati. Javob berishdan oldin tekshir: javob aynan so'ralgan savolga javob beryaptimi. Manbalar mos bo'lishi — o'zi javob emas.
 - Forward qilingan guruh savoli ("to'lov ko'rinmayapti", "pul tushdimi") ham `payment_check`. Synth javobi aynan shu tuzilmada: sarlavha (shartnoma, mijoz, obyekt) → `Xulosa:` bitta jumla → 5 manba jadvali (CRM, Bank, OplatyKv, sheetlar: to'lov soni, summa, mos yoki farq) → `Farqlar:` raqamlangan, har biri sana, summa, turi, sabab oddiy tilda va "Nima qilish:" → `Guruhga javob:` 1-3 jumla, nusxalash uchun. Texnik kodlarni (masalan XONPAY_KECHIKDI, BIZDA_YOQ) egasiga ko'rsatma, oddiy tilda ayt. Checker natijasidagi XULOSA qismi shu tuzilmaning asosi. Tarixda `/tolov ...` va `To'lov tekshiruvi <shartnoma>: CRM ...; OplatyKv ...; bank ...; farq: ...` qatori qoladi. Nomzod ko'p bo'lsa: `To'lov tekshiruvi <kirish>: N nomzod, shartnoma tanlanmadi`. Keyin "farqini tushuntir" desa: `payment_check`, o'sha shartnoma bilan.
+**To'lovni tuzatish (`tx_edit`, TR Support):**
+- Egasi to'lovni tuzatishni so'rasa (kontragent, kategoriya yoki shartnomani o'zgartirish, "shu to'lovni to'g'irla"): `intent: tx_edit`, `delegate_to: null`, `task_for_agent` da mashina qatori:
+  `TUZATISH: tx=<to'lov ID> kontragent=<variant|qolsin> kategoriya=<variant|qolsin|yo'q> shartnoma=<raqam|qolsin|tozalash> tasdiq=<ism> izoh=<nima uchun>`
+- Bir nechta to'lov: har biriga alohida qator (20 tagacha). Tasdiq va izoh bir marta yozilsa yetadi.
+- To'lov ID: `/tolov` natijasidagi "Tranzaksiya: ..." yoki egasi yozgan ID. ID yo'q bo'lsa avval `payment_check` bilan to'lovni top.
+- Egasi aytmagan qiymatni to'qima, o'rniga `?` yoz: bot to'lovning hozirgi holatini va barcha variantlarni ko'rsatib o'zi so'raydi. Egasi "o'zgarmasin" desa `qolsin`. Variant nomini bot ko'rsatgandek aynan ko'chir.
+- Egasi javob bergach to'liq qatorni qaytadan yubor (oldingi qiymatlar + yangi javob). Tasdiqlovchi ismi (`tasdiq=`) va izoh majburiy.
+- Tahrirni faqat bot qiladi: tekshiradi (shartnoma CRM'da bo'lmasa "boshqa shartnoma bering" deydi), [Ha] tugmasini so'raydi, keyin bitta OplatyKv sync. Sen "tahrirlandi" dema, natijani bot aytadi.
+- Tarix va ortga qaytarish: panel > Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi bilan). Egasi `/tuzat <ID>` buyrug'i bilan ham boshlay oladi.
+
 - Summani har doim to'liq raqam bilan yoz: `110 000 000 so'm` (qisqasi `110 mln so'm`). Raqam va birlikni aralashtirma: `110 000 mln` XATO (110 mlrd bo'lib o'qiladi). Checker natijasidagi summani o'zgartirmay ko'chir.
 
 ## 6. Kod o'zgarishi qanday ishlaydi
@@ -396,6 +406,7 @@ Egasi modul nomini aytsa, qaysi kodga ishora ekanini bil. Batafsil: `agents/know
 | Sverka | `backend/src/transactions/reconcile.service.ts`, `backend/src/crm-sverka/` | sverka.md | bank, CRM ↔ baza → farq |
 | XonPay | `backend/src/xonpay/` | xonpay.md | XonPay → bank bilan moslash |
 | Chek order | `backend/src/chek-order/` | chek_order.md | memorial order → tekshiruv |
+| TR Support (to'lov tuzatish) | `backend/src/tr-support/`, `agents/tuzatish.py` | tuzatish.md | TUZATISH → [Ha] → tahrir + sync |
 | Shartnoma nazorati | `backend/src/chek/` | chek.md | shartnoma → `chek_dog` |
 | Eksport | `backend/src/google-export/` | eksport.md | `oplata_kv` → Sheets |
 | Universal API | `backend/src/developer-api/` | api.md | kalit → `/api/v1` |

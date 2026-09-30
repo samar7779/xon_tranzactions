@@ -8,6 +8,7 @@ import { AgentBridgeService } from './agent-bridge.service';
 describe('AgentBridgeService', () => {
   let chek: { paymentCheck: jest.Mock; resAllMatch: jest.Mock; findForAgent: jest.Mock };
   let crm: { lookupForAgent: jest.Mock };
+  let trs: { options: jest.Mock; preview: jest.Mock; apply: jest.Mock };
   let gexp: { listSheetSources: jest.Mock; getRawConfig: jest.Mock; getConfig: jest.Mock; runAndLog: jest.Mock };
   let prisma: { exportCronLog: { findFirst: jest.Mock } };
   let svc: AgentBridgeService;
@@ -45,6 +46,7 @@ describe('AgentBridgeService', () => {
       findForAgent: jest.fn(),
     };
     crm = { lookupForAgent: jest.fn() };
+    trs = { options: jest.fn(), preview: jest.fn(), apply: jest.fn() };
     gexp = {
       listSheetSources: jest.fn(async () => [
         { id: 's1', name: 'Заявки', source: 'oplatakv', hasPayColumns: true },
@@ -59,9 +61,27 @@ describe('AgentBridgeService', () => {
       runAndLog: jest.fn(),
     };
     prisma = { exportCronLog: { findFirst: jest.fn(async () => null) } };
-    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any);
+    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any, trs as any);
   });
   afterEach(() => jest.restoreAllMocks());
+
+  // ── tx-edit ──
+  describe('tx-edit', () => {
+    it('apply: TrSupportService.apply ga egasi manbasi bilan; javob whitelist', async () => {
+      trs.apply.mockResolvedValue({ ok: true, batchId: 'b1', results: [{ tx: 'T', id: 'e1', status: 'applied', changes: [{ field: 'shartnoma', from: null, to: 'X1' }], secret: 'S' }], sync: { ok: true, added: 1, updated: 0, skipped: 0, at: 'x' } });
+      const r = await svc.txEditApply({ items: [{ tx: 'T', kontragent: null, kategoriya: null, shartnoma: 'X1' }], approvedBy: 'Samar', comment: null });
+      expect(trs.apply).toHaveBeenCalledWith([{ tx: 'T', kontragent: null, kategoriya: null, shartnoma: 'X1' }],
+        { approvedBy: 'Samar', comment: null, requestedBy: 'Telegram egasi (TR Support bot)' });
+      expect(r).toEqual({ ok: true, batchId: 'b1', results: [{ tx: 'T', id: 'e1', status: 'applied', errors: [], changes: [{ field: 'shartnoma', from: null, to: 'X1' }] }],
+        sync: { ok: true, added: 1, updated: 0, skipped: 0 } });
+    });
+    it("options: kontragent -> kategoriyalar (id'larsiz)", async () => {
+      trs.options.mockResolvedValue({ ok: true, tx: null, tree: [{ id: 'SECRET_ID', code: 'CLIENT', name: 'K', children: [{ id: 'SECRET_2', code: 'C1', name: 'V' }] }] });
+      const r = await svc.txEditOptions('T');
+      expect(r.kontragentlar).toEqual([{ code: 'CLIENT', name: 'K', kategoriyalar: [{ code: 'C1', name: 'V' }] }]);
+      expect(JSON.stringify(r)).not.toMatch(/SECRET_/);
+    });
+  });
 
   // ── chek-find ──
   describe('chekFind', () => {

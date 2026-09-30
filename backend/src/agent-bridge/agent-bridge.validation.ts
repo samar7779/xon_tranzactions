@@ -90,3 +90,45 @@ export function parseChekFind(q: Record<string, unknown>): {
     recipientAccount: account, contractNo: contract ? contract.toUpperCase() : null,
   };
 }
+
+// ── tx-edit ──
+const TX_EDIT_MSG = "tx-edit: tx (to'lov ID, 6-200 belgi: A-Z/0-9/_/./-), qiymatlar 80 belgigacha, approvedBy 2-120, 1-20 ta";
+export const TX_REF_RE = /^[A-Za-z0-9][A-Za-z0-9_.\-]{5,199}$/;
+const CTRL_RE = /[\u0000-\u001f\u007f]/;
+
+export function parseTxRef(raw: unknown): string {
+  if (typeof raw !== 'string' || !TX_REF_RE.test(raw)) throw new BadRequestException(TX_EDIT_MSG);
+  return raw;
+}
+
+/** kontragent/kategoriya/shartnoma: undefined/'' = qolsin; aks holda 80 belgigacha oddiy matn. */
+function parseChoiceVal(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || v.length > 80 || CTRL_RE.test(v)) throw new BadRequestException(TX_EDIT_MSG);
+  return v.trim();
+}
+
+export function parseTxChoice(q: Record<string, unknown>): { kontragent: string | null; kategoriya: string | null; shartnoma: string | null } {
+  return { kontragent: parseChoiceVal(q.kontragent), kategoriya: parseChoiceVal(q.kategoriya), shartnoma: parseChoiceVal(q.shartnoma) };
+}
+
+export function parseTxApply(body: unknown): {
+  items: Array<{ tx: string; kontragent: string | null; kategoriya: string | null; shartnoma: string | null }>;
+  approvedBy: string; comment: string | null;
+} {
+  const b = (body && typeof body === 'object' ? body : null) as Record<string, unknown> | null;
+  if (!b || !Array.isArray(b.items) || b.items.length < 1 || b.items.length > 20) throw new BadRequestException(TX_EDIT_MSG);
+  const items = b.items.map((it) => {
+    const o = (it && typeof it === 'object' ? it : null) as Record<string, unknown> | null;
+    if (!o) throw new BadRequestException(TX_EDIT_MSG);
+    return { tx: parseTxRef(o.tx), ...parseTxChoice(o) };
+  });
+  const approvedBy = typeof b.approvedBy === 'string' ? b.approvedBy.trim() : '';
+  if (approvedBy.length < 2 || approvedBy.length > 120 || CTRL_RE.test(approvedBy)) throw new BadRequestException(TX_EDIT_MSG);
+  let comment: string | null = null;
+  if (b.comment !== undefined && b.comment !== null && b.comment !== '') {
+    if (typeof b.comment !== 'string' || b.comment.length > 1000) throw new BadRequestException(TX_EDIT_MSG);
+    comment = b.comment.trim();
+  }
+  return { items, approvedBy, comment };
+}

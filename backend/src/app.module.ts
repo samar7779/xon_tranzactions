@@ -45,6 +45,7 @@ import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
 import { LeaderModule } from './leader/leader.module';
 import { AgentTeamModule } from './agent-team/agent-team.module';
 import { AgentBridgeModule } from './agent-bridge/agent-bridge.module';
+import { TrSupportModule } from './tr-support/tr-support.module';
 
 @Module({
   imports: [
@@ -100,6 +101,7 @@ import { AgentBridgeModule } from './agent-bridge/agent-bridge.module';
     LeaderModule,
     AgentTeamModule,
     AgentBridgeModule,
+    TrSupportModule,
   ],
   providers: [
     // FIX (A1): ThrottlerGuard'ni GLOBAL bog'laymiz — avval ThrottlerModule sozlangan-u,

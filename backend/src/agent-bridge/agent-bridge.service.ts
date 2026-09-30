@@ -5,12 +5,14 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ChekOrderService } from '../chek-order/chek-order.service';
 import { CrmService } from '../crm/crm.service';
+import { TrSupportService } from '../tr-support/tr-support.service';
 import { GoogleExportService } from '../google-export/google-export.service';
 import { AGENT_BRIDGE_KEY_ENV, isKeyConfigured } from './agent-bridge.guard';
 import { parseSheetIds } from './agent-bridge.validation';
 import {
   BridgeChekFindResponse, BridgeContractResult, BridgeCrmLookupResponse, BridgeCrmLookupRow, BridgeCrmPart, BridgeExportItem, BridgeExportLastRun, BridgeExportsResponse,
   BridgeOplataPart, BridgePaymentCheckResponse, BridgeRunResponse, BridgeSheetPart,
+  BridgeTxApply, BridgeTxChange, BridgeTxOptions, BridgeTxPreview, BridgeTxView,
 } from './agent-bridge.types';
 
 const ERR_MAX = 300;
@@ -46,6 +48,7 @@ export class AgentBridgeService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly crm: CrmService,
+    private readonly trSupport: TrSupportService,
   ) {}
 
   onModuleInit(): void {
@@ -55,6 +58,58 @@ export class AgentBridgeService implements OnModuleInit {
     } else {
       this.log.log(`${AGENT_BRIDGE_KEY_ENV} sozlanmagan — ko'prik YOPIQ (hamma so'rov 403)`);
     }
+  }
+
+  // ───────────────────────── tx-edit (TR Support) ─────────────────────────
+  private pickTx(t: any): BridgeTxView | null {
+    if (!t) return null;
+    const kv = (x: any) => (x ? { code: String(x.code), name: String(x.name) } : null);
+    return {
+      id: String(t.id), externalId: strOrNull(t.externalId), date: strOrNull(t.date), amount: num(t.amount),
+      direction: strOrNull(t.direction), editable: !!t.editable,
+      description: t.description != null ? String(t.description).slice(0, 300) : null,
+      kontragent: kv(t.kontragent), kategoriya: kv(t.kategoriya),
+      shartnoma: strOrNull(t.shartnoma), isContractManual: !!t.isContractManual,
+    };
+  }
+
+  private pickChanges(cs: any[]): BridgeTxChange[] {
+    return (cs || []).map((c) => ({ field: c.field, from: strOrNull(c.from), to: strOrNull(c.to) }));
+  }
+
+  async txEditOptions(tx: string): Promise<BridgeTxOptions> {
+    const r = await this.trSupport.options(tx);
+    return {
+      ok: true, tx: this.pickTx(r.tx),
+      kontragentlar: r.tree.map((t) => ({
+        code: t.code, name: t.name, kategoriyalar: t.children.map((c) => ({ code: c.code, name: c.name })),
+      })),
+    };
+  }
+
+  async txEditPreview(tx: string, choice: { kontragent: string | null; kategoriya: string | null; shartnoma: string | null }): Promise<BridgeTxPreview> {
+    const p = await this.trSupport.preview(tx, choice);
+    return {
+      ok: true, valid: p.valid, errors: p.errors.map(cut), tx: this.pickTx(p.tx), changes: this.pickChanges(p.changes),
+      crm: p.crm ? { contract: p.crm.contract, found: p.crm.found, customerName: p.crm.customerName, objectName: p.crm.objectName } : null,
+    };
+  }
+
+  async txEditApply(b: {
+    items: Array<{ tx: string; kontragent: string | null; kategoriya: string | null; shartnoma: string | null }>;
+    approvedBy: string; comment: string | null;
+  }): Promise<BridgeTxApply> {
+    const r = await this.trSupport.apply(b.items, { approvedBy: b.approvedBy, comment: b.comment, requestedBy: 'Telegram egasi (TR Support bot)' });
+    return {
+      ok: true, batchId: r.batchId,
+      results: r.results.map((x) => ({
+        tx: x.tx, id: x.id || null, status: x.status, errors: (x.errors || []).map(cut), changes: this.pickChanges(x.changes),
+      })),
+      sync: r.sync ? {
+        ok: !!r.sync.ok, added: r.sync.added, updated: r.sync.updated, skipped: r.sync.skipped,
+        ...(r.sync.error ? { error: cut(r.sync.error) } : {}),
+      } : null,
+    };
   }
 
   // ───────────────────────── chek-find (FAQAT O'QISH) ─────────────────────────

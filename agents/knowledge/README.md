@@ -28,6 +28,7 @@ INDEX "Modullar xaritasi" jadvalidagi har modul uchun bitta fayl:
 - `eksport.md` — Google Sheets eksport, SHMITD hisoboti va autsourcing Excel'ini Telegram'ga yuborish.
 - `api.md` — tashqi tizimlar uchun API: kalitlar, OplatyKv delta-feed, Universal API, so'rov logi.
 - `tolov_tekshirish.md` — shartnoma va to'lov tekshiruvi (CRM ↔ `transactions` ↔ `oplata_kv`, `agents/payment_check.py`): manbalar, moslash kalitlari, `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` blokini o'qish, farq kodlari va kim tuzatadi. Tuzilmasi o'ziga xos (raqamli bo'limlar, 7-bo'lim kodlar jadvali testda tekshiriladi), oxirida Bog'liqliklar, Xavfli joylar va Tez-tez bo'limlari.
+- `tuzatish.md` — TR Support: topilgan to'lovni egasi tasdig'i bilan tuzatish (kontragent, kategoriya, CRM'da tekshirilgan shartnoma), `TUZATISH:` qatori, [Ha], bitta OplatyKv sync, tarix va ortga qaytarish (panel TR Support tabi).
 
 ## Modul fayli tuzilmasi
 
