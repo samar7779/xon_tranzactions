@@ -618,12 +618,13 @@ def _check_oplatykv_sync() -> Tuple[str, str, Optional[dict]]:
             if kechikish is not None:
                 qachon += ", backend sync jadvalidan %d daq kechikkan" % round(kechikish)
             msgs.append("%d ta CLIENT to'lov oplata_kv ga tushmagan (3 kun)%s" % (round(n), qachon))
+    # egasi qarori 2026-09-30: kelajak updated_at yolg'iz warn bermaydi, soni info bo'lib qoladi
+    jim_izoh = ""
     if kelajak and kelajak > 0:
-        st = "warn"
-        msgs.append("oplata_kv da %d qator updated_at kelajakda" % round(kelajak))
+        jim_izoh = "; kelajak updated_at: %d (ogohlantirish jim)" % round(kelajak)
     if not msgs:
-        return "ok", "oplatykv_sync: tushmagan %d, %s" % (round(n), izoh), None
-    return st, "oplatykv_sync: " + "; ".join(msgs), None
+        return "ok", "oplatykv_sync: tushmagan %d, %s%s" % (round(n), izoh, jim_izoh), None
+    return st, "oplatykv_sync: " + "; ".join(msgs) + jim_izoh, None
 
 
 def _check_agents() -> Tuple[str, str, Optional[dict]]:
