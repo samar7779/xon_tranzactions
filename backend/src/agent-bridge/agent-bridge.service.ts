@@ -4,11 +4,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ChekOrderService } from '../chek-order/chek-order.service';
+import { CrmService } from '../crm/crm.service';
 import { GoogleExportService } from '../google-export/google-export.service';
 import { AGENT_BRIDGE_KEY_ENV, isKeyConfigured } from './agent-bridge.guard';
 import { parseSheetIds } from './agent-bridge.validation';
 import {
-  BridgeContractResult, BridgeCrmPart, BridgeExportItem, BridgeExportLastRun, BridgeExportsResponse,
+  BridgeChekFindResponse, BridgeContractResult, BridgeCrmLookupResponse, BridgeCrmLookupRow, BridgeCrmPart, BridgeExportItem, BridgeExportLastRun, BridgeExportsResponse,
   BridgeOplataPart, BridgePaymentCheckResponse, BridgeRunResponse, BridgeSheetPart,
 } from './agent-bridge.types';
 
@@ -44,6 +45,7 @@ export class AgentBridgeService implements OnModuleInit {
     private readonly googleExport: GoogleExportService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly crm: CrmService,
   ) {}
 
   onModuleInit(): void {
@@ -52,6 +54,66 @@ export class AgentBridgeService implements OnModuleInit {
       this.log.log('agent-bridge ochiq (faqat loopback, kalit bilan)');
     } else {
       this.log.log(`${AGENT_BRIDGE_KEY_ENV} sozlanmagan — ko'prik YOPIQ (hamma so'rov 403)`);
+    }
+  }
+
+  // ───────────────────────── chek-find (FAQAT O'QISH) ─────────────────────────
+  /** Chek ma'lumoti → tranzaksiya (ChekOrderService.findForAgent = matchOrder; natija saqlanmaydi). */
+  async chekFind(o: {
+    orderNo: string; amount: number | null; date: string | null; recipientAccount: string | null; contractNo: string | null;
+  }): Promise<BridgeChekFindResponse> {
+    const r: any = await this.chekOrder.findForAgent({
+      orderNo: o.orderNo, amount: o.amount, date: o.date, recipientAccount: o.recipientAccount, contractNo: o.contractNo,
+    });
+    const t = r?.matchedTx;
+    const c = r?.conditions;
+    const b = (v: any): boolean | null => (v === true ? true : v === false ? false : null);
+    return {
+      ok: true,
+      result: r?.result === 'found' || r?.result === 'mismatch' ? r.result : 'not_found',
+      conditions: c ? { order: b(c.order), account: b(c.account), date: b(c.date), amount: b(c.amount), contract: b(c.contract) } : null,
+      tx: t ? {
+        id: String(t.id),
+        externalId: strOrNull(t.externalId),
+        direction: strOrNull(t.direction),
+        amount: num(t.amount),
+        txnDate: t.txnDate ? new Date(t.txnDate).toISOString() : null,
+        docNumber: strOrNull(t.docNumber),
+        contractNumber: strOrNull(t.contractNumber),
+        fromName: strOrNull(t.fromName),
+        description: t.description != null ? String(t.description).slice(0, 300) : null,
+      } : null,
+    };
+  }
+
+  // ───────────────────────── crm-lookup (FAQAT O'QISH) ─────────────────────────
+  /** Shartnomasiz bank to'lovi CRM'da: CrmService.lookupForAgent (panel «XATO → CRM» match'i + transaction_id). */
+  async crmLookup(id: string, date: string | null, amount: number | null): Promise<BridgeCrmLookupResponse> {
+    const t0 = Date.now();
+    try {
+      const r: any = await this.crm.lookupForAgent(id, date, amount);
+      if (!r?.ok) return { ok: false, error: cut(r?.error || 'CRM javob bermadi') };
+      const pick = (p: any): BridgeCrmLookupRow => ({
+        contract: String(p?.contract ?? '').trim(),
+        date: String(p?.date ?? '').slice(0, 10),
+        amount: num(p?.amount),
+        initialAmount: num(p?.initialAmount), monthlyAmount: num(p?.monthlyAmount), otherAmount: num(p?.otherAmount),
+        object: strOrNull(p?.object),
+        client: strOrNull(p?.client),
+        externalId: String(p?.externalId ?? '').slice(0, 255),
+      });
+      const exact = (r.exact || []).slice(0, 5).map(pick);
+      const sameAmount = (r.sameAmount || []).slice(0, 5).map(pick);
+      this.log.log(`crm-lookup · exact=${exact.length} same=${sameAmount.length} via=${r.via ?? '-'} · ${Date.now() - t0}ms`);
+      return {
+        ok: true,
+        via: r.via === 'sana' || r.via === 'transaction_id' ? r.via : null,
+        checkedDate: r.checkedDate ? String(r.checkedDate).slice(0, 10) : null,
+        exact, sameAmount,
+      };
+    } catch (e: any) {
+      this.log.warn(`crm-lookup xato: ${e?.message}`);
+      return { ok: false, error: cut(e?.message || 'CRM qidiruvi yiqildi') };
     }
   }
 

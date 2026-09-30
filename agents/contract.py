@@ -552,7 +552,7 @@ TOLOV_TOPSHIRIQ_RE = re.compile(r"(?im)^\s*TOLOV:\s*(.+)$")
 TOLOV_BLOK_BOSH = "=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ==="
 TOLOV_BLOK_OXIR = CHECKER_BLOK_OXIR  # "=== TUGADI ===" (ikki blok bir topshiriqda birga kelmaydi)
 TOLOV_KOMPONENTLAR: Tuple[str, ...] = (
-    "kirish", "crm_kesh", "crm", "crm_panel", "oplata_kv", "sheet", "transactions", "xonpay", "bank_izi",
+    "kirish", "chek", "crm_id", "crm_kesh", "crm", "crm_panel", "oplata_kv", "sheet", "transactions", "xonpay", "bank_izi",
     "kontekst", "solishtirish", "panel_solishtirish", "farqlar", "tolovlar", "nomzodlar",
 )
 TOLOV_JADVAL_SARLAVHA = "sana | summa | tur | CRM | OKV | TX | moslik | kod"
@@ -601,6 +601,22 @@ TOLOV_KOPRIK_PORT_DEFAULT = 3001
 TOLOV_KOPRIK_HOSTLAR: Tuple[str, ...] = ("127.0.0.1", "localhost")
 TOLOV_KOPRIK_YOL = "/api/agent-bridge/payment-check"
 TOLOV_KOPRIK_EKSPORT_YOL = "/api/agent-bridge/exports"   # faqat GET (sozlama + oxirgi ish); run chaqirilmaydi
+# Shartnomasiz (XATO) to'lov: bank kompozit ID bo'yicha CRM (panel "XATO -> CRM" match'i); chek -> tranzaksiya
+# (panel "Chek order > Tekshirish" matchOrder). Ikkalasi faqat GET, faqat o'qish.
+TOLOV_KOPRIK_CRM_YOL = "/api/agent-bridge/crm-lookup"
+TOLOV_KOPRIK_CHEK_YOL = "/api/agent-bridge/chek-find"
+TOLOV_TUZ_XATO_CRM = "OplatyKv > XATO → CRM > shu to'lov > Qo'shish (shartnoma va boshlang'ich/oylik CRM'dan qo'yiladi)"
+TOLOV_TUZ_XATO_QOLDA = ("OplatyKv > CRM'dan qidir (ID) bilan tasdiqlang va to'lov shartnomasini qo'lda {sh} ga"
+                        " o'zgartiring (CRM'da sana boshqacha kiritilgan, XATO → CRM tabi topmaydi)")
+TOLOV_TUZ_SHARTNOMASIZ = ("to'lovchidan yoki sotuv bo'limidan shartnoma raqamini aniqlang; sotuv bo'limi to'lovni"
+                          " CRM'ga kiritgach " + "OplatyKv > XATO → CRM > Qo'shish (yoki XATO to'lovni ariza orqali"
+                          " tuzating)")
+TOLOV_GURUH_SHARTNOMASIZ_TPL = ("To'lov {sana} da {summa} so'm bizning hisobga tushgan, lekin izohida shartnoma raqami"
+                                " ko'rsatilmagani uchun hech bir xonadonga avtomatik biriktirilmagan. Shartnoma"
+                                " raqamini yuboring, biriktirib qo'yamiz.")
+TOLOV_GURUH_CRMDA_TPL = ("To'lov {sana} da {summa} so'm bizning hisobga tushgan. Izohida shartnoma raqami yo'qligi"
+                         " uchun avtomatik biriktirilmagan edi; CRM'da {sh} shartnomasida turibdi, bizda ham shu"
+                         " shartnomaga biriktiriladi va xonadonda ko'rinadi.")
 TOLOV_KOPRIK_HEADER = "x-agent-bridge-key"
 TOLOV_KOPRIK_TIMEOUT_S = 90                       # CRM show sekin bo'lishi mumkin
 TOLOV_KOPRIK_JAVOB_MAX = 5 * 1024 * 1024
@@ -881,7 +897,8 @@ TOLOV_GURUH_MOS_TPL = ("Shartnoma bo'yicha barcha to'lovlar ({n} ta, {summa} so'
 # /tolov (LLM'siz). Toza lotin, emoji yo'q.
 MSG_TOLOV_FOYDALANISH = (
     "Foydalanish: /tolov <shartnoma> (3 tagacha, vergul bilan), /tolov <to'lov ID>, /tolov <XonPay UUID>, "
-    "/tolov <summa> <sana>, /tolov mijoz <familiya ism>. Oxirida 'batafsil': texnik to'liq chiqish.\n"
+    "/tolov <summa> <sana>, /tolov chek <order №> [summa sana], /tolov mijoz <familiya ism>. "
+    "Oxirida 'batafsil': texnik to'liq chiqish.\n"
     "Misol: /tolov 821ZUR23V1 yoki /tolov 6150000 2026-09-20"
 )
 TOLOV_OWNER_SARLAVHA_TPL = "<b>To'lov tekshiruvi</b> — {kirish} — {vaqt}"

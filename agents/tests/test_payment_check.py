@@ -1601,8 +1601,9 @@ class StatikTest(unittest.TestCase):
         self.assertIn("_koprik_urlopen(req", inspect.getsource(pc._koprik_get))
         self.assertNotIn("/order/show", src)
         self.assertNotIn("/excel", src)
-        # ko'prik: faqat ikki GET yo'li; Sheets'ga yozadigan exports/:id/run yo'q
-        self.assertEqual(pc._KOPRIK_YOLLAR, ("/api/agent-bridge/payment-check", "/api/agent-bridge/exports"))
+        # ko'prik: faqat to'rt GET yo'li (hammasi o'qish); Sheets'ga yozadigan exports/:id/run yo'q
+        self.assertEqual(pc._KOPRIK_YOLLAR, ("/api/agent-bridge/payment-check", "/api/agent-bridge/exports",
+                                             "/api/agent-bridge/crm-lookup", "/api/agent-bridge/chek-find"))
         for yol in ("/api/agent-bridge/exports/s1/run", "/api/agent-bridge/payment-check/", "/api/oplata-kv"):
             with self.assertRaises(ValueError):
                 pc._koprik_get(yol, {}, pc._mono() + 30)
@@ -1992,8 +1993,8 @@ class KoprikTest(_CrmEnvBase):
         self.assertIn("XATO", _kodlar(n.farqlar))                  # DB tomoni ham ishladi
         self.assertIn("CRM jami crm_panel da (CRM_FARQ)", self._bolim(n, "farqlar").xabar)
         komp = [re.match(r"^\[(\w+)\]", x).group(1) for x in blok.split("\n") if re.match(r"^\[\w+\]", x)]
-        self.assertEqual(komp, [k for k in C.TOLOV_KOMPONENTLAR if k != "nomzodlar"
-                                for _ in range(2 if k == "sheet" else 1)])
+        self.assertEqual(komp, [k for k in C.TOLOV_KOMPONENTLAR if k not in ("nomzodlar", "chek", "crm_id")
+                                for _ in range(2 if k == "sheet" else 1)])   # chek/crm_id: faqat bitta to'lovda
         self.assertIn("CRM 6 150 000 (panel)", pc.qisqa(n))
         self._kalitsiz(blok, pc.format_owner(n), pc.qisqa(n), repr(n))
 
@@ -3373,6 +3374,169 @@ class LeaderTolovTest(TLR._FlowBase):
         self.assertTrue(LB._is_tolov("checker", "check", "a\nTOLOV: shartnoma=X1Y"))
         self.assertFalse(LB._is_tolov("checker", "check", "holat"))
         self.assertFalse(LB._is_tolov("support", C.INTENT_TOLOV, "TOLOV: shartnoma=X1Y"))
+
+
+# ---------------------------------------------------------------------------
+# Chek -> tranzaksiya -> bank ID -> CRM (shartnomasiz / XATO to'lov)
+# ---------------------------------------------------------------------------
+KOMP_C = _komp(gid="3734765350", num="2730", sana="29.09.2026", summa="813200000", sign="-")
+IZOH_C = ("00667Разовые платежи на счета юр. лиц в других банках ООО 'XONSAROY PREMIUM TOWER'"
+          " от G'AYBULLAYEVA DILRABO NUTFILLOYEVA")
+
+
+def _id_marshrut(**ustiga: Any) -> Dict[str, Any]:
+    r = _marshrut(**{
+        pc._SQL_ID_TX: [{"id": "ctxC", "external_id": KOMP_C, "contract_number": None,
+                         "txn_date": _vaqt("2026-09-29"), "amount": D("8132000"), "yon": "IN",
+                         "bank_general_id": "3734765350", "tolovchi": "TRANZIT SCHET", "izoh": IZOH_C}],
+        pc._SQL_ID_OKV: [{"id": "okvC", "contract_no": None, "sana": date(2026, 9, 29),
+                          "payment_amount": D("8132000"), "source_tx_id": KOMP_C}],
+        pc._SQL_ID_LOG: [],
+    })
+    r.update(ustiga)
+    return r
+
+
+def _crm_lookup(exact: Any = (), same: Any = (), via: Optional[str] = "sana") -> Dict[str, Any]:
+    def q(sh: str, mijoz: str = "ИСМОИЛОВА НИГОРА") -> Dict[str, Any]:
+        return {"contract": sh, "date": "2026-09-29", "amount": 8132000, "initialAmount": 8132000, "monthlyAmount": 0,
+                "otherAmount": 0, "object": "ZUR", "client": mijoz, "externalId": KOMP_C}
+    return {"ok": True, "via": via if exact else None, "checkedDate": "2026-09-29",
+            "exact": [q(x) for x in exact], "sameAmount": [q(x) for x in same]}
+
+
+class ChekCrmIdTest(_CrmEnvBase):
+    env = {C.TOLOV_CRM_ENV_YOQ: None, C.TOLOV_KOPRIK_ENV_KEY: KOP_KALIT}
+
+    def _run(self, matn: str, routes: Dict[str, Any], crm: Any = None, chek: Any = None) -> pc.Natija:
+        def router(req: urllib.request.Request) -> Any:
+            yol = urlsplit(req.full_url).path
+            if yol.endswith("/crm-lookup"):
+                return crm if crm is not None else _crm_lookup()
+            if yol.endswith("/chek-find"):
+                return chek if chek is not None else {"ok": True, "result": "not_found", "conditions": None, "tx": None}
+            if yol.endswith("/payment-check"):
+                return _kop_javob()
+            return _kop_eksportlar()
+        self.kop.calls.clear()
+        self.kop.default = router
+        self.fake = FakeDb(routes)
+        with mock.patch.object(db, "tx", self.fake.tx):
+            return pc.prefetch(matn)
+
+    def _chaqiruv(self, oxiri: str) -> List[SimpleNamespace]:
+        return [c for c in self.kop.calls if urlsplit(c.url).path.endswith(oxiri)]
+
+    @staticmethod
+    def _bolim(n: pc.Natija, komp: str) -> pc.Bolim:
+        return next(b for b in n.bolimlar if b.komponent == komp)
+
+    def test_parse_chek(self):
+        k = pc.parse_kirish("TOLOV: order=10904304 summa=8132000 sana=2026-09-29 hisob=29824000300001188002")
+        self.assertEqual((k.tur, k.order, k.summa, k.sana, k.hisob),
+                         ("chek", "10904304", D("8132000"), date(2026, 9, 29), "29824000300001188002"))
+        k = pc.parse_kirish("chek 10904304 8 132 000 29.09.2026")
+        self.assertEqual((k.tur, k.order, k.summa, k.sana), ("chek", "10904304", D("8132000"), date(2026, 9, 29)))
+        self.assertEqual(pc.parse_kirish("order 10904304").order, "10904304")
+        for yomon in ("TOLOV: order=AB12", "chek 10904304 8132000", "TOLOV: order=1 hisob=12"):
+            k = pc.parse_kirish(yomon)
+            self.assertFalse(k is not None and k.tur == "chek", yomon)
+        self.assertEqual(pc.tolov_topshiriq(pc.parse_kirish("chek 10904304 8132000 2026-09-29"), "?").split("\n")[0],
+                         "TOLOV: order=10904304 summa=8132000 sana=2026-09-29")
+        self.assertEqual(pc.kirish_nomi(pc.parse_kirish("chek 10904304")), "chek №10904304")
+
+    def test_id_shartnomasiz_crmda_topildi(self):
+        n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm=_crm_lookup(exact=[SH]))
+        [c] = self._chaqiruv("/crm-lookup")
+        self.assertEqual(parse_qs(urlsplit(c.url).query),
+                         {"id": [KOMP_C], "date": ["2026-09-29"], "amount": ["8132000"]})
+        self.assertEqual(_sarlavha(c, C.TOLOV_KOPRIK_HEADER), KOP_KALIT)
+        self.assertEqual(n.shartnomalar, [SH])
+        self.assertEqual((n.crm_id.eski, n.crm_id.via), ([], "sana"))
+        b = self._bolim(n, "crm_id")
+        self.assertEqual(b.status, "warn")
+        self.assertIn("CRM'da 821ZUR23V1 shartnomasida", b.xabar)
+        self.assertIn("bizda: shartnomasiz (XATO)", b.xabar)
+        self.assertIn("XATO → CRM tabi ham topadi", b.xabar)
+        ega = html.unescape(pc.format_owner(n))
+        self.assertIn("bizda shartnomasiz (XATO) turibdi; CRM'da u 821ZUR23V1", ega)
+        self.assertIn(C.TOLOV_TUZ_XATO_CRM, ega)
+        self.assertIn(C.TOLOV_GURUH_CRMDA_TPL.format(sana=pc._sana_qisqa("2026-09-29"), summa="8 132 000", sh=SH), ega)
+        self.assertIn("1. " + pc._sana_qisqa("2026-09-29") + " · 8 132 000 · bank", ega)
+        blok = pc.format_block(n)
+        self.assertIn("[crm_id] WARN:", blok)
+        self.assertLessEqual(len(blok), C.TOLOV_BLOK_MAX)
+
+    def test_crmda_sana_boshqa_qolda_tuzatish(self):
+        n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm=_crm_lookup(exact=[SH], via="transaction_id"))
+        self.assertIn(C.TOLOV_TUZ_XATO_QOLDA.format(sh=SH), html.unescape(pc.format_owner(n)))
+        self.assertIn("XATO → CRM tabi topmaydi", self._bolim(n, "crm_id").xabar)
+
+    def test_chek_topildi_crmda_yoq_oddiy_xulosa(self):
+        chek = {"ok": True, "result": "found",
+                "conditions": {"order": True, "account": None, "date": True, "amount": True, "contract": None},
+                "tx": {"id": "ctxC", "externalId": KOMP_C, "direction": "IN", "amount": 8132000,
+                       "txnDate": "2026-09-29T05:00:00.000Z", "docNumber": "10904304", "contractNumber": None,
+                       "fromName": "TRANZIT", "description": IZOH_C}}
+        n = self._run("TOLOV: order=10904304 summa=8132000 sana=2026-09-29", _id_marshrut(),
+                      crm=_crm_lookup(same=["5VTN11AA"]), chek=chek)
+        [c] = self._chaqiruv("/chek-find")
+        self.assertEqual(parse_qs(urlsplit(c.url).query),
+                         {"order": ["10904304"], "amount": ["8132000"], "date": ["2026-09-29"]})
+        self.assertEqual(n.shartnomalar, [])
+        self.assertEqual(self._bolim(n, "chek").status, "ok")
+        self.assertIn("mos: order ha, summa ha, sana ha", self._bolim(n, "chek").xabar)
+        self.assertIn("5VTN11AA", self._bolim(n, "crm_id").qatorlar[0])
+        ega = html.unescape(pc.format_owner(n))
+        self.assertIn("To'lov " + pc._sana_qisqa("2026-09-29") + " · 8 132 000 so'm", ega)
+        self.assertIn("to'lovchi: G'aybullayeva Dilrabo Nutfilloyeva", ega)
+        self.assertIn("hech bir shartnomaga biriktirilmagan; CRM'da ham", ega)
+        self.assertIn("5VTN11AA shartnomasi (Ismoilova Nigora)", ega)
+        self.assertIn(C.TOLOV_GURUH_SHARTNOMASIZ_TPL.format(sana=pc._sana_qisqa("2026-09-29"), summa="8 132 000"), ega)
+        blok = pc.format_block(n)
+        self.assertIn("[chek] OK:", blok)
+        self.assertIn("[crm_id] WARN:", blok)
+        self.assertIn("Guruhga javob:", blok)
+        self.assertTrue(pc.qisqa(n).startswith("To'lov tekshiruvi chek №10904304: "), pc.qisqa(n))
+        self.assertEqual(pc.parse_kirish("TOLOV: order=№10904304").order, "10904304")
+
+    def test_chek_topilmadi(self):
+        n = self._run("chek 10904304", {})
+        self.assertEqual(self._chaqiruv("/crm-lookup"), [])
+        self.assertEqual(self._bolim(n, "chek").status, "warn")
+        ega = html.unescape(pc.format_owner(n))
+        self.assertIn("Chek №10904304", ega)
+        self.assertIn("bank ko'chirmamizda topilmadi", ega)
+
+    def test_chek_topilmadi_summa_sana_bilan_davom(self):
+        routes = _id_marshrut(**{pc._SQL_SS_TX: [{"id": "ctxC", "external_id": KOMP_C, "contract_number": None,
+                                                  "txn_date": _vaqt("2026-09-29"), "amount": D("8132000"),
+                                                  "yon": "IN", "holat": "COMPLETED", "bank": "KAPITALBANK",
+                                                  "tolovchi": "", "izoh": IZOH_C}],
+                                 pc._SQL_SS_OKV: []})
+        n = self._run("chek 10904304 8132000 2026-09-29", routes, crm=_crm_lookup(exact=[SH]))
+        self.assertEqual(n.shartnomalar, [SH])
+        self.assertIn("summa va sana bo'yicha qidirildi", self._bolim(n, "chek").xabar)
+
+    def test_kompozit_emas_va_crm_xatosi(self):
+        routes = _id_marshrut()
+        routes[pc._SQL_ID_TX] = [dict(routes[pc._SQL_ID_TX][0], id="ctxC", external_id=None)]
+        cuid = "c" + "k3q9x" * 4 + "abcd"
+        routes[pc._SQL_ID_TX][0]["id"] = cuid
+        n = self._run("TOLOV: id=" + cuid, routes)
+        self.assertEqual(self._chaqiruv("/crm-lookup"), [])
+        self.assertEqual(self._bolim(n, "crm_id").status, "unknown")
+        n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm={"ok": False, "error": "timeout"})
+        self.assertIn("CRM: timeout", self._bolim(n, "crm_id").xabar)
+        self.assertIn("o'qilmadi", html.unescape(pc.format_owner(n)))
+
+    def test_shartnoma_crmda_bor_bolsa_qidirilmaydi(self):
+        routes = _id_marshrut()
+        routes[pc._SQL_ID_TX] = [dict(routes[pc._SQL_ID_TX][0], contract_number=SH)]
+        n = self._run("TOLOV: id=" + KOMP_C, routes)
+        self.assertEqual(self._chaqiruv("/crm-lookup"), [])
+        self.assertIsNone(n.crm_id)
+        self.assertEqual(n.shartnomalar, [SH])
 
 
 if __name__ == "__main__":

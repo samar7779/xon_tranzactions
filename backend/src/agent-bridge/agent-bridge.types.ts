@@ -110,3 +110,44 @@ export type BridgeRunResponse =
       error: string;                         // 300 belgigacha
       durationMs: number;
     };
+
+// ── crm-lookup (FAQAT O'QISH) ─────────────────────────────────
+// Bitta bank to'lovi (kompozit ID) CRM'da qaysi shartnomada — shartnomasiz (XATO) to'lov uchun.
+export interface BridgeCrmLookupRow {
+  contract: string;
+  date: string;                              // YYYY-MM-DD (CRM date_paid)
+  amount: number;                            // so'm
+  initialAmount: number; monthlyAmount: number; otherAmount: number;
+  object: string | null;
+  client: string | null;                     // CRM full_name (bot faqat egasiga ko'rsatadi)
+  externalId: string;                        // CRM Внешний ID
+}
+export type BridgeCrmLookupResponse =
+  | {
+      ok: true;
+      via: 'sana' | 'transaction_id' | null; // sana = panel «XATO → CRM» tabi ham topadi
+      checkedDate: string | null;
+      exact: BridgeCrmLookupRow[];           // ID (external_id yoki yadro) bo'yicha ANIQ mos, <=5
+      sameAmount: BridgeCrmLookupRow[];      // aniq yo'q bo'lsa: shu kuni shu summa (ID'siz), <=5
+    }
+  | { ok: false; error: string };
+
+// ── chek-find (FAQAT O'QISH) ──────────────────────────────────
+// Chek (memorial order / kvitansiya / ko'chirma qatori) → tranzaksiya: chek-order matchOrder bilan bir xil.
+export interface BridgeChekTx {
+  id: string;
+  externalId: string | null;                 // bank kompozit ID (ix_id) — CRM Внешний ID bilan bir xil format
+  direction: string | null;
+  amount: number;
+  txnDate: string | null;                    // ISO
+  docNumber: string | null;
+  contractNumber: string | null;             // tranzaksiyadagi shartnoma (null = izohdan topilmagan)
+  fromName: string | null;                   // to'lovchi (bot faqat egasiga ko'rsatadi)
+  description: string | null;                // 300 belgigacha
+}
+export interface BridgeChekFindResponse {
+  ok: true;
+  result: 'found' | 'mismatch' | 'not_found';
+  conditions: { order: boolean | null; account: boolean | null; date: boolean | null; amount: boolean | null; contract: boolean | null } | null;
+  tx: BridgeChekTx | null;
+}

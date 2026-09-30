@@ -23,6 +23,8 @@ describe('AgentBridgeController (HTTP)', () => {
     paymentCheck: jest.fn(async () => ({ ok: true, results: [] })),
     listExports: jest.fn(async () => ({ ok: true, credentialsAvailable: true, items: [] })),
     runExport: jest.fn(async (id: string) => ({ ok: true, sheet: { id, name: 'N', tabName: 'T' } })),
+    crmLookup: jest.fn(async () => ({ ok: true, via: null, checkedDate: null, exact: [], sameAmount: [] })),
+    chekFind: jest.fn(async () => ({ ok: true, result: 'not_found', conditions: null, tx: null })),
   };
   const auditMock = { record: jest.fn() };
 
@@ -102,6 +104,30 @@ describe('AgentBridgeController (HTTP)', () => {
     const r = await http().get(`/api/agent-bridge/payment-check?${qs}`).set(H, KEY);
     expect(r.status).toBe(400);
     expect(svcMock.paymentCheck).not.toHaveBeenCalled();
+  });
+
+  const KOMP = '3734765350_2730_22.12.2025_20208000305742909002_22696000905500044001_200000000_-';
+  it('GET crm-lookup: kalitsiz 403; kalit bilan servisga tozalangan qiymatlar; audit yozilmaydi (GET)', async () => {
+    expect((await http().get(`/api/agent-bridge/crm-lookup?id=${KOMP}`)).status).toBe(403);
+    const r = await http().get(`/api/agent-bridge/crm-lookup?id=${KOMP}&date=2025-12-22&amount=2000000`).set(H, KEY);
+    expect(r.status).toBe(200);
+    expect(svcMock.crmLookup).toHaveBeenCalledWith(KOMP, '2025-12-22', 2000000);
+    expect(auditMock.record).not.toHaveBeenCalled();
+  });
+
+  it.each(['', 'id=12345678', `id=${KOMP}&date=22.12.2025`, `id=${KOMP}&id=${KOMP}`])('crm-lookup?%s → 400', async (qs) => {
+    const r = await http().get(`/api/agent-bridge/crm-lookup?${qs}`).set(H, KEY);
+    expect(r.status).toBe(400);
+    expect(svcMock.crmLookup).not.toHaveBeenCalled();
+  });
+
+  it('GET chek-find: kalit bilan servisga, order majburiy', async () => {
+    const r = await http().get('/api/agent-bridge/chek-find?order=10904304&amount=8132000&date=2026-09-29').set(H, KEY);
+    expect(r.status).toBe(200);
+    expect(svcMock.chekFind).toHaveBeenCalledWith({ orderNo: '10904304', amount: 8132000, date: '2026-09-29', recipientAccount: null, contractNo: null });
+    expect((await http().get('/api/agent-bridge/chek-find?amount=8132000').set(H, KEY)).status).toBe(400);
+    expect((await http().get('/api/agent-bridge/chek-find?order=10904304')).status).toBe(403);
+    expect(svcMock.chekFind).toHaveBeenCalledTimes(1);
   });
 
   it('POST run → 200 va audit (actor: agent-bridge) yoziladi', async () => {

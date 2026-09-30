@@ -686,6 +686,15 @@ export class ChekOrderService {
     return { ok: true, batchId, results: this.groupResults(orderResults) };
   }
 
+  /**
+   * agent-bridge (bot) uchun: chekdan olingan ma'lumot (order №, summa, sana, hisob, shartnoma) bo'yicha
+   * tranzaksiyani topish — panel «Tekshirish» tabi bilan AYNAN bir xil matchOrder (ball: order№ 50,
+   * hisob 40, summa 25, shartnoma 25, sana 10; chegara 50). FAQAT O'QISH: natija saqlanmaydi.
+   */
+  async findForAgent(o: ExtractedOrder): Promise<OrderResult> {
+    return this.matchOrder(o, true);
+  }
+
   // ───────────────── SOLISHTIRISH (order → tranzaksiya) ─────────────────
   private async matchOrder(o: ExtractedOrder, hasSource: boolean): Promise<OrderResult> {
     const orderNo = cleanOrderNo(o.orderNo);

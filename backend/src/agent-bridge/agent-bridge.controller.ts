@@ -3,12 +3,14 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AgentBridgeGuard } from './agent-bridge.guard';
 import { AgentBridgeService } from './agent-bridge.service';
-import { assertExportId, parseContracts } from './agent-bridge.validation';
+import { assertExportId, parseChekFind, parseContracts, parseCrmLookup } from './agent-bridge.validation';
 
 /**
  * agent-bridge — `agents/` Python boti uchun ichki (loopback) HTTP ko'prik.
  *   GET  /api/agent-bridge/payment-check?contracts=A,B,C[&sheetIds=x,y]  — FAQAT O'QISH
  *   GET  /api/agent-bridge/exports                                      — FAQAT O'QISH
+ *   GET  /api/agent-bridge/crm-lookup?id=<kompozit>[&date=&amount=]     — FAQAT O'QISH (CRM)
+ *   GET  /api/agent-bridge/chek-find?order=<№>[&amount=&date=&account=&contract=] — FAQAT O'QISH
  *   POST /api/agent-bridge/exports/:id/run                              — Google Sheets'ga YOZADI
  *        (bot faqat egasi Telegram'da [Ha] bosgandan keyin chaqiradi)
  *
@@ -29,6 +31,24 @@ export class AgentBridgeController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   paymentCheck(@Query('contracts') contracts: any, @Query('sheetIds') sheetIds?: any) {
     return this.svc.paymentCheck(parseContracts(contracts), sheetIds); // sheetIds servisda ro'yxatga qarshi tekshiriladi
+  }
+
+  // Shartnomasiz (XATO) bank to'lovi CRM'da qaysi shartnomada — panel «XATO → CRM» bilan bir xil match.
+  @Get('crm-lookup')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  crmLookup(@Query('id') id: any, @Query('date') date?: any, @Query('amount') amount?: any) {
+    const q = parseCrmLookup(id, date, amount);
+    return this.svc.crmLookup(q.id, q.date, q.amount);
+  }
+
+  // Chek → tranzaksiya: panel «Chek order > Tekshirish» bilan bir xil matchOrder (saqlanmaydi).
+  @Get('chek-find')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  chekFind(
+    @Query('order') order: any, @Query('amount') amount?: any, @Query('date') date?: any,
+    @Query('account') account?: any, @Query('contract') contract?: any,
+  ) {
+    return this.svc.chekFind(parseChekFind({ order, amount, date, account, contract }));
   }
 
   @Get('exports')

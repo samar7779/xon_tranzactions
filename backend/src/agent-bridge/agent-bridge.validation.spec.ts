@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { assertExportId, parseContracts, parseSheetIds } from './agent-bridge.validation';
+import { assertExportId, parseChekFind, parseContracts, parseCrmLookup, parseSheetIds } from './agent-bridge.validation';
 
 const expect400 = (fn: () => unknown, mustNotEcho?: string) => {
   let err: any;
@@ -72,4 +72,38 @@ describe('assertExportId', () => {
   });
   it.each(['', '../etc', 'a/b', 'a b', 'x'.repeat(81), 'sheet-1\n'])('%p → 400', (v) => expect400(() => assertExportId(v)));
   it.each([[undefined], [null], [['sheet-1']], [1]])('%p → 400', (v) => expect400(() => assertExportId(v)));
+});
+
+describe('parseCrmLookup', () => {
+  const ID = '3734765350_2730_22.12.2025_20208000305742909002_22696000905500044001_200000000_-';
+  it('kompozit ID + ixtiyoriy sana/summa', () => {
+    expect(parseCrmLookup(ID, undefined, undefined)).toEqual({ id: ID, date: null, amount: null });
+    expect(parseCrmLookup('IP_' + ID, '2025-12-22', '2000000.50')).toEqual({ id: 'IP_' + ID, date: '2025-12-22', amount: 2000000.5 });
+  });
+  it.each([
+    [undefined], [''], ['12345678'], ['abc'], ['a_b c_d_e_f'], ["x'; DROP_TABLE"], ['_' + 'x'.repeat(10)], ['a_' + 'x'.repeat(200)],
+  ])('yaroqsiz id %p → 400', (id) => {
+    expect(() => parseCrmLookup(id, undefined, undefined)).toThrow(BadRequestException);
+  });
+  it('yaroqsiz sana/summa → 400', () => {
+    expect(() => parseCrmLookup(ID, '22.12.2025', undefined)).toThrow(BadRequestException);
+    expect(() => parseCrmLookup(ID, undefined, '-5')).toThrow(BadRequestException);
+    expect(() => parseCrmLookup(ID, undefined, '0')).toThrow(BadRequestException);
+    expect(() => parseCrmLookup(ID, undefined, ['1'])).toThrow(BadRequestException);
+  });
+});
+
+describe('parseChekFind', () => {
+  it('order majburiy; qolganlari ixtiyoriy, shartnoma UPPERCASE', () => {
+    expect(parseChekFind({ order: '10904304' })).toEqual({ orderNo: '10904304', amount: null, date: null, recipientAccount: null, contractNo: null });
+    expect(parseChekFind({ order: '10904304', amount: '8132000', date: '2026-09-29', account: '29824000300001188002', contract: 'abc123' }))
+      .toEqual({ orderNo: '10904304', amount: 8132000, date: '2026-09-29', recipientAccount: '29824000300001188002', contractNo: 'ABC123' });
+  });
+  it.each([
+    [{}], [{ order: '' }], [{ order: 'A1' }], [{ order: '1'.repeat(31) }], [{ order: ['1'] }],
+    [{ order: '1', amount: '1,5' }], [{ order: '1', date: '29.09.2026' }], [{ order: '1', account: '12AB' }],
+    [{ order: '1', contract: 'a-b' }],
+  ])('yaroqsiz %p → 400', (q) => {
+    expect(() => parseChekFind(q as any)).toThrow(BadRequestException);
+  });
 });

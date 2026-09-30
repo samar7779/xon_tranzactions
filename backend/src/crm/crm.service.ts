@@ -482,6 +482,76 @@ export class CrmService {
     return list.map((it) => ({ id: it.id, crm: resultMap.get(it.id) ?? null }));
   }
 
+  /**
+   * agent-bridge (bot) uchun: bitta bank to'lovini (kompozit ID) CRM'dan qidirish — FAQAT O'QISH.
+   *  1) To'lov sanasidagi CRM to'lovlari (payment-history/excel, date_from=date_to) — matchComposites
+   *     bilan AYNAN bir xil match (to'liq external_id yoki kompozit yadro) → panel «XATO → CRM» tabi
+   *     ham xuddi shu natijani ko'radi (via='sana').
+   *  2) Topilmasa — `transaction_id = general_id` filtri (CRM'da sana boshqa kiritilgan bo'lsa ham
+   *     topadi; via='transaction_id'). Filtr e'tiborsiz qoldirilsa ham faqat yadro mos qator olinadi.
+   *  Aniq mos yo'q bo'lsa — shu kuni shu summali CRM to'lovlari (sameAmount, <=5): ID bilan
+   *  bog'lanmagan, ehtimoliy nomzod (qo'lda kiritilgan bo'lishi mumkin).
+   */
+  async lookupForAgent(id: string, date?: string | null, amount?: number | null): Promise<{
+    ok: boolean; error?: string; via: 'sana' | 'transaction_id' | null; checkedDate: string | null;
+    exact: any[]; sameAmount: any[];
+  }> {
+    const cid = String(id || '').trim();
+    const parsed = this.parseComposite(cid);
+    const iso = (date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '') || parsed?.isoDate || '';
+    const core = this.compositeCore(cid);
+    const want = amount != null && Number.isFinite(amount) ? Math.abs(Number(amount))
+      : parsed ? Math.abs(parsed.amount) / 100 : null; // kompozit summa tiyinda
+    const rowsOf = (r: any): any[] => {
+      const raw: any = r?.ok ? (r.data?.data ?? r.data) : null;
+      return raw?.data ?? (Array.isArray(raw) ? raw : []);
+    };
+    const isExact = (p: any) => {
+      const ext = String(p.external_id ?? '').trim();
+      return !!ext && (ext === cid || (!!core && this.compositeCore(ext) === core));
+    };
+    // + mijoz ismi (bot egasiga ko'rsatadi; crmRowSummary shakli boshqa joylar uchun o'zgarmaydi)
+    const summary = (p: any) => ({ ...this.crmRowSummary(p), client: String(p.full_name ?? '').trim() || null });
+    const exact: any[] = [];
+    const sameAmount: any[] = [];
+    let via: 'sana' | 'transaction_id' | null = null;
+    let dateError = '';
+
+    if (iso) {
+      let page = 1;
+      let prevSig = '';
+      while (page <= 6) {
+        const r: any = await this.callClient('/payment-history/excel', { page, limit: 5000, date_from: iso, date_to: iso }, 90_000);
+        if (!r?.ok) { dateError = String(r?.error || r?.status || 'CRM javob bermadi').slice(0, 200); break; }
+        const rows = rowsOf(r);
+        if (!rows.length) break;
+        const sig = `${rows.length}:${rows[0]?.external_id ?? ''}:${rows[rows.length - 1]?.external_id ?? ''}`;
+        if (sig === prevSig) break;
+        prevSig = sig;
+        for (const p of rows) {
+          if (isExact(p)) exact.push(summary(p));
+          else if (want != null && Math.abs(Math.abs(Number(p.amount || 0)) - want) < 1 && sameAmount.length < 5) {
+            sameAmount.push(summary(p));
+          }
+        }
+        if (rows.length < 5000) break;
+        page++;
+      }
+      if (exact.length) via = 'sana';
+    }
+
+    const gid = parsed?.generalId || '';
+    if (!exact.length && /^\d+$/.test(gid)) {
+      const r: any = await this.callClient('/payment-history/excel', { page: 1, limit: 500, transaction_id: gid }, 60_000);
+      for (const p of rowsOf(r)) if (isExact(p)) exact.push(summary(p));
+      if (exact.length) via = 'transaction_id';
+      else if (!r?.ok && dateError) return { ok: false, error: dateError, via: null, checkedDate: iso || null, exact: [], sameAmount: [] };
+    } else if (!exact.length && dateError) {
+      return { ok: false, error: dateError, via: null, checkedDate: iso || null, exact: [], sameAmount: [] };
+    }
+    return { ok: true, via, checkedDate: iso || null, exact: exact.slice(0, 5), sameAmount: exact.length ? [] : sameAmount };
+  }
+
   /** purpose'dagi XONPAY:(UUID) bo'yicha lokal XonpayTransaction'dan match (type→bosh/oylik). */
   private async applyXonpayMatches(
     list: Array<{ id: string; purpose: string }>, resultMap: Map<string, any>,

@@ -6,7 +6,8 @@ import { AgentBridgeService } from './agent-bridge.service';
  * metod chaqirilsa TypeError bilan test yiqiladi.
  */
 describe('AgentBridgeService', () => {
-  let chek: { paymentCheck: jest.Mock; resAllMatch: jest.Mock };
+  let chek: { paymentCheck: jest.Mock; resAllMatch: jest.Mock; findForAgent: jest.Mock };
+  let crm: { lookupForAgent: jest.Mock };
   let gexp: { listSheetSources: jest.Mock; getRawConfig: jest.Mock; getConfig: jest.Mock; runAndLog: jest.Mock };
   let prisma: { exportCronLog: { findFirst: jest.Mock } };
   let svc: AgentBridgeService;
@@ -41,7 +42,9 @@ describe('AgentBridgeService', () => {
     chek = {
       paymentCheck: jest.fn(async (raw: string) => ({ ok: true, results: raw.split(',').map(mkRes) })),
       resAllMatch: jest.fn(() => true),
+      findForAgent: jest.fn(),
     };
+    crm = { lookupForAgent: jest.fn() };
     gexp = {
       listSheetSources: jest.fn(async () => [
         { id: 's1', name: 'Заявки', source: 'oplatakv', hasPayColumns: true },
@@ -56,9 +59,57 @@ describe('AgentBridgeService', () => {
       runAndLog: jest.fn(),
     };
     prisma = { exportCronLog: { findFirst: jest.fn(async () => null) } };
-    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any);
+    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any);
   });
   afterEach(() => jest.restoreAllMocks());
+
+  // ── chek-find ──
+  describe('chekFind', () => {
+    it('matchOrder natijasi whitelist bilan (tavsif 300 belgi), boshqa maydon sizmaydi', async () => {
+      chek.findForAgent.mockResolvedValue({
+        orderNo: '10904304', extracted: { orderNo: '10904304' }, result: 'found',
+        conditions: { order: true, account: null, date: true, amount: true, contract: null },
+        matchedTx: {
+          id: 'tx1', externalId: 'G_1_29.09.2026_A_B_813200000_-', direction: 'IN', amount: '8132000', currency: 'UZS',
+          txnDate: new Date('2026-09-29T05:00:00Z'), docNumber: '10904304', reference: 'SECRET_REF', contractNumber: null,
+          fromName: "G'AYBULLAYEVA DILRABO", fromAccount: 'SECRET_ACC', toName: 'X', toAccount: 'Y', description: 'd'.repeat(400),
+        },
+      });
+      const r = await svc.chekFind({ orderNo: '10904304', amount: 8132000, date: '2026-09-29', recipientAccount: null, contractNo: null });
+      expect(chek.findForAgent).toHaveBeenCalledWith({ orderNo: '10904304', amount: 8132000, date: '2026-09-29', recipientAccount: null, contractNo: null });
+      expect(r.result).toBe('found');
+      expect(r.tx).toMatchObject({ id: 'tx1', externalId: 'G_1_29.09.2026_A_B_813200000_-', amount: 8132000, contractNumber: null, docNumber: '10904304' });
+      expect(r.tx!.description).toHaveLength(300);
+      expect(JSON.stringify(r)).not.toMatch(/SECRET_/);
+    });
+    it('topilmadi → tx null', async () => {
+      chek.findForAgent.mockResolvedValue({ result: 'not_found', matchedTx: null, conditions: null });
+      const r = await svc.chekFind({ orderNo: '1', amount: null, date: null, recipientAccount: null, contractNo: null });
+      expect(r).toEqual({ ok: true, result: 'not_found', conditions: null, tx: null });
+    });
+  });
+
+  // ── crm-lookup ──
+  describe('crmLookup', () => {
+    it('aniq mos → whitelist qatorlar, via saqlanadi', async () => {
+      crm.lookupForAgent.mockResolvedValue({
+        ok: true, via: 'sana', checkedDate: '2026-09-29',
+        exact: [{ contract: 'A1B2C3', date: '2026-09-29', amount: 8132000, initialAmount: 8132000, monthlyAmount: 0, otherAmount: 0,
+          object: 'Obj', client: 'Ism', externalId: 'E', purpose: 'SECRET_PURPOSE', orderId: 'SECRET_ORDER' }],
+        sameAmount: [],
+      });
+      const r: any = await svc.crmLookup('G_1_29.09.2026_A_B_813200000_-', '2026-09-29', 8132000);
+      expect(crm.lookupForAgent).toHaveBeenCalledWith('G_1_29.09.2026_A_B_813200000_-', '2026-09-29', 8132000);
+      expect(r).toMatchObject({ ok: true, via: 'sana', exact: [{ contract: 'A1B2C3', client: 'Ism', initialAmount: 8132000 }] });
+      expect(JSON.stringify(r)).not.toMatch(/SECRET_/);
+    });
+    it('CRM xatosi yoki exception → ok:false (300 belgi)', async () => {
+      crm.lookupForAgent.mockResolvedValueOnce({ ok: false, error: 'x'.repeat(500) });
+      expect(await svc.crmLookup('A_B_C', null, null)).toEqual({ ok: false, error: 'x'.repeat(300) });
+      crm.lookupForAgent.mockRejectedValueOnce(new Error('boom'));
+      expect(await svc.crmLookup('A_B_C', null, null)).toEqual({ ok: false, error: 'boom' });
+    });
+  });
 
   // ── payment-check ──
   describe('paymentCheck', () => {

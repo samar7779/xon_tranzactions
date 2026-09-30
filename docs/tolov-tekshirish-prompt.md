@@ -92,6 +92,12 @@ CRM'dagi haqiqiy raqam `224VHA26E4` (A va 4 aralashgan). Chekdagi qabul qiluvchi
      va kirill O bir xil hisoblanadi.
    - Chekdan summa, sana, bank, qabul qiluvchi hisob va tranzaksiya raqamini ham yoz.
    - Raqam yo'q bo'lsa: summa + sana (±3 kun) + hisob bo'yicha qidir.
+   - **Chekda shartnoma raqami yo'q** (masalan boshqa bankdan "Разовые платежи ... от <F.I.O.>"):
+     faqat shartnoma bo'yicha qidirma. (a) Chekdagi order № (bank hujjat raqami), summa va sana bilan
+     tranzaksiyani top — panel **Chek order > Tekshirish** bilan bir xil. (b) Topilgan tranzaksiyaning
+     **ID** si (ix_id, kompozit) ni ol. (c) Shu ID ni CRM'dan qidir (CRM Внешний ID = shu ID):
+     topilsa — qaysi shartnomada ekanini ko'rasan (yechim: OplatyKv > XATO → CRM > Qo'shish);
+     topilmasa — to'lov CRM'ga kiritilmagan, sotuv bo'limi shartnomani aniqlasin.
 2. **CRM.** Shartnoma CRM'da bormi, holati (sotilgan / bekor), to'lovlar ro'yxatida shu to'lov
    (sana, summa) bormi. CRM'dagi kanonik raqamni ol (chekdagi raqam xato bo'lishi mumkin).
 3. **Tranzaksiya.** Pul bankdan tushganmi: summa va sana bo'yicha, izohda shartnoma raqami bormi,
@@ -109,6 +115,7 @@ CRM'dagi haqiqiy raqam `224VHA26E4` (A va 4 aralashgan). Chekdagi qabul qiluvchi
 | CRM'da bor (Способ = Xon Pay, Внешний ID = UUID), bankda va OplatyKv'da yo'q | Pul XonPay hisobida, bizga **1-3 bank ish kunida** o'tadi; dam olish kunida tushmaydi | Billing'da UUID bo'yicha holatini ko'r (TOPILMAGAN = hali tushmagan). 3 ish kunigacha kutiladi, oshsa XonPay bilan tekshiriladi. Guruhga: "XonPay orqali to'langan, pul hali bizga tushmagan, ish kunida tushadi" |
 | Chekda bor, Tranzaksiyalarda yo'q | Bank sync kechikkan yoki yiqilgan; yoki bank to'lov sanasini ko'chirgan | Admin → Sync tarixi (`/uz/admin/sync-logs`), sverka. Sana ±3 kun ichida qidir |
 | Tranzaksiyada bor, OplatyKv'da **XATO** | Izohda shartnoma raqami yo'q yoki noto'g'ri | OplatyKv → **XATO → CRM**: CRM'dan topib biriktirish (yoki XATO tuzatish arizasi, 2 bosqichli tasdiq) |
+| Chek bor, shartnoma raqami yo'q, "xonadonda ko'rinmayapti" | To'lov bizga tushgan, lekin izohda raqam yo'qligi uchun shartnomasiz (XATO) turibdi | `/tolov chek <order №> <summa> <sana>`: bot tranzaksiyani topadi, ID si bilan CRM'dan qidiradi. CRM'da bor — XATO → CRM > Qo'shish (CRM'da sana boshqa bo'lsa qo'lda). CRM'da yo'q — sotuv bo'limi shartnomani aniqlab CRM'ga kiritadi; "shu kuni shu summa" nomzodlari faqat taxmin |
 | Chekdagi raqam CRM'dagidan farq qiladi (masalan `528MSO25WY` va `5282MSO25WY`) | Chekda ma'lumot xatosi | CRM'dagi to'g'ri (kanonik) raqamni ko'rsat; tx shartnomasini kanonik shaklga o'tkazish |
 | OplatyKv'da bor, sheetda yo'q yoki summa kam, to'lov **eksport oxirgi ishlagandan keyin** tushgan | Eksport hali ishlamagan (cron faqat belgilangan soat va kunlarda) yoki oxirgi ishga tushish xato bilan tugagan | Admin → Export → sheet → **Bajarish**. Keyin qayta tekshir |
 | OplatyKv'da bor, sheetda yo'q; to'lov **split qilinmagan** (kategoriya yo'q) | Sheet filtri faqat FIRST/MONTHLY kategoriyalarni oladi | To'lovni split qilish (boshlang'ich/oylik), keyin eksport |
@@ -149,6 +156,9 @@ Yechim: <kim, qayerda, nima qiladi>
 - `/tolov <shartnoma>` — oddiy tilda javob: Xulosa, 5 manba jadvali (CRM, Bank, OplatyKv, Sotuv hisoboti,
   Debitorlik), Farqlar (sabab + "Nima qilish"), Guruhga javob.
 - `/tolov <XonPay UUID>` — XonPay to'lovini UUID bo'yicha topib, shartnomasini to'liq tekshiradi.
+- `/tolov chek <order №> [summa sana]` — chek (memorial order, kvitansiya yoki ko'chirma qatori) bo'yicha:
+  tranzaksiya (Chek order bilan bir xil) → uning ID si → CRM. Shartnoma raqami yo'q to'lov uchun.
+- `/tolov <to'lov ID>` — tranzaksiya ID si (kompozit) bo'yicha; shartnomasiz bo'lsa CRM'dan ID bo'yicha qidiradi.
 - `/tolov <shartnoma> batafsil` — texnik tafsilot (farq kodlari, eksport sozlamasi, tarix).
 - Guruh xabarini forward qilib, ostiga "tekshir" — Checker solishtiradi, Leader tushuntiradi.
 
