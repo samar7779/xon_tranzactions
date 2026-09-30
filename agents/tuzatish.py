@@ -36,7 +36,7 @@ log = logging.getLogger("agents.tuzatish")
 _KALITLAR = ("tx", "kontragent", "kategoriya", "shartnoma", "tasdiq", "izoh")
 _KALIT_RE = re.compile(r"(?i)\b(%s)\s*=\s*" % "|".join(_KALITLAR))
 _TOKEN_RE = re.compile(r"^[0-9a-f]{16}$")
-_TX_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{5,199}$")
+_TX_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+\-]{5,199}$")
 _NOMALUM = {"", "?", "??", "nomalum", "noma'lum"}
 _MAYDON_NOMI = {"kontragent": "Kontragent", "kategoriya": "Kategoriya", "shartnoma": "Shartnoma"}
 _YOLLAR = (C.TUZATISH_KOPRIK_OPTIONS, C.TUZATISH_KOPRIK_PREVIEW, C.TUZATISH_KOPRIK_APPLY)

@@ -123,6 +123,7 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 - Tahrirni faqat bot qiladi: tekshiradi (shartnoma CRM'da bo'lmasa "boshqa shartnoma bering" deydi), [Ha] tugmasini so'raydi, keyin bitta OplatyKv sync. Sen "tahrirlandi" dema, natijani bot aytadi.
 - Tarix va ortga qaytarish: panel > Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi bilan). Egasi `/tuzat <ID>` buyrug'i bilan ham boshlay oladi.
 
+- To'lov ID sini blokdagidek TO'LIQ ko'chir (`ID: ...` qatori, masalan `6614256160_100398475_29.09.2026_20208000907166123002_17409000800001158217_11000000000_-`), qisqartirma: XATO ro'yxatida qidirish va ariza uchun to'liq ID kerak.
 - Summani har doim to'liq raqam bilan yoz: `110 000 000 so'm` (qisqasi `110 mln so'm`). Raqam va birlikni aralashtirma: `110 000 mln` XATO (110 mlrd bo'lib o'qiladi). Checker natijasidagi summani o'zgartirmay ko'chir.
 
 ## 6. Kod o'zgarishi qanday ishlaydi

@@ -11,10 +11,10 @@ const MAX_RAW_LEN = 200;
 const CONTRACTS_MSG = 'contracts: 1-3 ta, har biri faqat A-Z/0-9, 3-20 belgi';
 const SHEET_IDS_MSG = "sheetIds: 1-10 ta, har biri faqat A-Z/0-9/_/-, 1-80 belgi";
 const EXPORT_ID_MSG = "id: faqat A-Z/0-9/_/-, 1-80 belgi";
-const CRM_LOOKUP_MSG = "crm-lookup: id (bank kompozit ID, 8-200 belgi: A-Z/0-9/_/./-), date YYYY-MM-DD, amount musbat son";
+const CRM_LOOKUP_MSG = "crm-lookup: id (bank kompozit ID, 8-200 belgi: A-Z/0-9/_/./+/-), date YYYY-MM-DD, amount musbat son";
 
-// Bank kompozit ID: [IP_|HB_]general_id_num_dd.mm.yyyy_accCt_accDt_amountTiyin_sign (sign '-' ham bo'ladi)
-export const COMPOSITE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.\-]{7,199}$/;
+// Bank kompozit ID: [IP_|HB_]general_id_num_dd.mm.yyyy_accCt_accDt_amountTiyin_sign (sign: '-' kirim, '+' chiqim)
+export const COMPOSITE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.+\-]{7,199}$/;
 
 function splitList(raw: string): string[] {
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -92,8 +92,8 @@ export function parseChekFind(q: Record<string, unknown>): {
 }
 
 // ── tx-edit ──
-const TX_EDIT_MSG = "tx-edit: tx (to'lov ID, 6-200 belgi: A-Z/0-9/_/./-), qiymatlar 80 belgigacha, approvedBy 2-120, 1-20 ta";
-export const TX_REF_RE = /^[A-Za-z0-9][A-Za-z0-9_.\-]{5,199}$/;
+const TX_EDIT_MSG = "tx-edit: tx (to'lov ID, 6-200 belgi: A-Z/0-9/_/./+/-), qiymatlar 80 belgigacha, approvedBy 2-120, 1-20 ta";
+export const TX_REF_RE = /^[A-Za-z0-9][A-Za-z0-9_.+\-]{5,199}$/;
 const CTRL_RE = /[\u0000-\u001f\u007f]/;
 
 export function parseTxRef(raw: unknown): string {

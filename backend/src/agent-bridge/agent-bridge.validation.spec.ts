@@ -81,6 +81,10 @@ describe('parseCrmLookup', () => {
   it('kompozit ID + ixtiyoriy sana/summa', () => {
     expect(parseCrmLookup(ID, undefined, undefined)).toEqual({ id: ID, date: null, amount: null });
     expect(parseCrmLookup('IP_' + ID, '2025-12-22', '2000000.50')).toEqual({ id: 'IP_' + ID, date: '2025-12-22', amount: 2000000.5 });
+    // chiqim to'lovi: sign '+'
+    const CHIQIM = ID.replace(/_-$/, '_+');
+    expect(parseCrmLookup(CHIQIM, undefined, undefined).id).toBe(CHIQIM);
+    expect(parseTxRef(CHIQIM)).toBe(CHIQIM);
   });
   it.each([
     [undefined], [''], ['12345678'], ['abc'], ['a_b c_d_e_f'], ["x'; DROP_TABLE"], ['_' + 'x'.repeat(10)], ['a_' + 'x'.repeat(200)],

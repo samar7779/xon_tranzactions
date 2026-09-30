@@ -1452,11 +1452,13 @@ class PrefetchTest(_CrmEnvBase):
         blok = pc.format_block(n)
         lines = blok.split("\n")
         self.assertEqual([i for i, x in enumerate(lines) if "===" in x], [0, len(lines) - 1])
-        ichki = "\n".join(lines[1:-1])
+        # to'liq to'lov ID lari (egasi talabi) PII emas: tekshiruvdan oldin olib tashlanadi
+        ichki = re.sub(r"ID: \S+", "ID", "\n".join(lines[1:-1]))
         for s in ("123 45 67", "1234567", "Ahmedov", "TUGADI"):  # izohdagi PII sizmaydi (CRM ismi to'liq: egasi qarori)
             self.assertNotIn(s, ichki, s)
         self.assertIn("izohda: 821ZUR23VI", blok)
         for owner in (html.unescape(pc.format_owner(n)), html.unescape(pc.format_batafsil(n))):
+            owner = re.sub(r"ID:(?:</b>)? (?:<code>)?\S+", "ID", owner)
             for s in ("123 45 67", "1234567", "==="):
                 self.assertNotIn(s, owner, s)
 
@@ -2580,8 +2582,11 @@ class KoprikTest(_CrmEnvBase):
         self.assertRegex(blok, r"F\d+ BIZDA_YOQ \| 2026-09-22 \| 3 000 000 \| crm=8888888888_5_22\.09\.2026 \| bankdan: ha"
                                r" \(kompozit\); usul: Bank \| sabab: CRM: bizga tushgan \(2026-09-22 kompozitda\), bizning"
                                r" Tranzaksiyalarda yo'q — bank sync \| tuzatish: bank sync")
+        # egasi talabi (2026-09-30): xulosada to'lov ID si to'liq (hisob raqamlari bilan); texnik qismi qisqa ID
+        xulosa, texnik = blok.split("\n" + C.TOLOV_XULOSA_BLOK_OXIR + "\n", 1)
+        self.assertIn("ID: 8888888888_5_22.09.2026_", xulosa)
         for hisob in ("20208000900123456789", "22618000900987654321"):
-            self.assertNotIn(hisob, blok)
+            self.assertNotIn(hisob, texnik)
         # qo'shimcha SELECT yiqilsa: "bizda yo'q" deyilmaydi, kompozitlar oddiy solishtiriladi
         n = self._run(routes=_marshrut(**{pc._SQL_KOMP_TX: RuntimeError("komp boom")}), pc_javob=_kop_javob(res))
         self.assertNotIn("BIZDA_YOQ", _kodlar(n.farqlar))
@@ -3501,6 +3506,29 @@ class ChekCrmIdTest(_CrmEnvBase):
         n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm=_crm_lookup(exact=[SH], via="transaction_id"))
         self.assertIn(C.TOLOV_TUZ_BOT_TPL.format(sh=SH), html.unescape(pc.format_owner(n)))
         self.assertIn("XATO → CRM tabi topmaydi", self._bolim(n, "crm_id").xabar)
+
+    def test_toliq_id_egasiga(self):
+        """Egasi talabi: to'lov ID si to'liq (kompozit, hisob raqamlari bilan) — sarlavha ostida va har farqda."""
+        misol = "6614256160_100398475_29.09.2026_20208000907166123002_17409000800001158217_11000000000_-"
+        self.assertEqual(pc.toliq_id(misol), misol)
+        self.assertEqual(pc.toliq_id(misol[:-1] + "+"), misol[:-1] + "+")    # chiqim: sign '+'
+        self.assertEqual(pc.toliq_id("ck3q9x0000abcd0000abcd"), "")          # cuid kompozit emas
+        self.assertEqual(pc.toliq_id("a_b c_d_e_f_g"), "")                    # xavfsiz belgilar emas
+        # shartnomasiz to'lov (B holat): sarlavha ostida ID va farq qatorida ID
+        n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm=_crm_lookup())
+        ega = html.unescape(pc.format_owner(n))
+        self.assertIn("ID: " + KOMP_C, ega)
+        birinchi = next(x for x in ega.split("\n") if x.startswith("1. "))
+        self.assertTrue(birinchi.endswith(" ID: " + KOMP_C), birinchi)
+        self.assertIn("ID: " + KOMP_C, pc.format_block(n))                  # Leader ham ko'radi (xulosa bloki)
+        # CRM'da topildi (A holat): sarlavha, 1-farq va fixture'dagi boshqa XATO to'lov ham to'liq ID bilan
+        n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm=_crm_lookup(exact=[SH]))
+        self.assertIn("<code>%s</code>" % KOMP_C, pc.format_owner(n))       # Telegram'da bosib nusxalanadi
+        ega = html.unescape(re.sub(r"<[^>]+>", "", pc.format_owner(n)))
+        qatorlar = ega.split("\n")
+        self.assertEqual(qatorlar[1], "ID: " + KOMP_C)
+        self.assertTrue(next(x for x in qatorlar if x.startswith("1. ")).endswith(" ID: " + KOMP_C))
+        self.assertIn("ID: " + KOMP2, ega)
 
     def test_xato_royxatidagi_tolov_ariza_biriktiriladi(self):
         """Izohda xato raqam (217VHA23EU, CRM'da yo'q), OplatyKv'da XATO qatori: bot tuzatmaydi, ariza yo'li."""

@@ -638,6 +638,17 @@ def qisqa_id(s: Any) -> str:
     return t[:40]
 
 
+_TOLIQ_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+\-]{7,254}$")
+
+
+def toliq_id(s: Any) -> str:
+    """Egasiga ko'rsatiladigan TO'LIQ bank ID (kompozit, masalan
+    6614256160_100398475_29.09.2026_<hisob>_<hisob>_<tiyin>_-). Kompozit bo'lmasa ''. Matn tozalanmaydi (_toza hisob
+    raqamini maskalashi mumkin), shuning uchun faqat xavfsiz belgilar ruxsat."""
+    t = _s(s)
+    return t if t and parse_composite(t) is not None and _TOLIQ_ID_RE.match(t) else ""
+
+
 # ---------------------------------------------------------------------------
 # XonPay: bank ish kunlari va Billing holati (sof)
 # ---------------------------------------------------------------------------
@@ -1200,7 +1211,7 @@ def kirish_nomi(k: Optional[Kirish], shartnomalar: Sequence[str] = ()) -> str:
     if k.tur == "shartnoma":
         return ", ".join(k.shartnomalar)
     if k.tur == "id":
-        return "ID " + qisqa_id(k.id)
+        return "ID " + (toliq_id(k.id) or qisqa_id(k.id))
     if k.tur == "xonpay":
         return "XonPay " + k.id[:8]
     if k.tur == "summa_sana":
@@ -2563,7 +2574,7 @@ class CrmIdNatija:
     eski: Optional[List[str]] = None          # CRM topgach almashtirilgan bizdagi shartnoma(lar); None = almashmadi
 
 
-_KOMP_PARAM_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{7,199}$")   # backend COMPOSITE_ID_RE bilan bir xil
+_KOMP_PARAM_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+\-]{7,199}$")   # backend COMPOSITE_ID_RE bilan bir xil
 
 
 def _summa_param(v: Any) -> str:
@@ -4351,7 +4362,8 @@ def _shartnomasiz(d: DbNatija) -> bool:
 def _yolgiz_qisqa(y: Optional[Dict[str, Any]]) -> str:
     if not y:
         return "-"
-    return "%s, %s, %s so'm" % (qisqa_id(y.get("kalit")), _s(y.get("sana")) or "-", pul(y.get("summa")))
+    return "%s, %s, %s so'm" % (toliq_id(y.get("kalit")) or qisqa_id(y.get("kalit")), _s(y.get("sana")) or "-",
+                                pul(y.get("summa")))
 
 
 def _chek_bolim(c: "ChekNatija", k: Kirish) -> Bolim:
@@ -4369,7 +4381,8 @@ def _chek_bolim(c: "ChekNatija", k: Kirish) -> Bolim:
     t = c.tx
     return Bolim("chek", "ok" if c.natija == "found" else "warn", "%s: %s — tx %s, %s, %s so'm, hujjat %s, shartnoma %s%s" % (
         bosh, "topildi" if c.natija == "found" else "topildi, lekin shartlar to'liq mos emas",
-        qisqa_id(t["external_id"] or t["id"]), config.fmt_local(t["vaqt"]) if t["vaqt"] else "-", pul(t["summa"]),
+        toliq_id(t["external_id"]) or qisqa_id(t["external_id"] or t["id"]),
+        config.fmt_local(t["vaqt"]) if t["vaqt"] else "-", pul(t["summa"]),
         t["hujjat"] or "-", t["shartnoma"] or "yo'q", "; mos: " + shart if shart else ""))
 
 
@@ -4421,7 +4434,7 @@ def _kirish_bolim(k: Kirish, d: DbNatija, n: Natija) -> Bolim:
     if k.tur == "shartnoma":
         q.append("shartnoma " + ", ".join(k.shartnomalar))
     elif k.tur == "id":
-        q.append("ID " + qisqa_id(k.id))
+        q.append("ID " + (toliq_id(k.id) or qisqa_id(k.id)))
     elif k.tur == "xonpay":
         # so'ralgan to'lovning holati birinchi qatorda (blokda [kirish] eng birinchi)
         xp = xonpay_qatorlari(d.xonpay_kirish, n.vaqt)
@@ -4789,6 +4802,7 @@ class OddiyFarq:
     sabab: str
     nima: str
     guruh: str = ""                           # xulosa/guruh javobi uchun toifa (egasiga ko'rsatilmaydi)
+    id: str = ""                              # to'lovning TO'LIQ bank ID si (kompozit) — egasi talabi
 
 
 @dataclass
@@ -4803,6 +4817,7 @@ class Xulosa:
     batafsil: str = ""                        # "Batafsil: /tolov <kirish> batafsil"
     reja: List[str] = field(default_factory=list)   # "Boshlang'ich: reja ..., to'langan ..., qarz ... — yopilmagan"
     bosh: Optional[Tuple[Decimal, Decimal, Decimal]] = None   # boshlang'ich (reja, to'langan, qarz)
+    idlar: List[str] = field(default_factory=list)   # so'ralgan to'lov(lar)ning to'liq ID si (sarlavha ostida)
 
 
 def _holat_oddiy(status: Any) -> str:
@@ -4894,7 +4909,53 @@ def _oddiy_farqlar(n: Natija) -> List[OddiyFarq]:
     tartib = {k: i for i, k in enumerate(C.TOLOV_MUHIM_KODLAR)}
     fs.sort(key=lambda f: f.sana, reverse=True)                  # har toifada yangisi birinchi (barqaror saralash)
     fs.sort(key=lambda f: (tartib[f.kod], not f.sabab.startswith("CRM: bizga tushgan")))
+    idlar = _toliq_idlar(n)
+
+    def fid(dalil: str) -> str:
+        m = re.search(r"(?:okv|tx|crm)=(\S+)", dalil or "")
+        return idlar.get(m.group(1), toliq_id(m.group(1))) if m else ""
+
     for f in fs:
+        oldin = len(out)
+        _farq_qosh(f, n, out, izohlangan, idlar)
+        for x in out[oldin:]:
+            x.id = x.id or fid(f.dalil)
+    return out + _shubhali_xonpay(n)
+
+
+def _toliq_idlar(n: Natija) -> Dict[str, str]:
+    """qisqa_id -> to'liq ID: tekshiruvdagi barcha ma'lum to'lovlardan (tx, OplatyKv, CRM, bizda yo'q kompozitlar)."""
+    m: Dict[str, str] = {}
+
+    def qosh(v: Any) -> None:
+        t = toliq_id(v)
+        if t:
+            m.setdefault(qisqa_id(t), t)
+
+    for j in n.juftlar:
+        if j.tx is not None:
+            qosh(j.tx.external_id)
+        if j.okv is not None:
+            qosh(j.okv.source_tx_id)
+            if j.okv.tx is not None:
+                qosh(j.okv.tx.external_id)
+        if j.crm is not None:
+            qosh(j.crm.external_id)
+    if n.koprik is not None:
+        for s in n.koprik.shartnomalar:
+            for x in s.crm.tolovlar:
+                qosh(x.ext)
+        for t in n.koprik.komp_tx:
+            qosh(t.external_id)
+    if n.yolgiz:
+        qosh(n.yolgiz.get("kalit"))
+    return m
+
+
+def _farq_qosh(f: Farq, n: Natija, out: List[OddiyFarq], izohlangan: Callable[[Decimal, str], bool],
+               idlar: Dict[str, str]) -> None:
+    """Bitta Farq -> oddiy tildagi farq(lar) (out ga qo'shiladi)."""
+    if True:
         turi = _farq_turi(f)
         n_ish = re.match(r"^(\d+) ish kuni", f.izoh)
         if f.kod == "XONPAY_KUTILMOQDA":
@@ -4920,7 +4981,7 @@ def _oddiy_farqlar(n: Natija) -> List[OddiyFarq]:
             for t in sorted(faqat_c, key=lambda t: t.sana, reverse=True):
                 if not izohlangan(t.summa, t.sana):
                     sabab, nima = _oddiy("CRM_BOR")
-                    out.append(OddiyFarq(t.sana, t.summa, _kt_turi(t), sabab, nima, "crm_bor"))
+                    out.append(OddiyFarq(t.sana, t.summa, _kt_turi(t), sabab, nima, "crm_bor", id=toliq_id(t.ext)))
             for t in sorted(faqat_o, key=lambda t: t.sana, reverse=True):
                 if not izohlangan(t.summa, t.sana):
                     sabab, nima = _oddiy("OKV_BOR")
@@ -4945,7 +5006,6 @@ def _oddiy_farqlar(n: Natija) -> List[OddiyFarq]:
             sabab, nima = _oddiy(f.kod)
             grp = {"CRM_YOQ": "okv_bor", "QAYTARIM": "crm_bor", "SYNC_KUTILMOQDA": "sync"}.get(f.kod, "okv")
             out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, grp))
-    return out + _shubhali_xonpay(n)
 
 
 def _shubhali_xonpay(n: Natija) -> List[OddiyFarq]:
@@ -5238,6 +5298,8 @@ def _xulosa_qur(n: Natija, d: DbNatija, crm_sabab: Optional[str]) -> Xulosa:
     if jami_mos and any(not f.yashirin and f.kod in C.TOLOV_TAQSIMOT_KODLAR for f in n.farqlar):
         x.eslatma = C.TOLOV_ESLATMA_TAQSIMOT
     x.guruh = _guruh_javobi(n, x.manbalar, x.farqlar, x.bosh)
+    if n.yolgiz and toliq_id(n.yolgiz.get("kalit")):
+        x.idlar = [toliq_id(n.yolgiz.get("kalit"))]
     cf = _crm_id_farq(n)
     if cf is not None:
         # Bizda shartnomasiz (XATO), CRM'da topildi: shu to'lov asosiy xabar; umumiy farqlar ichidagi
@@ -5269,7 +5331,7 @@ def _crm_id_farq(n: Natija) -> Optional[OddiyFarq]:
     xato_royxat = bool(y.get("okv_bor") and y.get("okv_sh"))
     nima = C.TOLOV_TUZ_ARIZA_SH_TPL.format(sh=sh) if xato_royxat else C.TOLOV_TUZ_BOT_TPL.format(sh=sh)
     return OddiyFarq(sana=_s(y.get("sana")), summa=_dec(y.get("summa")), turi="bank", sabab=sabab, nima=nima,
-                     guruh="xato_crm")
+                     guruh="xato_crm", id=toliq_id(y.get("kalit")))
 
 
 def _xulosa_shartnomasiz(n: Natija, d: DbNatija) -> Xulosa:
@@ -5303,7 +5365,8 @@ def _xulosa_shartnomasiz(n: Natija, d: DbNatija) -> Xulosa:
         sabab += ", CRM'da ham bu to'lov bank ID bo'yicha topilmadi"
     nima = C.TOLOV_TUZ_ARIZA if (y.get("okv_bor") and okv_sh) else C.TOLOV_TUZ_SHARTNOMASIZ
     x.farqlar = [OddiyFarq(sana=sana, summa=summa, turi="bank", sabab=sabab, nima=nima,
-                           guruh="shartnomasiz")]
+                           guruh="shartnomasiz", id=toliq_id(y.get("kalit")))]
+    x.idlar = [i for i in (toliq_id(y.get("kalit")),) if i]
     for r in (c.summa_teng if c is not None else [])[:3]:
         kim = r["mijoz"] or r["obyekt"] or "-"
         x.farqlar.append(OddiyFarq(
@@ -5360,12 +5423,14 @@ def _manba_jadval(manbalar: Sequence[ManbaQator]) -> List[str]:
 
 def _farq_satr(f: OddiyFarq) -> str:
     q = " · ".join((_sana_qisqa(f.sana), pul(f.summa) if f.summa is not None else "-", _toza(f.turi, 40)))
-    return "%s — %s. Nima qilish: %s." % (q, _toza(f.sabab, 300).rstrip("."), _toza(f.nima, 200).rstrip("."))
+    s = "%s — %s. Nima qilish: %s." % (q, _toza(f.sabab, 300).rstrip("."), _toza(f.nima, 200).rstrip("."))
+    return s + (" ID: " + f.id if toliq_id(f.id) else "")
 
 
 def _xulosa_qatorlari(x: Xulosa, farq_max: int) -> Tuple[List[str], List[str], List[str], List[str], List[str]]:
     """(bosh qatorlar, jadval, reja qatorlari, farq qatorlari, oxirgi qatorlar) — oddiy matn (HTML'siz)."""
     bosh = [x.shartnoma + (" — " + x.tavsif if x.tavsif else ""), "Xulosa: " + _toza(x.xulosa, 900)]
+    bosh[1:1] = ["ID: " + i for i in x.idlar if toliq_id(i)]
     farq = ["%d. %s" % (i, _farq_satr(f)) for i, f in enumerate(x.farqlar[:farq_max], 1)]
     if len(x.farqlar) > farq_max:
         farq.append("... yana %d ta farq: batafsil rejimda" % (len(x.farqlar) - farq_max))
@@ -5384,7 +5449,8 @@ def format_xulosa(n: Natija) -> str:
     while True:
         bosh, jadval, reja, farq, oxir = _xulosa_qatorlari(x, farq_max)
         qator = ["<b>%s</b>%s" % (esc(x.shartnoma), esc(" — " + x.tavsif) if x.tavsif else ""),
-                 "<b>Xulosa:</b> " + esc(bosh[1][len("Xulosa: "):]),
+                 ] + ["<b>ID:</b> <code>%s</code>" % esc(b[len("ID: "):]) for b in bosh if b.startswith("ID: ")] + [
+                 "<b>Xulosa:</b> " + esc(bosh[-1][len("Xulosa: "):]),
                  "<pre>" + esc("\n".join(jadval)) + "</pre>"] + [esc(r) for r in reja]
         qator += ["<b>Farqlar:</b>"] + [esc(f) for f in farq] if farq else ["<b>Farqlar:</b> yo'q"]
         qator += [esc(o) for o in oxir[:-1]]
@@ -5400,7 +5466,7 @@ def _xulosa_blok(n: Natija) -> List[str]:
     if n.xulosa is None:
         return []
     bosh, jadval, reja, farq, oxir = _xulosa_qatorlari(n.xulosa, C.TOLOV_BLOK_FARQ_MAX)
-    qator = [C.TOLOV_XULOSA_BLOK_BOSH] + [_bir_qator(bosh[0], 300), bosh[1]] + jadval + reja
+    qator = [C.TOLOV_XULOSA_BLOK_BOSH] + [_bir_qator(bosh[0], 300)] + bosh[1:] + jadval + reja
     qator += (["Farqlar:"] + farq) if farq else ["Farqlar: yo'q"]
     return qator + oxir + [C.TOLOV_XULOSA_BLOK_OXIR]
 
