@@ -1073,6 +1073,63 @@ def _erkin_matn(matn: str) -> Optional[Kirish]:
         s = _id_ok(tok.strip(".,;:()\"'"))
         if s is not None and not s.isdigit():
             return Kirish(tur="id", id=s, xom=_xom(matn))
+    return _matn_tolov(matn)
+
+
+# Erkin matndan chek/to'lov belgilari (shartnoma, UUID va ID topilmaganda oxirgi zaxira).
+# Taxmin qilinmaydi: summa va sana har biri matnda AYNAN bitta bo'lsagina olinadi.
+_MATN_ORDER_RE = re.compile(r"(?i)(?:№|#|\border\b|ордер|\bhujjat\b|документ|\bдок\b\.?)\s*(?:№|n|raqami)?\s*[:.]?\s*"
+                            r"(\d{5,15})(?!\d)")   # 20 xonali hisob raqami order emas
+_MATN_SANA_RE = re.compile(r"(?<![\d.])(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?)(?![\d])")
+_MATN_SUMMA_RE = re.compile(
+    r"(?<![\d.,])(\d{1,3}(?:[ \u00a0.,]\d{3})+|\d{4,12})(?:[.,](\d{1,2}))?(?![\d])"
+    r"(\s*(?:so['‘’ʻʼ`]?m|сум|сўм|sum(?!ma)|uzs))?", re.I)   # "so'mga" ham
+_MATN_TEL_RE = re.compile(r"\+?998[\s\-()]*\d{2}[\s\-()]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}")
+
+
+def _matn_sana(g: Sequence[Optional[str]]) -> Optional[date]:
+    try:
+        if g[0]:
+            return _sana_ok("%s-%s-%s" % (g[0], g[1], g[2]))
+        kun, oy = int(g[3]), int(g[4])
+        yil = int(g[5]) if g[5] else config.today_local().year
+        d = date(yil, oy, kun)
+        if not g[5] and d > config.today_local() + timedelta(days=1):
+            d = date(yil - 1, oy, kun)               # yilsiz sana kelajakda bo'lsa o'tgan yil
+        return _sana_ok(d.isoformat())
+    except (ValueError, TypeError):
+        return None
+
+
+def _matn_tolov(matn: str) -> Optional[Kirish]:
+    """Erkin matn: order № (№/order/hujjat/док belgisi bilan), summa va sana -> chek yoki summa_sana.
+    Telefon raqamlari avval olib tashlanadi; summa: kamida 2 ta minglik guruhi ("8 132 000") yoki pul birligi
+    ("500 000 so'm", "8132000 so'm"). Bir nechta turli summa yoki sana bo'lsa olinmaydi (Leader aniqlashtiradi)."""
+    t = _MATN_TEL_RE.sub(" ", _s(matn))
+    t = _TEL_MAHALLIY_RE.sub(" ", t)
+    orderlar = _uniq(m.group(1) for m in _MATN_ORDER_RE.finditer(t))
+    t = _MATN_ORDER_RE.sub(" ", t)
+    sanalar: List[date] = []
+    for m in _MATN_SANA_RE.finditer(t):
+        d = _matn_sana(m.groups())
+        if d is not None and d not in sanalar:
+            sanalar.append(d)
+    t = _MATN_SANA_RE.sub(" ", t)
+    summalar: List[Decimal] = []
+    for m in _MATN_SUMMA_RE.finditer(t):
+        butun, tiyin, birlik = m.group(1), m.group(2), m.group(3)
+        guruhli = bool(re.search(r"[ \u00a0.,]", butun))
+        if not (birlik or (guruhli and len(re.split(r"[ \u00a0.,]", butun)) >= 3)):
+            continue
+        v = _summa_ok(re.sub(r"[ \u00a0.,]", "", butun) + ("." + tiyin if tiyin else ""))
+        if v is not None and v >= 1000 and v not in summalar:
+            summalar.append(v)
+    summa = summalar[0] if len(summalar) == 1 else None
+    sana = sanalar[0] if len(sanalar) == 1 else None
+    if len(orderlar) == 1:
+        return Kirish(tur="chek", order=orderlar[0], summa=summa, sana=sana, xom=_xom(matn))
+    if summa is not None and sana is not None:
+        return Kirish(tur="summa_sana", summa=summa, sana=sana, xom=_xom(matn))
     return None
 
 

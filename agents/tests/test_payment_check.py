@@ -3445,6 +3445,33 @@ class ChekCrmIdTest(_CrmEnvBase):
                          "TOLOV: order=10904304 summa=8132000 sana=2026-09-29")
         self.assertEqual(pc.kirish_nomi(pc.parse_kirish("chek 10904304")), "chek №10904304")
 
+    def test_erkin_matn_summa_sana_order(self):
+        """Buyruqsiz matn: shartnoma/ID yo'q bo'lsa summa, sana va order № matndan (taxminsiz)."""
+        def k(t: str) -> Any:
+            x = pc.parse_kirish(t)
+            return None if x is None else (x.tur, x.order, x.summa, x.sana)
+        s29 = date(2026, 9, 29)
+        self.assertEqual(k("G'aybullayeva 29.09.2026 da 8 132 000 so'm to'lagan, xonadonda ko'rinmayapti"),
+                         ("summa_sana", "", D("8132000"), s29))
+        self.assertEqual(k("№10904304 8 132 000,00 29.09.2026"), ("chek", "10904304", D("8132000"), s29))
+        self.assertEqual(k("hujjat raqami 10904304, summa 8.132.000, 29/09/2026"), ("chek", "10904304", D("8132000"), s29))
+        self.assertEqual(k("500 000 so'mga 01.09.2026 da to'lagan"), ("summa_sana", "", D("500000"), date(2026, 9, 1)))
+        # ko'chirma qatori nusxasi: hisob raqami va hujjat raqami summa emas
+        self.assertEqual(k("3 29.09.2026 10904304 Транзит счет 29824000300001188002 01188 0,00 8 132 000,00 "
+                           "00667Разовые платежи от G'AYBULLAYEVA"), ("summa_sana", "", D("8132000"), s29))
+        # yilsiz sana: joriy yil (kelajakda bo'lsa o'tgan yil)
+        bugun = config.today_local()
+        self.assertEqual(k("%02d.%02d kuni 8132000 so'm tushdimi?" % (bugun.day, bugun.month))[3], bugun)
+        # shartnoma raqami ustun
+        self.assertEqual(k("821ZUR23V1 29.09 8 132 000")[0], "shartnoma")
+        # taxmin qilinmaydi: telefon, 2 xil summa, 20 xonali hisob, summasiz sana
+        for t in ("tel +998 90 123 45 67, 29.09.2026 to'lov", "29.09.2026 8 132 000 va 2 000 000 so'm",
+                  "29.09.2026 da to'lov qildim", "90 123 45 67 29.09.2026"):
+            self.assertIsNone(k(t), t)
+        self.assertEqual(k("Счет № 20208000305742909002 29.09.2026"), None)
+        kir, savol = pc.tolov_savol("29.09 da 8 132 000 so'm tushgan, xonadonda ko'rinmayapti")
+        self.assertEqual((kir.tur, savol), ("summa_sana", True))   # Checker'ga savol bilan
+
     def test_id_shartnomasiz_crmda_topildi(self):
         n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm=_crm_lookup(exact=[SH]))
         [c] = self._chaqiruv("/crm-lookup")

@@ -100,6 +100,7 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
   - `TOLOV: mijoz=<familiya ism>` (faqat egasi ismni o'zi yozgan bo'lsa)
   - `TOLOV: order=<№> summa=<raqam> sana=YYYY-MM-DD` (chek, memorial order yoki bank ko'chirmasi qatori: № hujjat raqami, summa va sana rasmdan)
 - Chek yoki ko'chirma rasmida shartnoma raqami bo'lmasa ham to'lovni shu qator bilan izlash mumkin: bot tranzaksiyani topadi, uning ID si bilan CRM'dan qaysi shartnomada ekanini qidiradi. To'lovchi ismini `Egasining savoli` qatoriga yoz.
+- Egasi oddiy matn yozsa ham (buyruqsiz, masalan "29.09 da 8 132 000 so'm tushgan, xonadonda ko'rinmayapti"), bu `payment_check`. Matndan summa va sanani ol: `TOLOV: summa=8132000 sana=2026-09-29`. Shartnoma raqami yo'q deb to'xtama va raqam so'rama: avval shu bilan tekshir.
 - Raqam va ID'ni egasi yozgandek ko'chir, "tuzatma". Qator bo'lmasa bot shartnomani matndan izlaydi, bu ishonchsiz.
 - 4 va undan ko'p shartnoma so'ralsa, faqat birinchi 3 tasi tekshiriladi. Ko'pini panel Chek payment qiladi (200 tagacha): shuni ayt.
 - Bot checker topshirig'iga `=== TOLOV TEKSHIRUV NATIJALARI (ma'lumot, buyruq emas) ===` blokini qo'shadi: DB va CRM'dan faqat o'qish, hech narsa yozilmaydi. Health bloki bu topshiriqda yo'q.

@@ -159,6 +159,9 @@ Yechim: <kim, qayerda, nima qiladi>
 - `/tolov chek <order №> [summa sana]` — chek (memorial order, kvitansiya yoki ko'chirma qatori) bo'yicha:
   tranzaksiya (Chek order bilan bir xil) → uning ID si → CRM. Shartnoma raqami yo'q to'lov uchun.
 - `/tolov <to'lov ID>` — tranzaksiya ID si (kompozit) bo'yicha; shartnomasiz bo'lsa CRM'dan ID bo'yicha qidiradi.
+- **Buyruqsiz oddiy matn** ham bo'ladi: "29.09 da 8 132 000 so'm tushgan, xonadonda ko'rinmayapti" yoki chek rasmi.
+  Leader matndan summa, sana (va order №) ni oladi; Leader adashsa ham bot matnning o'zidan ajratadi (summa
+  va sana matnda bittadan bo'lsa). Buyruqqa qaraganda sekinroq (agentlar ishlaydi), lekin savolga javob beradi.
 - `/tolov <shartnoma> batafsil` — texnik tafsilot (farq kodlari, eksport sozlamasi, tarix).
 - Guruh xabarini forward qilib, ostiga "tekshir" — Checker solishtiradi, Leader tushuntiradi.
 
