@@ -778,12 +778,21 @@ def _add_system(inner: str) -> None:
         log.warning("SISTEMA yozilmadi: %s", exc.__class__.__name__)
 
 
+def jim_komponentlar() -> Tuple[str, ...]:
+    """Telegram ogohlantirishi o'chirilgan komponentlar (C.CHECKER_JIM_ENV; env yo'q -> default)."""
+    if config.env_source(C.CHECKER_JIM_ENV) == "none":
+        return C.CHECKER_JIM_DEFAULT
+    return tuple(x.strip().lower() for x in config.env(C.CHECKER_JIM_ENV, "").split(",") if x.strip())
+
+
 async def checker_tick(outbox: "notify.Outbox", on_teacher_lines: TeacherLinesCb) -> None:
-    """Tekshiruv -> eng jiddiy throttle'dan o'tgan muammo -> bitta LLM tahlili -> egasiga."""
+    """Tekshiruv -> eng jiddiy throttle'dan o'tgan muammo -> bitta LLM tahlili -> egasiga.
+    Jim komponentlar (jim_komponentlar) tekshiriladi va yoziladi, lekin egasiga ogohlantirish bo'lmaydi."""
     results = await asyncio.to_thread(run_all_checks_once)
-    problems = [r for r in results if r.status in ("warn", "error")]
+    jim = set(jim_komponentlar())
+    problems = [r for r in results if r.status in ("warn", "error") and r.component.lower() not in jim]
     if not problems:
-        log.info("checker: muammo yo'q (%d tekshiruv)", len(results))
+        log.info("checker: muammo yo'q (%d tekshiruv; jim: %s)", len(results), ", ".join(sorted(jim)) or "-")
         return
     problems.sort(key=lambda r: -C.CHECK_SEVERITY.get(r.status, 0))
     target: Optional[CheckResult] = None

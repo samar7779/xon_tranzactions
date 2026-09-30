@@ -244,6 +244,11 @@ CHECKER_ALERT_OGOHLANTIRISH = (
 CHECKER_START_DELAY_S = 45
 CHECKER_INTERVAL_S = 4 * 3600
 CHECKER_ALERT_THROTTLE_S = 3600
+# Jim komponentlar: tekshiriladi (agent_health, /health, web Agent Support), lekin egasiga Telegram ogohlantirish
+# YUBORILMAYDI va "Boshqa ogohlantirishlar" ga ham qo'shilmaydi. Env (vergul bilan) bo'lsa o'sha ro'yxat,
+# bo'sh qiymat = hech biri jim emas. Env yo'q bo'lsa default. Egasi qarori (2026-09-30): sverka vaqtincha jim.
+CHECKER_JIM_ENV = "AGENTS_CHECKER_JIM"
+CHECKER_JIM_DEFAULT: Tuple[str, ...] = ("sverka",)
 
 # ---------------------------------------------------------------------------
 # 7. Teacher (teacher.md, Q5, Q6, KOD 4, 7)

@@ -166,6 +166,7 @@ Format: `KALIT=qiymat`, har biri alohida qatorda. Qiymat qo'shtirnoqsiz yoki `'.
 | `AGENTS_TOLOV_SHEETLAR` | yo'q | OplatyKv bilan solishtiriladigan sheetlar (id yoki nom, vergul bilan). Default: nomida Sotuv yoki Debetor bo'lganlar |
 | `AGENTS_TOLOV_CRM` | yo'q | eski to'g'ridan CRM GET, default `0` (o'chiq, prod'da 404): `[crm] UNKNOWN: o'chirilgan`, CRM ma'lumoti `[crm_panel]` dan. `1` yoqadi |
 | `AGENTS_TOLOV_CRM_KUNLIK` | yo'q | bir kunda (Toshkent) CRM GET so'rovlari chegarasi, default `300`. Oshsa `[crm] UNKNOWN: kunlik cheklov tugadi` |
+| `AGENTS_CHECKER_JIM` | yo'q | Checker Telegram ogohlantirishi o'chirilgan komponentlar (vergul bilan, masalan `sverka,xonpay`). Tekshiruv ishlaydi (`/health`, web Agent Support), faqat egasiga xabar yo'q. Default `sverka`; bo'sh qiymat = hammasi ogohlantiradi |
 | `ANTHROPIC_BASE_URL` | yo'q | faqat proxy kerak bo'lsa |
 | `DEPLOY_LOCK` | yo'q | default `/var/run/xon-tranzactions-deploy.lock` (`deploy.sh` bilan bir xil) |
 | `DEPLOY_LOG` | yo'q | default `/var/log/xon-tranzactions/deploy.log` |
