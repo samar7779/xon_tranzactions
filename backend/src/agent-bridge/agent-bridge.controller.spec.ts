@@ -28,6 +28,9 @@ describe('AgentBridgeController (HTTP)', () => {
     txEditOptions: jest.fn(async () => ({ ok: true, tx: null, kontragentlar: [] })),
     txEditPreview: jest.fn(async () => ({ ok: true, valid: false, errors: [], tx: null, changes: [], crm: null })),
     txEditApply: jest.fn(async () => ({ ok: true, batchId: 'b', results: [], sync: null })),
+    arizaFind: jest.fn(async () => ({ ok: true, candidates: [], hisobMos: null, crm: null, aiName: 'AI' })),
+    arizaSubmit: jest.fn(async () => ({ ok: true, id: 'r1', alreadyPending: false, contract: 'X1', aiEnabled: true, aiName: 'AI' })),
+    arizaStatus: jest.fn(async () => ({ ok: true, id: 'r1', status: 'pending' })),
   };
   const auditMock = { record: jest.fn() };
 
@@ -158,6 +161,20 @@ describe('AgentBridgeController (HTTP)', () => {
     }
     expect(svcMock.txEditApply).toHaveBeenCalledTimes(1);
     expect((await http().post('/api/agent-bridge/tx-edit/apply').send(body)).status).toBe(403);
+  });
+
+  it('xato-ariza: find/status GET, submit POST (audit nomi), kalitsiz 403, yaroqsiz 400', async () => {
+    expect((await http().get('/api/agent-bridge/xato-ariza/find?summa=7100000&sana=2026-09-29')).status).toBe(403);
+    expect((await http().get('/api/agent-bridge/xato-ariza/find?summa=7100000&sana=2026-09-29&hisob=20208000205720456001').set(H, KEY)).status).toBe(200);
+    expect(svcMock.arizaFind).toHaveBeenCalledWith({ tx: null, summa: 7100000, sana: '2026-09-29', hisob: '20208000205720456001', shartnoma: null });
+    expect((await http().get('/api/agent-bridge/xato-ariza/find?summa=7100000').set(H, KEY)).status).toBe(400);
+    const body = { oplataKvId: 'ck3q9x0000abcd0000abcd', contractNo: '467RMZ26HA', fayl: 'leader_bot_0123456789abcdef.jpg', yubordi: 'TR Support · Samar' };
+    expect((await http().post('/api/agent-bridge/xato-ariza/submit').set(H, KEY).send(body)).status).toBe(200);
+    expect(svcMock.arizaSubmit).toHaveBeenCalledWith(body);
+    expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: "Agent: XATO to'lovga ariza yuborildi (TR Support)" }));
+    expect((await http().post('/api/agent-bridge/xato-ariza/submit').set(H, KEY).send({ ...body, fayl: '/etc/passwd' })).status).toBe(400);
+    expect((await http().get('/api/agent-bridge/xato-ariza/status?id=ck3q9x0000abcd0000abcd').set(H, KEY)).status).toBe(200);
+    expect(svcMock.arizaSubmit).toHaveBeenCalledTimes(1);
   });
 
   it('POST run → 200 va audit (actor: agent-bridge) yoziladi', async () => {

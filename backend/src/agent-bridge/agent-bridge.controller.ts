@@ -4,7 +4,8 @@ import { Throttle } from '@nestjs/throttler';
 import { AgentBridgeGuard } from './agent-bridge.guard';
 import { AgentBridgeService } from './agent-bridge.service';
 import {
-  assertExportId, parseChekFind, parseContracts, parseCrmLookup, parseTxApply, parseTxChoice, parseTxRef,
+  assertExportId, parseArizaFind, parseArizaId, parseArizaSubmit, parseChekFind, parseContracts, parseCrmLookup,
+  parseTxApply, parseTxChoice, parseTxRef,
 } from './agent-bridge.validation';
 
 /**
@@ -16,6 +17,9 @@ import {
  *   GET  /api/agent-bridge/tx-edit/options?tx=<ID>                      — FAQAT O'QISH (variantlar)
  *   GET  /api/agent-bridge/tx-edit/preview?tx=&kontragent=&kategoriya=&shartnoma= — FAQAT O'QISH (tekshiruv)
  *   POST /api/agent-bridge/tx-edit/apply                                — TAHRIRLAYDI (egasi [Ha] bosgach)
+ *   GET  /api/agent-bridge/xato-ariza/find?tx=|summa=&sana=[&hisob=&shartnoma=] — FAQAT O'QISH
+ *   POST /api/agent-bridge/xato-ariza/submit                            — ARIZA yuboradi (egasi [Ha] bosgach)
+ *   GET  /api/agent-bridge/xato-ariza/status?id=                         — FAQAT O'QISH (AI natijasi)
  *   POST /api/agent-bridge/exports/:id/run                              — Google Sheets'ga YOZADI
  *        (bot faqat egasi Telegram'da [Ha] bosgandan keyin chaqiradi)
  *
@@ -74,6 +78,26 @@ export class AgentBridgeController {
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   txEditApply(@Body() body: any) {
     return this.svc.txEditApply(parseTxApply(body));
+  }
+
+  // XATO to'lovga ariza: XATO sahifasidagi "Shartnoma biriktirish" bilan bir xil (createRequestWithFile + AI).
+  @Get('xato-ariza/find')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  arizaFind(@Query('tx') tx?: any, @Query('summa') summa?: any, @Query('sana') sana?: any,
+    @Query('hisob') hisob?: any, @Query('shartnoma') shartnoma?: any) {
+    return this.svc.arizaFind(parseArizaFind({ tx, summa, sana, hisob, shartnoma }));
+  }
+
+  @Post('xato-ariza/submit')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  arizaSubmit(@Body() body: any) {
+    return this.svc.arizaSubmit(parseArizaSubmit(body));
+  }
+
+  @Get('xato-ariza/status')
+  arizaStatus(@Query('id') id: any) {
+    return this.svc.arizaStatus(parseArizaId(id));
   }
 
   @Get('exports')

@@ -36,7 +36,9 @@ AGENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")  # nomda / \ .. taqiq
 LEADER_JSON_KEYS: Tuple[str, ...] = ("intent", "delegate_to", "task_for_agent", "human_reply")
 INTENT_TOLOV = "payment_check"  # checker'ga: bot TOLOV bloki qo'shadi (18-bo'lim)
 INTENT_TUZATISH = "tx_edit"  # to'lov ustunlarini tahrirlash: bot TUZATISH qatorini o'zi bajaradi (19-bo'lim)
-INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV, INTENT_TUZATISH)
+INTENT_ARIZA = "xato_ariza"  # XATO to'lovga ariza: bot ARIZA qatorini o'zi bajaradi (19-bo'lim)
+INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV, INTENT_TUZATISH,
+                            INTENT_ARIZA)
 JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S | re.I)
 
 DELEG_HUMAN_REPLY = "Qabul qildim."
@@ -381,6 +383,7 @@ SEZGIR_PREFIKSLAR: Tuple[str, ...] = (
     "agents/reja.py", "agents/config.py", "agents/contract.py", "agents/db.py",
     "agents/db_migrations.py", "agents/history.py", "agents/memory_blocks.py", "agents/notify.py",
     "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py", "agents/tuzatish.py",
+    "agents/ariza.py",
     "agents/bin", "agents/deploy", "agents/requirements.txt", "agents/.gitignore", ".gitignore",
     "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth", "backend/src/agent-bridge",
     "backend/src/tr-support",
@@ -409,6 +412,8 @@ CB_TW_OK = "tw_ok:"
 CB_TW_NO = "tw_no:"
 CB_TZ_OK = "tz_ok:"          # TR Support: to'lov tahririni tasdiqlash
 CB_TZ_NO = "tz_no:"
+CB_AR_OK = "ar_ok:"          # TR Support: XATO to'lovga ariza yuborishni tasdiqlash
+CB_AR_NO = "ar_no:"
 KNOPKA_HA = "Ha"
 KNOPKA_YOQ = "Yo'q"
 
@@ -419,6 +424,8 @@ KV_SUP_RUN = "sup_run_{token}"
 KV_SUP_DONE = "sup_done_{token}"
 KV_TZ_APPR = "tz_appr_{token}"
 KV_TZ_RUN = "tz_run_{token}"
+KV_AR_APPR = "ar_appr_{token}"
+KV_AR_RUN = "ar_run_{token}"
 KV_SUP_EXEC_LOCK = "sup_exec_lock"
 KV_SUP_EXEC_ACTIVE = "sup_exec_active"
 KV_TW_APPR = "tw_appr_{token}"
@@ -998,3 +1005,23 @@ MSG_TUZATISH_FOYDALANISH = ("Foydalanish: /tuzat <to'lov ID>. Bot to'lovning hoz
 MSG_TUZATISH_QABUL = "Qabul qilindi, tahrirlanmoqda..."
 MSG_TUZATISH_BEKOR = "Bekor qilindi. Hech narsa o'zgarmadi."
 MSG_TUZATISH_PANEL = "Tarix va ortga qaytarish: panel > Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi bilan)."
+
+# XATO to'lovga ariza (ariza.py; Leader intent xato_ariza): XATO sahifasidagi "Shartnoma biriktirish" bilan bir xil
+# (shartnoma + ariza fayli), [Ha] dan keyin; keyin AI tekshiruvchi (agent.aiName) o'zi ko'radi, bot natijani kutadi.
+ARIZA_RE = re.compile(r"(?im)^\s*ARIZA:\s*(.+)$")
+ARIZA_KOPRIK_FIND = "/api/agent-bridge/xato-ariza/find"
+ARIZA_KOPRIK_SUBMIT = "/api/agent-bridge/xato-ariza/submit"
+ARIZA_KOPRIK_STATUS = "/api/agent-bridge/xato-ariza/status"
+ARIZA_KUTISH_S = 240                               # AI natijasini kutish (keyin: "Arizalar" tabida ko'rinadi)
+ARIZA_KUT_QADAM_S = 15
+KNOPKA_AR_HA = "Ha, ariza yubor"
+MSG_ARIZA_QABUL = "Qabul qilindi, ariza yuborilmoqda..."
+MSG_ARIZA_BEKOR = "Bekor qilindi. Ariza yuborilmadi."
+
+# Tasdiq matn bilan ham (tugmasiz): kutilayotgan TR Support tasdig'i bo'lsa qisqa javob [Ha] yoki [Yo'q] kabi.
+TASDIQ_HA_RE = re.compile(r"(?i)^\s*(ha|xa|ha,? tahrirla|ha,? ariza yubor|tasdiq|tasdiqlayman|tasdiqladim|tasdiqlandi|"
+                          r"tasdiqlaymiz|bajar|bajaring|bajarilsin|yubor|yuboring|roziman|ok|okey|davom et)[\s.!]*$")
+TASDIQ_YOQ_RE = re.compile(r"(?i)^\s*(yo'q|yoq|yo‘q|yoʻq|bekor|bekor qil|bekor qiling|kerak emas|rad|to'xta|toxta)[\s.!]*$")
+TASDIQ_MATN_MAX = 40
+MSG_TASDIQ_QAYSI = ("Bir nechta tasdiq kutilmoqda. Qaysi biri ekanini aytish uchun kerakli tasdiq xabariga reply qilib"
+                    " yozing.")

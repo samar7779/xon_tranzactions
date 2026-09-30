@@ -770,6 +770,41 @@ async def on_text(msg: Message) -> None:
                 await _outbox().set_reaction(primary.message_id, state["react"])
 
 
+async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
+    """Qisqa "tasdiqlayman" / "yo'q" matni kutilayotgan TR Support tasdig'iga (tahrir yoki ariza) tugma kabi.
+    Reply qilingan tasdiq xabari aniqlaydi; reply bo'lmasa faqat bitta kutilayotgan tasdiq bo'lsa. True = hal qilindi."""
+    fn = getattr(_mod("tuzatish"), "matn_qaror", None)
+    qaror = fn(text) if callable(fn) else None
+    if qaror is None:
+        return False
+    kutilgan: List[Tuple[Any, str, Dict[str, Any]]] = []
+    for name in ("tuzatish", "ariza"):
+        mod = _mod(name)
+        if mod is None or not callable(getattr(mod, "kutilayotgan", None)):
+            continue
+        try:
+            kutilgan += [(mod, tok, p) for tok, p in await asyncio.to_thread(mod.kutilayotgan)]
+        except Exception:
+            log.exception("%s: kutilayotgan tasdiqlar o'qilmadi", name)
+    if not kutilgan:
+        return False
+    reply_mid = getattr(replied, "message_id", None) if replied is not None else None
+    tanlov = [x for x in kutilgan if reply_mid and x[2].get("mid") == reply_mid]
+    if not tanlov and len(kutilgan) == 1:
+        tanlov = kutilgan
+    await _hist(C.ROLE_OWNER, text)
+    if len(tanlov) != 1:
+        await _say(C.MSG_TASDIQ_QAYSI, escape=True, reply_to=getattr(msg, "message_id", None))
+        return True
+    mod, tok, p = tanlov[0]
+    toast = await mod.decide(tok, qaror, _outbox(), p.get("mid"))
+    if qaror and toast in (C.MSG_TUZATISH_QABUL, C.MSG_ARIZA_QABUL):
+        await _say(toast, escape=True, reply_to=getattr(msg, "message_id", None))
+    elif qaror and toast not in (C.MSG_TUZATISH_BEKOR, C.MSG_ARIZA_BEKOR, C.MSG_MUDDAT_OTGAN):
+        await _say(toast, escape=True, reply_to=getattr(msg, "message_id", None))
+    return True
+
+
 async def _handle_owner_message(msgs: Sequence[Message], is_fwd: bool, state: Dict[str, Any]) -> None:
     """msgs: bitta xabar yoki albom qismlari (message_id tartibida)."""
     outbox = _outbox()
@@ -797,6 +832,9 @@ async def _handle_owner_message(msgs: Sequence[Message], is_fwd: bool, state: Di
         await _say(img_errs[0])
         return
     replied = _replied_of(msgs)
+    # 2b. TR Support tasdig'i matn bilan ("tasdiqlayman", "ha", "yo'q"): kutilayotgan tasdiq bo'lsa tugma kabi
+    if not is_fwd and not image_paths and text.strip() and await _matn_tasdiq(text, replied, msg):
+        return
     if image_paths:
         # albomning bir qismi o'qilmadi yoki chegaradan ortdi: egasi bilsin, qolgani bilan davom
         if img_errs:
@@ -913,6 +951,14 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
     # 6b. To'lovni tuzatish (TR Support): TUZATISH qatori bo'lsa bot o'zi so'raydi / tekshiradi / [Ha] so'raydi.
     #     Leader'ning delegatsiyasi va human_reply o'rniga (tahrirni faqat bot, egasi tasdig'i bilan qiladi).
     tz_matn = "\n".join(str(x) for x in (data.get("task_for_agent"), data.get("human_reply")) if x)
+    if C.ARIZA_RE.search(tz_matn):
+        ar = _mod("ariza")
+        if ar is None:
+            await _say(_MSG_MODUL_YOQ_TPL.format(modul="ariza"), escape=True, reply_to=reply_to)
+            return
+        state["react"] = emoji
+        await ar.handle(tz_matn, _outbox(), reply_to=reply_to, rasmlar=image_paths)
+        return
     if C.TUZATISH_RE.search(tz_matn):
         tz = _mod("tuzatish")
         if tz is None:
@@ -1190,6 +1236,16 @@ async def on_callback(cb: CallbackQuery) -> None:
                 toast = _MSG_MODUL_YOQ_TPL.format(modul="reja")
             else:
                 toast = await rj.decide(token, approve, _outbox(), message_id)
+        elif data.startswith(C.CB_AR_OK) or data.startswith(C.CB_AR_NO):
+            approve = data.startswith(C.CB_AR_OK)
+            token = data[len(C.CB_AR_OK if approve else C.CB_AR_NO):]
+            ar = _mod("ariza")
+            if not _TOKEN_RE.match(token):
+                toast = C.MSG_MUDDAT_OTGAN
+            elif ar is None:
+                toast = _MSG_MODUL_YOQ_TPL.format(modul="ariza")
+            else:
+                toast = await ar.decide(token, approve, _outbox(), message_id)
         elif data.startswith(C.CB_TZ_OK) or data.startswith(C.CB_TZ_NO):
             approve = data.startswith(C.CB_TZ_OK)
             token = data[len(C.CB_TZ_OK if approve else C.CB_TZ_NO):]
@@ -1352,7 +1408,7 @@ async def cmd_reset(msg: Message) -> None:
         await on_text(msg)
         return
     await asyncio.to_thread(history.clear_history)
-    for name in ("reja", "memory_blocks", "tuzatish"):
+    for name in ("reja", "memory_blocks", "tuzatish", "ariza"):
         module = _mod(name)
         if module is None:
             continue

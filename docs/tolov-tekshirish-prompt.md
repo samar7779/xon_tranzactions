@@ -227,7 +227,13 @@ To'lov topilgach uni bot orqali to'g'rilash mumkin. O'zgaradigan 3 ustun: **Kont
    shartnoma va chek). Ariza allaqachon yuborilgan bo'lsa: "tasdiqlanishini kuting".
 4. Bot oldin/keyin ko'rinishini ko'rsatadi: **[Ha, tahrirla]** bosilsa tahrir bo'ladi, keyin OplatyKv sync bir marta
    ishlaydi (bir nechta to'lov bo'lsa ham bitta sync).
-5. Tarix: panel > Tranzaksiyalar > Klient · XATO shartnoma > **TR Support** (kirish kodi bilan): qachon, kim tasdiqladi,
+5. Tasdiqni tugma bilan yoki matn bilan berasiz: "tasdiqlayman", "ha" — bajaradi; "yo'q", "bekor" — bekor qiladi.
+6. **XATO deb belgilash:** shartnomasiz to'lovni XATO ro'yxatiga tushirish uchun botga "shu to'lovni XATO deb belgila,
+   izohdagi raqam 467RZM26HA" deng: raqam CRM'siz yoziladi, to'lov XATO ro'yxatiga tushadi, keyin ariza biriktiriladi.
+7. **Ariza:** ariza yoki bank xati rasmini botga tashlab "shu arizani XATO to'lovga biriktir" deng. Bot to'lovni XATO
+   ro'yxatidan topadi, shartnomani CRM'da, ismni va obyektni tekshiradi, tasdiqingizdan keyin XATO sahifasidagi
+   "Shartnoma biriktirish" bilan bir xil ariza yuboradi; AI tekshiruvchi (Shomurad AI) natijasini bot yozadi.
+8. Tarix: panel > Tranzaksiyalar > Klient · XATO shartnoma > **TR Support** (kirish kodi bilan): qachon, kim tasdiqladi,
    nima o'zgardi, izoh. **Ortga qaytarish** tugmasi to'lovni eski holiga qaytaradi va sync'ni yana ishlatadi.
 
 ## 6. Eslatmalar

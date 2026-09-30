@@ -182,3 +182,22 @@ export interface BridgeTxApply {
   results: Array<{ tx: string; id: string | null; status: 'applied' | 'failed' | 'skipped'; errors: string[]; changes: BridgeTxChange[] }>;
   sync: { ok: boolean; added?: number; updated?: number; skipped?: number; error?: string } | null;
 }
+
+// ── xato-ariza (TR Support: XATO to'lovga ariza — XATO sahifasidagi "Shartnoma biriktirish" bilan bir xil) ──
+export interface BridgeArizaCandidate {
+  oplataKvId: string; txId: string | null; date: string | null; amount: number | null;
+  contractNo: string | null; client: string | null; purpose: string | null;
+  toAccount: string | null; fromAccount: string | null; direction: string | null;
+  pending: { by: string | null; at: string | null; contract: string | null } | null;
+}
+export interface BridgeArizaFind {
+  ok: true; candidates: BridgeArizaCandidate[]; hisobMos: boolean | null;
+  crm: { contract: string; found: boolean; customerName: string | null; objectName: string | null } | null;
+  aiName: string;
+}
+export interface BridgeArizaSubmit { ok: true; id: string; alreadyPending: boolean; contract: string; aiEnabled: boolean; aiName: string }
+export interface BridgeArizaStatus {
+  ok: true; id: string; status: string; agentState: string | null; agentReason: string | null;
+  reviewedBy: string | null; reviewedByType: string | null; rejectReason: string | null; contract: string | null;
+  reviewedAt: string | null; aiName: string;
+}

@@ -1057,7 +1057,7 @@ export class CategorizationService {
    * setContract() dan farqi: CRM'da bo'lmasa ham qabul qiladi.
    * Foydalanuvchi javobgar (masalan, CRM'ga hali qo'shilmagan yangi shartnoma).
    */
-  async setContractManual(txId: string, contractNumber: string | null, actorId: string): Promise<{
+  async setContractManual(txId: string, contractNumber: string | null, actorId: string | null, actorLabel?: string): Promise<{
     ok: true;
     contractNumber: string | null;
     oplataKvSync?: Awaited<ReturnType<typeof this.syncContractChangeToOplataKv>>;
@@ -1084,7 +1084,10 @@ export class CategorizationService {
       },
     });
 
-    const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+    const u = actorId
+      ? await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } })
+      : null;
+    const actorName = actorLabel || u?.email || null;
 
     // Tarixga yozish — faqat haqiqiy o'zgarish bo'lganda
     if (old.contractNumber !== newContract) {
@@ -1094,7 +1097,7 @@ export class CategorizationService {
             txId,
             action: 'contract',
             actorId,
-            actorName: u?.email || null,
+            actorName,
             oldCategoryName: old.contractNumber,
             newCategoryName: newContract,
             contractNumber: newContract,
@@ -1116,7 +1119,7 @@ export class CategorizationService {
       externalId: old.externalId,
       oldContract: old.contractNumber,
       newContract,
-      actorEmail: u?.email || null,
+      actorEmail: actorName,
       reason: 'setContractManual',
     });
 

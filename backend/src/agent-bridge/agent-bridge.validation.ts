@@ -132,3 +132,49 @@ export function parseTxApply(body: unknown): {
   }
   return { items, approvedBy, comment };
 }
+
+// ── xato-ariza ──
+const ARIZA_MSG = "xato-ariza: tx yoki summa+sana; shartnoma A-Z/0-9, hisob raqam, fayl leader_bot_<hex>.<ext>, yubordi 2-120";
+const CUID_RE = /^[a-z0-9]{20,40}$/;
+const ARIZA_FAYL_RE_V = /^leader_bot_[0-9a-f]{16}\.(jpg|jpeg|png|webp|gif)$/;
+
+function optStr(v: unknown, max: number): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v !== 'string' || v.length > max || CTRL_RE.test(v)) throw new BadRequestException(ARIZA_MSG);
+  return v.trim() || null;
+}
+
+export function parseArizaFind(q: Record<string, unknown>): {
+  tx: string | null; summa: number | null; sana: string | null; hisob: string | null; shartnoma: string | null;
+} {
+  const tx = q.tx === undefined || q.tx === '' ? null : parseTxRef(q.tx);
+  const summaS = optStr(q.summa, 20);
+  if (summaS != null && (!/^\d{1,13}(?:\.\d{1,2})?$/.test(summaS) || Number(summaS) <= 0)) throw new BadRequestException(ARIZA_MSG);
+  const sana = optStr(q.sana, 10);
+  if (sana != null && !/^\d{4}-\d{2}-\d{2}$/.test(sana)) throw new BadRequestException(ARIZA_MSG);
+  const hisob = optStr(q.hisob, 30);
+  if (hisob != null && !/^\d{6,30}$/.test(hisob)) throw new BadRequestException(ARIZA_MSG);
+  const shartnoma = optStr(q.shartnoma, 40);
+  if (shartnoma != null && !/^[A-Za-z0-9№/ \-]{3,40}$/.test(shartnoma)) throw new BadRequestException(ARIZA_MSG);
+  if (!tx && !(summaS && sana)) throw new BadRequestException(ARIZA_MSG);
+  return { tx, summa: summaS != null ? Number(summaS) : null, sana, hisob, shartnoma };
+}
+
+export function parseArizaSubmit(body: unknown): { oplataKvId: string; contractNo: string; fayl: string; yubordi: string } {
+  const b = (body && typeof body === 'object' ? body : null) as Record<string, unknown> | null;
+  if (!b) throw new BadRequestException(ARIZA_MSG);
+  const oplataKvId = typeof b.oplataKvId === 'string' ? b.oplataKvId : '';
+  if (!CUID_RE.test(oplataKvId)) throw new BadRequestException(ARIZA_MSG);
+  const contractNo = optStr(b.contractNo, 40);
+  if (!contractNo || !/^[A-Za-z0-9№/ \-]{3,40}$/.test(contractNo)) throw new BadRequestException(ARIZA_MSG);
+  const fayl = typeof b.fayl === 'string' ? b.fayl : '';
+  if (!ARIZA_FAYL_RE_V.test(fayl)) throw new BadRequestException(ARIZA_MSG);
+  const yubordi = optStr(b.yubordi, 120);
+  if (!yubordi || yubordi.length < 2) throw new BadRequestException(ARIZA_MSG);
+  return { oplataKvId, contractNo, fayl, yubordi };
+}
+
+export function parseArizaId(raw: unknown): string {
+  if (typeof raw !== 'string' || !CUID_RE.test(raw)) throw new BadRequestException(ARIZA_MSG);
+  return raw;
+}

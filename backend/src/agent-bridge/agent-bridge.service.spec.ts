@@ -61,7 +61,7 @@ describe('AgentBridgeService', () => {
       runAndLog: jest.fn(),
     };
     prisma = { exportCronLog: { findFirst: jest.fn(async () => null) } };
-    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any, trs as any);
+    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any, trs as any, {} as any);
   });
   afterEach(() => jest.restoreAllMocks());
 

@@ -6,6 +6,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { ChekOrderService } from '../chek-order/chek-order.service';
 import { CrmService } from '../crm/crm.service';
 import { TrSupportService } from '../tr-support/tr-support.service';
+import { TrArizaService } from '../tr-support/tr-ariza.service';
 import { GoogleExportService } from '../google-export/google-export.service';
 import { AGENT_BRIDGE_KEY_ENV, isKeyConfigured } from './agent-bridge.guard';
 import { parseSheetIds } from './agent-bridge.validation';
@@ -13,6 +14,7 @@ import {
   BridgeChekFindResponse, BridgeContractResult, BridgeCrmLookupResponse, BridgeCrmLookupRow, BridgeCrmPart, BridgeExportItem, BridgeExportLastRun, BridgeExportsResponse,
   BridgeOplataPart, BridgePaymentCheckResponse, BridgeRunResponse, BridgeSheetPart,
   BridgeTxApply, BridgeTxChange, BridgeTxOptions, BridgeTxPreview, BridgeTxView, BridgeTxXato,
+  BridgeArizaFind, BridgeArizaStatus, BridgeArizaSubmit,
 } from './agent-bridge.types';
 
 const ERR_MAX = 300;
@@ -49,6 +51,7 @@ export class AgentBridgeService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly crm: CrmService,
     private readonly trSupport: TrSupportService,
+    private readonly trAriza: TrArizaService,
   ) {}
 
   onModuleInit(): void {
@@ -58,6 +61,35 @@ export class AgentBridgeService implements OnModuleInit {
     } else {
       this.log.log(`${AGENT_BRIDGE_KEY_ENV} sozlanmagan — ko'prik YOPIQ (hamma so'rov 403)`);
     }
+  }
+
+  // ───────────────────────── xato-ariza (TR Support) ─────────────────────────
+  async arizaFind(q: { tx: string | null; summa: number | null; sana: string | null; hisob: string | null; shartnoma: string | null }): Promise<BridgeArizaFind> {
+    const r = await this.trAriza.find(q);
+    return {
+      ok: true, hisobMos: r.hisobMos, aiName: cut(r.aiName),
+      crm: r.crm ? { contract: r.crm.contract, found: r.crm.found, customerName: strOrNull(r.crm.customerName), objectName: strOrNull(r.crm.objectName) } : null,
+      candidates: r.candidates.slice(0, 20).map((c) => ({
+        oplataKvId: c.oplataKvId, txId: strOrNull(c.txId), date: strOrNull(c.date), amount: c.amount != null ? num(c.amount) : null,
+        contractNo: strOrNull(c.contractNo), client: strOrNull(c.client), purpose: c.purpose != null ? String(c.purpose).slice(0, 300) : null,
+        toAccount: strOrNull(c.toAccount), fromAccount: strOrNull(c.fromAccount), direction: strOrNull(c.direction),
+        pending: c.pending ? { by: strOrNull(c.pending.by), at: strOrNull(c.pending.at), contract: strOrNull(c.pending.contract) } : null,
+      })),
+    };
+  }
+
+  async arizaSubmit(b: { oplataKvId: string; contractNo: string; fayl: string; yubordi: string }): Promise<BridgeArizaSubmit> {
+    const r = await this.trAriza.submit(b);
+    return { ok: true, id: String(r.id), alreadyPending: !!r.alreadyPending, contract: String(r.contract), aiEnabled: !!r.aiEnabled, aiName: cut(r.aiName) };
+  }
+
+  async arizaStatus(id: string): Promise<BridgeArizaStatus> {
+    const r = await this.trAriza.status(id);
+    return {
+      ok: true, id: r.id, status: String(r.status), agentState: strOrNull(r.agentState), agentReason: r.agentReason != null ? cut(r.agentReason) : null,
+      reviewedBy: strOrNull(r.reviewedBy), reviewedByType: strOrNull(r.reviewedByType), rejectReason: r.rejectReason != null ? cut(r.rejectReason) : null,
+      contract: strOrNull(r.contract), reviewedAt: strOrNull(r.reviewedAt), aiName: cut(r.aiName),
+    };
   }
 
   // ───────────────────────── tx-edit (TR Support) ─────────────────────────

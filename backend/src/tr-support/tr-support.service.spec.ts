@@ -16,7 +16,7 @@ const NAME: Record<string, any> = Object.fromEntries(CATS.map((c) => [c.id, { co
 describe('TrSupportService', () => {
   let tx: any;
   let prisma: any;
-  let cat: { setManual: jest.Mock; setContract: jest.Mock; restoreSnapshot: jest.Mock };
+  let cat: { setManual: jest.Mock; setContract: jest.Mock; setContractManual: jest.Mock; restoreSnapshot: jest.Mock };
   let crmCache: { lookup: jest.Mock };
   let oplataKv: { syncNowRespectingSettings: jest.Mock; findXatoRowForTx: jest.Mock };
   let rows: any[];
@@ -50,6 +50,7 @@ describe('TrSupportService', () => {
     cat = {
       setManual: jest.fn(async (_id: string, b: any) => { tx.categoryId = b.categoryId; tx.subcategoryId = b.subcategoryId; return { ok: true }; }),
       setContract: jest.fn(async (_id: string, c: string | null) => { tx.contractNumber = c; tx.isContractManual = false; return { ok: true }; }),
+      setContractManual: jest.fn(async (_id: string, c: string | null) => { tx.contractNumber = c; tx.isContractManual = !!c; return { ok: true }; }),
       restoreSnapshot: jest.fn(async (_id: string, s: any) => {
         Object.assign(tx, { categoryId: s.categoryId, subcategoryId: s.subcategoryId, contractNumber: s.contractNumber, isContractManual: s.isContractManual });
         return { ok: true };
@@ -195,6 +196,32 @@ describe('TrSupportService', () => {
       const o = await svc.options('ctx1');
       expect(o.xato).toMatchObject({ inList: false, xabar: null });
       expect((await svc.preview('ctx1', { shartnoma: '206FZO25A2' })).valid).toBe(true);
+    });
+  });
+
+  describe('XATO rejimi (to\'lovni XATO ro\'yxatiga tushirish)', () => {
+    it('shartnoma=XATO:<raqam>: CRM\'da yo\'q raqam CRM\'siz (qo\'lda) yoziladi, sync bitta', async () => {
+      tx.categoryId = null; tx.subcategoryId = null;
+      const p = await svc.preview('ctx1', { kontragent: 'CLIENT', kategoriya: 'CLIENT_VZNOS_KV', shartnoma: 'XATO:467RZM26HA' });
+      expect(p.valid).toBe(true);
+      expect(p.changes).toContainEqual({ field: 'shartnoma', from: null, to: '467RZM26HA (XATO)' });
+      expect(p.plan).toMatchObject({ contract: '467RZM26HA', contractXato: true });
+      const r = await svc.apply([{ tx: 'ctx1', kontragent: 'CLIENT', kategoriya: 'CLIENT_VZNOS_KV', shartnoma: 'XATO 467RZM26HA' }], { approvedBy: 'Samar' });
+      expect(r.results[0].status).toBe('applied');
+      expect(cat.setContractManual).toHaveBeenCalledWith('ctx1', '467RZM26HA', null, 'TR Support · tasdiq: Samar');
+      expect(cat.setContract).not.toHaveBeenCalled();
+      expect(oplataKv.syncNowRespectingSettings).toHaveBeenCalledTimes(1);
+      expect(rows[0].after).toMatchObject({ contractNumber: '467RZM26HA', isContractManual: true });
+    });
+
+    it("raqam CRM'da bor bo'lsa XATO emas; kontragent CLIENT emas bo'lsa rad; raqamsiz — 'XATO'", async () => {
+      let p = await svc.preview('ctx1', { shartnoma: 'XATO:206FZO25A2' });
+      expect(p.errors[0]).toContain("CRM'da bor (ISM) — bu XATO emas");
+      p = await svc.preview('ctx1', { kontragent: 'Зарплата', shartnoma: 'XATO:467RZM26HA' });
+      expect(p.errors[0]).toContain("faqat \"Клиент / Физ.Л / Юр.Л\" kontragentli");
+      p = await svc.preview('ctx1', { shartnoma: 'xato' });
+      expect(p.valid).toBe(true);
+      expect(p.plan).toMatchObject({ contract: 'XATO', contractXato: true });
     });
   });
 

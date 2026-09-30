@@ -39,7 +39,8 @@ _TOKEN_RE = re.compile(r"^[0-9a-f]{16}$")
 _TX_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+\-]{5,199}$")
 _NOMALUM = {"", "?", "??", "nomalum", "noma'lum"}
 _MAYDON_NOMI = {"kontragent": "Kontragent", "kategoriya": "Kategoriya", "shartnoma": "Shartnoma"}
-_YOLLAR = (C.TUZATISH_KOPRIK_OPTIONS, C.TUZATISH_KOPRIK_PREVIEW, C.TUZATISH_KOPRIK_APPLY)
+_YOLLAR = (C.TUZATISH_KOPRIK_OPTIONS, C.TUZATISH_KOPRIK_PREVIEW, C.TUZATISH_KOPRIK_APPLY,
+           C.ARIZA_KOPRIK_FIND, C.ARIZA_KOPRIK_SUBMIT, C.ARIZA_KOPRIK_STATUS)
 _BG_TASKS: set = set()
 
 
@@ -220,7 +221,8 @@ def savol_matni(q: Qator, opt: Optional[Dict[str, Any]]) -> str:
             qator.append("   %s: %s" % (t.get("name", ""), bola or "kategoriyasiz"))
         n += 1
     if "shartnoma" in kerak:
-        qator.append("%d) Shartnoma raqami (CRM'da tekshiriladi; yoki \"qolsin\", \"tozalash\")" % n)
+        qator.append("%d) Shartnoma raqami (CRM'da tekshiriladi; yoki \"qolsin\", \"tozalash\"; XATO ro'yxatiga"
+                     " tushirish uchun \"XATO:<izohdagi raqam>\")" % n)
         n += 1
     if "tasdiq" in kerak:
         qator.append("%d) Kim tasdiqlaydi (ism)" % n)
@@ -253,7 +255,8 @@ def preview_html(previews: List[Tuple[Qator, Dict[str, Any]]], tasdiq: str, izoh
         if qolgan:
             q.append("  O'zgarmaydi: " + _e(", ".join(qolgan)))
     q += ["", "Tasdiqladi: <b>%s</b>" % _e(tasdiq), "Izoh: %s" % _e(izoh),
-          "Keyin OplatyKv sync bir marta ishlaydi. Tasdiq %d daqiqa amal qiladi." % max(1, C.APPROVAL_TTL_S // 60)]
+          "Keyin OplatyKv sync bir marta ishlaydi. Tasdiq %d daqiqa amal qiladi: tugmani bosing yoki"
+          " \"tasdiqlayman\" / \"yo'q\" deb yozing." % max(1, C.APPROVAL_TTL_S // 60)]
     return "\n".join(q)
 
 
@@ -380,6 +383,9 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
                      hist=re.sub(r"<[^>]+>", "", html.unescape(matn)))
     if mid is None:
         await asyncio.to_thread(db.kv_del, C.kv_key(C.KV_TZ_APPR, token=token))
+    else:
+        payload["mid"] = mid
+        await asyncio.to_thread(db.kv_set_json, C.kv_key(C.KV_TZ_APPR, token=token), payload)
 
 
 def _eskirgan(payload: Dict[str, Any]) -> bool:
@@ -431,6 +437,31 @@ async def _bajar(payload: Dict[str, Any], outbox: Any) -> None:
         await _say(outbox, "Tahrir bajarilmadi: ichki xato. Holatni panelda (TR Support) tekshiring.")
         return
     await _say(outbox, natija_matni(r))
+
+
+# ---------------------------------------------------------------------------
+# Matn bilan tasdiq (tugmasiz): "tasdiqlayman", "ha", "yo'q" ...
+# ---------------------------------------------------------------------------
+def matn_qaror(text: Any) -> Optional[bool]:
+    """Qisqa matn tasdiqmi (True), radmi (False) yoki yo'q (None). Uzun matn hech qachon tasdiq emas."""
+    t = str(text or "").strip()
+    if not t or len(t) > C.TASDIQ_MATN_MAX:
+        return None
+    if C.TASDIQ_HA_RE.match(t):
+        return True
+    if C.TASDIQ_YOQ_RE.match(t):
+        return False
+    return None
+
+
+def kutilayotgan() -> List[Tuple[str, Dict[str, Any]]]:
+    """Muddati o'tmagan tasdiq so'rovlari: (token, payload)."""
+    out: List[Tuple[str, Dict[str, Any]]] = []
+    for key in db.kv_keys(C.KV_TZ_APPR.split("{", 1)[0]):
+        p = db.kv_get_json(key)
+        if isinstance(p, dict) and _TOKEN_RE.match(str(p.get("token") or "")) and not _eskirgan(p):
+            out.append((str(p["token"]), p))
+    return out
 
 
 def purge_pending() -> int:

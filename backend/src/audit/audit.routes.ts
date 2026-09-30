@@ -49,6 +49,7 @@ const KNOWN: Record<string, string> = {
   'POST import': 'Fayl import qilindi',
   'POST agent-bridge/exports/:id/run': 'Agent: Google eksport ishga tushirildi',
   'POST agent-bridge/tx-edit/apply': "Agent: to'lov tahrirlandi (TR Support)",
+  'POST agent-bridge/xato-ariza/submit': "Agent: XATO to'lovga ariza yuborildi (TR Support)",
   'POST tr-support/edits/:id/rollback': 'TR Support: tahrir ortga qaytarildi',
   'POST tr-support/unlock': 'TR Support: kod bilan kirish',
 };

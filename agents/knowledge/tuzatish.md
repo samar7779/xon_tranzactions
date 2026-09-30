@@ -24,6 +24,19 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
 - Hech narsa o'zgarmasa tahrir yo'q. Bir tasdiqda ko'pi bilan 20 ta to'lov.
 - Tahrirda avval kategoriya, keyin shartnoma (shartnoma OplatyKv'ga faqat CLIENT to'lovda o'tadi).
 
+## XATO deb belgilash
+- `shartnoma=XATO:<raqam>` (yoki `XATO`): shartnomasiz yoki noto'g'ri raqamli to'lovni XATO ro'yxatiga tushirish (keyin ariza olinadi). Raqam CRM'siz, panelning qo'lda shartnoma yo'li (`setContractManual`, `is_contract_manual=true`) bilan yoziladi; kontragent `CLIENT` bo'lishi shart (OplatyKv sync faqat CLIENT'ni oladi). Raqam CRM'da bor bo'lsa rad: u XATO emas. Sync'dan keyin OplatyKv qatori (`contract_no` CRM'da yo'q) XATO ro'yxatida chiqadi.
+
+## Matn bilan tasdiq
+- Tugmadan tashqari egasining qisqa javobi: "tasdiqlayman", "ha", "bajaring" = [Ha]; "yo'q", "bekor" = [Yo'q] (`C.TASDIQ_HA_RE` / `TASDIQ_YOQ_RE`, 40 belgigacha). Tasdiq xabariga reply bo'lsa o'sha so'rov; reply bo'lmasa faqat bitta kutilayotgan so'rov bo'lsa. Bir nechta bo'lsa bot "qaysi biri — reply qilib yozing" deydi. Uzun matn hech qachon tasdiq emas (Leader'ga ketadi).
+
+## XATO to'lovga ariza (ARIZA)
+- Egasi ariza/bank xati/chek rasmini beradi. Leader: `intent: xato_ariza`, `ARIZA: summa= sana= hisob= shartnoma= tolovchi= fayl= tasdiq=` (yoki `tx=`). Bot (`agents/ariza.py`):
+  1. XATO ro'yxatidan to'lov: `GET /api/agent-bridge/xato-ariza/find` (xato-list bilan bir xil filtr `findXatoRows`, summa ±1, sana ±3 kun, qabul qiluvchi hisob). 0 ta: "XATO ro'yxatida yo'q — avval XATO deb belgilang"; bir nechta: ID lari bilan so'raydi; kutilayotgan ariza bo'lsa: "kuting".
+  2. Shartnoma CRM'da (kanonik), topilmasa "boshqa shartnoma bering". To'lovchi ismi CRM mijozi bilan (familiya/ism 4 harf), obyekt kodi izohdagi shartnoma bilan solishtiriladi (farqli bo'lsa AI arizani xodimga yuborishi mumkin, ogohlantirish).
+  3. [Ha, ariza yubor] yoki "tasdiqlayman" → `POST xato-ariza/submit`: XATO sahifasidagi "Shartnoma biriktirish" bilan AYNAN bir xil `CorrectionService.createRequestWithFile` (ariza fayli = bot saqlagan rasm, `static/tg_uploads/leader_bot_<hex>.<ext>`, nomi qat'iy tekshiriladi). Yuboruvchi: `TR Support · <tasdiq>`.
+  4. AI tekshiruvchi (`agent.aiName`, masalan Shomurad AI) darrov ko'radi; bot `xato-ariza/status` ni 4 daqiqagacha kutib natijani yozadi: tasdiqlandi / rad / xodim ko'rishi kerak. AI o'chiq bo'lsa: xodim tasdiqlaydi.
+
 ## Tarix va ortga qaytarish
 - Har tahrir `tr_support_edits` jadvalida: qachon, to'lov (ID, sana, summa), oldin/keyin (kontragent, kategoriya, shartnoma), kim tasdiqladi (`approved_by`), izoh, holat (`applied` | `failed` qisman | `rolled_back`), sync natijasi. Bir tasdiq = bitta `batch_id`.
 - Panel: Tranzaksiyalar > Klient · XATO shartnoma > **TR Support** tabi ("Barcha XATO" dan keyin). Kirish kodi serverda tekshiriladi (`POST /tr-support/unlock`; env `TR_SUPPORT_CODE`, default 7779).

@@ -68,12 +68,17 @@ export interface TrPreview {
   tx: TrTxView | null;
   changes: TrChange[];
   crm: { contract: string; found: boolean; customerName: string | null; objectName: string | null } | null;
-  plan: { txId: string; catChange: boolean; categoryId: string | null; subcategoryId: string | null; contract?: string | null } | null;
+  plan: {
+    txId: string; catChange: boolean; categoryId: string | null; subcategoryId: string | null; contract?: string | null;
+    contractXato?: boolean;         // shartnoma CRM'siz yoziladi (XATO ro'yxatiga tushishi uchun)
+  } | null;
 }
 
 const norm = (s: any) => String(s ?? '').replace(APOS, "'").toLowerCase().replace(/[\s./]+/g, ' ').trim();
 const isQolsin = (v: any) => v == null || QOLSIN.has(norm(v));
 const isYoq = (v: any) => YOQ.has(norm(v));
+// shartnoma=XATO:<raqam> (yoki "XATO <raqam>", "XATO") — to'lovni XATO ro'yxatiga tushirish: raqam CRM'siz yoziladi
+const XATO_RE = /^xato(?:\s*[:=\s]\s*(.*))?$/i;
 export const normContract = (s: string) => s.replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
 
 @Injectable()
@@ -239,16 +244,31 @@ export class TrSupportService {
     }
     const subChanged = newSubId !== (tx.subcategoryId || null);
 
-    // 3) Shartnoma (CRM'da bo'lishi SHART)
+    // 3) Shartnoma (CRM'da bo'lishi SHART) yoki XATO rejimi (egasi tasdig'i bilan XATO ro'yxatiga tushirish)
     let newContract: string | null | undefined;
-    if (!isQolsin(choice.shartnoma)) {
+    let contractXato = false;
+    const xm = !isQolsin(choice.shartnoma) ? XATO_RE.exec(String(choice.shartnoma).trim()) : null;
+    if (xm) {
+      contractXato = true;
+      const raw = normContract(xm[1] || '') || 'XATO';
+      if (!/^[A-Z0-9/]{3,64}$/.test(raw)) out.errors.push(`XATO uchun raqam noto'g'ri: "${xm[1]}"`);
+      else if ((newTop?.code || '') !== 'CLIENT') {
+        out.errors.push("XATO ro'yxatiga faqat \"Клиент / Физ.Л / Юр.Л\" kontragentli to'lov tushadi — kontragentni ham tanlang");
+      } else if (raw !== 'XATO') {
+        const c: any = await this.crmCache.lookup(raw, { forceRefresh: true });
+        if (c?.found) {
+          out.errors.push(`${raw} CRM'da bor (${c.customerName || 'mijoz'}) — bu XATO emas. Oddiy shartnoma sifatida qo'ying yoki boshqa raqam bering`);
+        }
+      }
+      if (!out.errors.length) newContract = raw === (tx.contractNumber || null) ? undefined : raw;
+    } else if (!isQolsin(choice.shartnoma)) {
       newContract = isYoq(choice.shartnoma) ? null : normContract(String(choice.shartnoma)) || null;
       if (newContract && !/^[A-Z0-9/]{3,64}$/.test(newContract)) {
         out.errors.push(`Shartnoma raqami noto'g'ri: "${choice.shartnoma}"`);
         newContract = undefined;
       } else if ((newContract || null) === (tx.contractNumber || null)) newContract = undefined;
     }
-    if (newContract) {
+    if (newContract && !contractXato) {
       const topCode = newTop?.code || '';
       if (!CONTRACT_TOPS.includes(topCode)) {
         out.errors.push("Shartnoma faqat \"Клиент / Физ.Л / Юр.Л\" yoki \"Переброска\" kontragentida qo'yiladi");
@@ -270,7 +290,9 @@ export class TrSupportService {
     if (subChanged) {
       out.changes.push({ field: 'kategoriya', from: tx.subcategory?.name || null, to: nameOf(newSubId, newTop?.children || []) });
     }
-    if (newContract !== undefined) out.changes.push({ field: 'shartnoma', from: tx.contractNumber || null, to: newContract });
+    if (newContract !== undefined) {
+      out.changes.push({ field: 'shartnoma', from: tx.contractNumber || null, to: contractXato ? `${newContract} (XATO)` : newContract });
+    }
     if (!out.errors.length && !out.changes.length) {
       out.errors.push("Hech narsa o'zgarmaydi: tanlangan qiymatlar hozirgisi bilan bir xil");
     }
@@ -278,6 +300,7 @@ export class TrSupportService {
     out.plan = {
       txId: tx.id, catChange: topChanged || subChanged, categoryId: newTopId, subcategoryId: newSubId,
       ...(newContract !== undefined ? { contract: newContract } : {}),
+      ...(contractXato ? { contractXato: true } : {}),
     };
     return out;
   }
@@ -308,7 +331,10 @@ export class TrSupportService {
         if (p.plan.catChange) {
           await this.cat.setManual(p.plan.txId, { categoryId: p.plan.categoryId, subcategoryId: p.plan.subcategoryId }, null, label);
         }
-        if (p.plan.contract !== undefined) await this.cat.setContract(p.plan.txId, p.plan.contract, null, label);
+        if (p.plan.contract !== undefined) {
+          if (p.plan.contractXato) await this.cat.setContractManual(p.plan.txId, p.plan.contract, null, label);
+          else await this.cat.setContract(p.plan.txId, p.plan.contract, null, label);
+        }
       } catch (e: any) {
         status = 'failed';
         error = String(e?.response?.message || e?.message || e).slice(0, 500);

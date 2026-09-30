@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
-  assertExportId, parseChekFind, parseContracts, parseCrmLookup, parseSheetIds, parseTxApply, parseTxChoice, parseTxRef,
+  assertExportId, parseArizaFind, parseArizaId, parseArizaSubmit, parseChekFind, parseContracts, parseCrmLookup, parseSheetIds,
+  parseTxApply, parseTxChoice, parseTxRef,
 } from './agent-bridge.validation';
 
 const expect400 = (fn: () => unknown, mustNotEcho?: string) => {
@@ -129,5 +130,27 @@ describe('tx-edit validatsiya', () => {
       { items: [{ tx: 'ck3q9x0000abcd' }], approvedBy: 'Samar', comment: 5 }]) {
       expect(() => parseTxApply(bad)).toThrow(BadRequestException);
     }
+  });
+});
+
+describe('xato-ariza validatsiya', () => {
+  it('find: tx yoki summa+sana majburiy; hisob, shartnoma formati', () => {
+    expect(parseArizaFind({ summa: '7100000', sana: '2026-09-29', hisob: '20208000205720456001', shartnoma: '467RMZ26HA' }))
+      .toEqual({ tx: null, summa: 7100000, sana: '2026-09-29', hisob: '20208000205720456001', shartnoma: '467RMZ26HA' });
+    expect(parseArizaFind({ tx: 'EXT1_2_29.09.2026_A_B_1_-' }).tx).toBe('EXT1_2_29.09.2026_A_B_1_-');
+    for (const bad of [{}, { summa: '7100000' }, { summa: '-1', sana: '2026-09-29' }, { summa: '1', sana: '29.09.2026' },
+      { summa: '1', sana: '2026-09-29', hisob: '12a' }, { summa: '1', sana: '2026-09-29', shartnoma: 'a;b' }]) {
+      expect(() => parseArizaFind(bad as any)).toThrow(BadRequestException);
+    }
+  });
+  it('submit: oplataKvId cuid, fayl faqat leader_bot_<hex>.<ext>, yubordi majburiy', () => {
+    const ok = { oplataKvId: 'ck3q9x0000abcd0000abcd', contractNo: '467RMZ26HA', fayl: 'leader_bot_0123456789abcdef.jpg', yubordi: 'TR Support · Samar' };
+    expect(parseArizaSubmit(ok)).toEqual(ok);
+    for (const bad of [{ ...ok, fayl: '../x.jpg' }, { ...ok, fayl: 'leader_bot_0123456789abcdef.pdf' }, { ...ok, oplataKvId: 'X Y' },
+      { ...ok, yubordi: '' }, { ...ok, contractNo: '' }, null]) {
+      expect(() => parseArizaSubmit(bad)).toThrow(BadRequestException);
+    }
+    expect(parseArizaId('ck3q9x0000abcd0000abcd')).toBe('ck3q9x0000abcd0000abcd');
+    expect(() => parseArizaId('../x')).toThrow(BadRequestException);
   });
 });

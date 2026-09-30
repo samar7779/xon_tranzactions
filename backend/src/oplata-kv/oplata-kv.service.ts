@@ -1892,6 +1892,33 @@ export class OplataKvService {
     });
   }
 
+  /**
+   * TR Support ariza: XATO to'lovlar ro'yxatidan nomzodlar — xato-list bilan AYNAN bir xil filtr (buildXatoFilter)
+   * va ro'yxat sanasi (listDateFrom = agent.dateFrom). keys (sourceTxId), summa (±1, ishora farqsiz), sana oynasi.
+   */
+  async findXatoRows(opts: {
+    keys?: string[]; amount?: number | null; from?: Date | null; to?: Date | null;
+    listDateFrom?: string | null; ids?: string[]; take?: number;
+  }) {
+    const xf = await this.buildXatoFilter();
+    const and: Prisma.OplataKvWhereInput[] = [xf];
+    if (opts.ids?.length) and.push({ id: { in: opts.ids } });
+    if (opts.keys?.length) and.push({ sourceTxId: { in: opts.keys } });
+    if (opts.amount != null && Number.isFinite(opts.amount)) {
+      const a = Math.abs(Number(opts.amount));
+      and.push({ OR: [{ paymentAmount: { gte: a - 1, lte: a + 1 } }, { paymentAmount: { gte: -a - 1, lte: -a + 1 } }] });
+    }
+    if (opts.from) and.push({ date: { gte: opts.from } });
+    if (opts.to) and.push({ date: { lte: opts.to } });
+    if (opts.listDateFrom) and.push({ date: { gte: new Date(opts.listDateFrom) } });
+    return this.prisma.oplataKv.findMany({
+      where: { AND: and },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      take: Math.min(Math.max(1, opts.take || 20), 50),
+      select: { id: true, date: true, contractNo: true, paymentAmount: true, client: true, object: true, purpose: true, sourceTxId: true },
+    });
+  }
+
   async getXatoListForAgent(opts: { dateFrom?: string | null; limit?: number }) {
     const xatoFilter = await this.buildXatoFilter();
     const dateWhere = opts.dateFrom ? { date: { gte: new Date(opts.dateFrom) } } : {};
