@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  AlertTriangle, ArrowRight, Bot, CheckCircle2, KeyRound, Loader2, Lock, RotateCcw, Search, Undo2, X,
+  AlertTriangle, ArrowRight, Bot, Calendar, CheckCircle2, ChevronRight, Copy, FileSignature, KeyRound, Loader2, Lock,
+  RotateCcw, Search, Undo2, UserCheck, Wallet, X,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,11 +17,13 @@ import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 /**
  * TR Support — Telegram agenti (@TRanSupport_bot) orqali, egasi tasdig'i bilan qilingan to'lov tahrirlari.
  * Kirish kodi server tomonda tekshiriladi (POST /tr-support/unlock). Kod shu brauzer sessiyasida eslab qolinadi.
+ * Jadval: har tahrir — bitta ixcham qator; qatorga bosilsa to'liq ma'lumot oynasi (oldin/keyin, ID, sync, qaytarish).
  * "Ortga qaytarish" to'lovni oldingi holatiga qaytaradi va OplatyKv sync'ni bir marta ishga tushiradi.
  */
 
 type State = {
   categoryName: string | null; subcategoryName: string | null; contractNumber: string | null;
+  isContractManual?: boolean;
 };
 type Edit = {
   id: string; batchId: string; txId: string; txExternalId: string | null; txDate: string | null;
@@ -31,6 +34,7 @@ type Edit = {
 };
 
 const SS_KEY = 'trsupport.code';
+const FIELDS = ['kontragent', 'kategoriya', 'shartnoma'] as const;
 const FIELD_LABEL: Record<string, string> = { kontragent: 'Kontragent', kategoriya: 'Kategoriya', shartnoma: 'Shartnoma' };
 const valOf = (s: State | null | undefined, f: string) =>
   (f === 'kontragent' ? s?.categoryName : f === 'kategoriya' ? s?.subcategoryName : s?.contractNumber) || null;
@@ -41,6 +45,12 @@ function readCode(): string | null {
 function saveCode(v: string | null) {
   try { if (v) window.sessionStorage.setItem(SS_KEY, v); else window.sessionStorage.removeItem(SS_KEY); } catch { /* storage yopiq */ }
 }
+function copy(text: string) {
+  try {
+    navigator.clipboard.writeText(text).then(() => toast.success('Nusxalandi'), () => toast.error('Nusxalanmadi'));
+  } catch { toast.error('Nusxalanmadi'); }
+}
+const signed = (e: Edit) => (e.amount == null ? '—' : `${e.direction === 'OUT' ? '−' : '+'}${formatMoney(Math.abs(e.amount))}`);
 
 export function TrSupportTab() {
   const [code, setCode] = useState<string | null>(null);
@@ -91,23 +101,37 @@ function Gate({ onOk }: { onOk: (code: string) => void }) {
 function StatusPill({ e }: { e: Edit }) {
   if (e.status === 'rolled_back') {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-        title={`${e.rolledBackBy || ''} · ${formatDateTime(e.rolledBackAt)}${e.rollbackNote ? ` · ${e.rollbackNote}` : ''}`}>
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 whitespace-nowrap">
         <Undo2 className="h-3 w-3" /> Qaytarilgan
       </span>
     );
   }
   if (e.status === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900"
-        title={e.error || ''}>
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900 whitespace-nowrap">
         <AlertTriangle className="h-3 w-3" /> Qisman
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900">
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900 whitespace-nowrap">
       <CheckCircle2 className="h-3 w-3" /> Bajarildi
+    </span>
+  );
+}
+
+/** Shartnoma belgisi: XATO — qizil, yo'q — kulrang, bor — oddiy. */
+function ContractChip({ v }: { v: string | null }) {
+  if (!v) return <span className="text-slate-400">—</span>;
+  const xato = v.toUpperCase() === 'XATO';
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-bold tracking-wide whitespace-nowrap',
+      xato
+        ? 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900'
+        : 'text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800',
+    )}>
+      <FileSignature className="h-3 w-3" /> {v}
     </span>
   );
 }
@@ -119,6 +143,7 @@ function EditList({ code, onLocked }: { code: string; onLocked: () => void }) {
   const [page, setPage] = useState(1);
   const [q, setQ] = useState('');
   const [qd, setQd] = useState('');
+  const [detail, setDetail] = useState<Edit | null>(null);
   const [confirm, setConfirm] = useState<Edit | null>(null);
   const [note, setNote] = useState('');
   useEffect(() => { const t = setTimeout(() => { setQd(q.trim()); setPage(1); }, 300); return () => clearTimeout(t); }, [q]);
@@ -140,7 +165,7 @@ function EditList({ code, onLocked }: { code: string; onLocked: () => void }) {
       toast.success(s?.ok === false
         ? `Ortga qaytarildi, lekin sync xato: ${s.error || ''}`
         : "Ortga qaytarildi va OplatyKv sync bajarildi");
-      setConfirm(null); setNote('');
+      setConfirm(null); setNote(''); setDetail(null);
       qc.invalidateQueries({ queryKey: ['tr-support-edits'] });
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
@@ -177,51 +202,60 @@ function EditList({ code, onLocked }: { code: string; onLocked: () => void }) {
           <table className="w-full text-[12px]">
             <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <tr>
-                <th className="text-left px-3 py-2">Qachon</th>
-                <th className="text-left px-3 py-2">To'lov</th>
-                <th className="text-left px-3 py-2">Nima o'zgardi</th>
-                <th className="text-left px-3 py-2">Tasdiqladi</th>
-                <th className="text-left px-3 py-2">Izoh</th>
+                <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> Qachon</span></th>
+                <th className="text-left px-3 py-2">To'lov sanasi</th>
+                <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> Summa</span></th>
+                <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> Shartnoma</span></th>
+                <th className="text-left px-3 py-2">O'zgarish</th>
+                <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><UserCheck className="h-3 w-3" /> Tasdiqladi</span></th>
                 <th className="text-left px-3 py-2">Holat</th>
                 <th className="text-right px-3 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
               {items.map((e) => (
-                <tr key={e.id} className="align-top hover:bg-rose-50/30 dark:hover:bg-rose-950/10">
+                <tr key={e.id} onClick={() => setDetail(e)}
+                  className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors cursor-pointer">
                   <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 tabular-nums">{formatDateTime(e.createdAt)}</td>
-                  <td className="px-3 py-2">
-                    <div className="text-slate-700 dark:text-slate-200 tabular-nums whitespace-nowrap">
-                      {formatDateTime(e.txDate)} · <b>{e.amount != null ? formatMoney(e.amount) : '—'}</b>
-                    </div>
-                    <div className="text-[10.5px] text-slate-400 font-mono truncate max-w-[220px]" title={e.txExternalId || e.txId}>{e.txExternalId || e.txId}</div>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 tabular-nums">{formatDateTime(e.txDate)}</td>
+                  <td className={cn('px-3 py-2 whitespace-nowrap text-right font-bold tabular-nums',
+                    e.direction === 'OUT' ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                    {signed(e)} <span className="text-[10px] font-semibold text-slate-400">UZS</span>
                   </td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col gap-1">
-                      {(e.changed || []).map((f) => (
-                        <div key={f} className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[74px]">{FIELD_LABEL[f] || f}</span>
-                          <span className="text-slate-500 dark:text-slate-400 line-through decoration-slate-300">{valOf(e.before, f) || "yo'q"}</span>
-                          <ArrowRight className="h-3 w-3 text-slate-400" />
-                          <span className="font-semibold text-slate-800 dark:text-slate-100">{valOf(e.after, f) || "yo'q"}</span>
-                        </div>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {(e.changed || []).includes('shartnoma') ? (
+                      <span className="inline-flex items-center gap-1">
+                        <ContractChip v={valOf(e.before, 'shartnoma')} />
+                        <ArrowRight className="h-3 w-3 text-slate-400" />
+                        <ContractChip v={valOf(e.after, 'shartnoma')} />
+                      </span>
+                    ) : <ContractChip v={valOf(e.after, 'shartnoma')} />}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1">
+                      {FIELDS.filter((f) => (e.changed || []).includes(f)).map((f) => (
+                        <span key={f} title={`${FIELD_LABEL[f]}: ${valOf(e.before, f) || "yo'q"} → ${valOf(e.after, f) || "yo'q"}`}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
+                          {FIELD_LABEL[f]}
+                        </span>
                       ))}
-                    </div>
+                    </span>
                   </td>
-                  <td className="px-3 py-2 text-slate-700 dark:text-slate-200 whitespace-nowrap">{e.approvedBy}</td>
-                  <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[240px]"><span className="line-clamp-3" title={e.comment || ''}>{e.comment || '—'}</span></td>
-                  <td className="px-3 py-2"><StatusPill e={e} />
-                    {e.syncResult?.ok === false && <div className="mt-1 text-[10.5px] text-amber-600" title={e.syncResult?.error || ''}>sync xato</div>}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {e.status !== 'rolled_back' && canRollback && (
-                      <button
-                        onClick={() => { setConfirm(e); setNote(''); }}
-                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg text-[11px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/40"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" /> Ortga qaytarish
-                      </button>
-                    )}
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-700 dark:text-slate-200 max-w-[140px] truncate" title={e.approvedBy}>{e.approvedBy}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><StatusPill e={e} /></td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1">
+                      {e.status !== 'rolled_back' && canRollback && (
+                        <button
+                          title="Ortga qaytarish"
+                          onClick={(ev) => { ev.stopPropagation(); setConfirm(e); setNote(''); }}
+                          className="inline-grid place-items-center h-7 w-7 rounded-lg text-rose-600 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -235,8 +269,13 @@ function EditList({ code, onLocked }: { code: string; onLocked: () => void }) {
         <Button variant="outline" size="sm" disabled={page * 30 >= total} onClick={() => setPage((p) => p + 1)}>Keyingi</Button>
       </div>
 
+      {detail && (
+        <Detail e={detail} canRollback={canRollback && detail.status !== 'rolled_back'}
+          onClose={() => setDetail(null)} onRollback={() => { setConfirm(detail); setNote(''); }} />
+      )}
+
       {confirm && (
-        <div className="fixed inset-0 z-[320] grid place-items-center bg-slate-950/50 backdrop-blur-sm p-4" onClick={() => !rollback.isPending && setConfirm(null)}>
+        <div className="fixed inset-0 z-[330] grid place-items-center bg-slate-950/50 backdrop-blur-sm p-4" onClick={() => !rollback.isPending && setConfirm(null)}>
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 p-5" onClick={(ev) => ev.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -269,5 +308,95 @@ function EditList({ code, onLocked }: { code: string; onLocked: () => void }) {
         </div>
       )}
     </>
+  );
+}
+
+/** Qator bosilganda: tahrirning to'liq ma'lumoti. */
+function Detail({ e, canRollback, onClose, onRollback }: {
+  e: Edit; canRollback: boolean; onClose: () => void; onRollback: () => void;
+}) {
+  const id = e.txExternalId || e.txId;
+  const s = e.syncResult;
+  const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
+    <div className="grid grid-cols-[120px_1fr] gap-3 py-1.5 text-[12px]">
+      <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 pt-0.5">{k}</div>
+      <div className="text-slate-700 dark:text-slate-200 min-w-0">{children}</div>
+    </div>
+  );
+  return (
+    <div className="fixed inset-0 z-[320] grid place-items-center bg-slate-950/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-xl max-h-[90vh] overflow-auto rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800"
+        onClick={(ev) => ev.stopPropagation()}>
+        <div className="px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-[11px] text-slate-500"><Bot className="h-3.5 w-3.5 text-violet-500" /> TR Support tahriri · {formatDateTime(e.createdAt)}</div>
+            <div className={cn('mt-1 text-[22px] font-extrabold tabular-nums', e.direction === 'OUT' ? 'text-rose-600' : 'text-emerald-600')}>
+              {signed(e)} <span className="text-[12px] font-semibold text-slate-400">UZS</span>
+            </div>
+            <div className="text-[11.5px] text-slate-500">To'lov sanasi: {formatDateTime(e.txDate)}</div>
+          </div>
+          <div className="flex items-center gap-2"><StatusPill e={e} />
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+
+        <div className="px-5 py-3">
+          <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden">
+            <table className="w-full text-[12px]">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10.5px] uppercase tracking-wider text-slate-500">
+                <tr><th className="text-left px-3 py-1.5">Ustun</th><th className="text-left px-3 py-1.5">Oldin</th><th className="text-left px-3 py-1.5">Keyin</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {FIELDS.map((f) => {
+                  const ozg = (e.changed || []).includes(f);
+                  return (
+                    <tr key={f} className={ozg ? 'bg-violet-50/40 dark:bg-violet-950/10' : ''}>
+                      <td className="px-3 py-1.5 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{FIELD_LABEL[f]}</td>
+                      <td className={cn('px-3 py-1.5', ozg ? 'text-slate-500 line-through' : 'text-slate-500')}>{valOf(e.before, f) || "yo'q"}</td>
+                      <td className={cn('px-3 py-1.5', ozg ? 'font-semibold text-slate-800 dark:text-slate-100' : 'text-slate-400')}>
+                        {ozg ? (valOf(e.after, f) || "yo'q") : "o'zgarmagan"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+            <Row k="To'lov ID">
+              <span className="inline-flex items-start gap-1.5">
+                <code className="font-mono text-[11px] break-all text-slate-700 dark:text-slate-200">{id}</code>
+                <button title="Nusxalash" onClick={() => copy(id)} className="shrink-0 text-slate-400 hover:text-slate-700"><Copy className="h-3.5 w-3.5" /></button>
+              </span>
+            </Row>
+            <Row k="Tasdiqladi">{e.approvedBy}</Row>
+            <Row k="Izoh"><span className="whitespace-pre-wrap">{e.comment || '—'}</span></Row>
+            <Row k="Manba">{e.requestedBy || 'Telegram (TR Support bot)'}</Row>
+            <Row k="OplatyKv sync">
+              {!s ? '—' : s.ok === false
+                ? <span className="text-amber-600">xato: {s.error || '—'}</span>
+                : <span>bajarildi · qo'shildi {s.added ?? 0}, yangilandi {s.updated ?? 0}{s.at ? ` · ${formatDateTime(s.at)}` : ''}</span>}
+            </Row>
+            {e.status === 'failed' && e.error && <Row k="Xato"><span className="text-amber-700 dark:text-amber-300">{e.error}</span></Row>}
+            {e.status === 'rolled_back' && (
+              <Row k="Qaytarildi">
+                {e.rolledBackBy || '—'} · {formatDateTime(e.rolledBackAt)}{e.rollbackNote ? ` · ${e.rollbackNote}` : ''}
+              </Row>
+            )}
+            <Row k="Tasdiq guruhi"><code className="font-mono text-[11px] text-slate-500">{e.batchId}</code></Row>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          {canRollback && (
+            <Button size="sm" variant="outline" className="text-rose-700 border-rose-200 hover:bg-rose-50 dark:text-rose-300 dark:border-rose-900" onClick={onRollback}>
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Ortga qaytarish
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={onClose}><X className="h-3.5 w-3.5 mr-1" /> Yopish</Button>
+        </div>
+      </div>
+    </div>
   );
 }
