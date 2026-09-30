@@ -55,6 +55,10 @@ log = logging.getLogger("agents.leader_bot")
 # ---------------------------------------------------------------------------
 _MAX_DOWNLOAD = 20 * 1024 * 1024          # Bot API getFile chegarasi
 _IMG_EXT = frozenset({"jpg", "jpeg", "png", "webp", "gif"})
+# Ariza fayli: PDF va Word ham (XATO sahifasidagi "Shartnoma biriktirish" qabul qiladigan turlar)
+_DOC_EXT = frozenset({"pdf", "doc", "docx"})
+_DOC_MIME = {"application/pdf": "pdf", "application/msword": "doc",
+             "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"}
 _MIME_EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 _TOKEN_RE = re.compile(r"^[0-9a-f]{6,32}$")
 _TOLOV_CMD_RE = re.compile(r"^\s*/tolov(?:@\S+)?\s*", re.I)
@@ -85,7 +89,7 @@ _MSG_RASM_KATTA = "Shefim, rasm juda katta (20 MB dan ortiq). Kichikroq yuboring
 _MSG_RASM_FORMAT = "Shefim, bu rasm formatini o'qiy olmayman. jpg, png, webp yoki gif yuboring."
 _MSG_RASM_XATO = "Shefim, rasmni yuklab ololmadim. Qayta yuboring."
 _MSG_RASM_KOP_TPL = "Shefim, albomdan faqat birinchi {n} ta rasmni ko'raman."
-_MSG_TUR_YOQ = "Shefim, bu turdagi xabarni o'qiy olmayman. Matn yoki rasm yuboring."
+_MSG_TUR_YOQ = "Shefim, bu turdagi xabarni o'qiy olmayman. Matn, rasm, PDF yoki Word yuboring."
 _MSG_MODUL_YOQ_TPL = "Shefim, {modul} moduli yuklanmadi. Bot logini tekshirish kerak."
 _MSG_RESTART_TPL = "Bot qayta ishga tushdi. {holat}."
 _MSG_CLI_YOQ = "Shefim, claude CLI topilmadi. Agentlar ishlamaydi, CLAUDE_CMD ni tekshirish kerak."
@@ -536,6 +540,11 @@ def _image_of(msg: Any) -> Tuple[Any, str, int, Optional[str]]:
         if not ext:
             return None, "", 0, _MSG_RASM_FORMAT
         return doc, ext, int(doc.file_size or 0), None
+    if doc is not None:
+        suffix = Path(doc.file_name or "").suffix.lower().lstrip(".")
+        ext = suffix if suffix in _DOC_EXT else _DOC_MIME.get((doc.mime_type or "").lower(), "")
+        if ext:
+            return doc, ext, int(doc.file_size or 0), None
     return None, "", 0, None
 
 

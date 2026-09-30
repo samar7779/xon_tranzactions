@@ -136,7 +136,7 @@ export function parseTxApply(body: unknown): {
 // ── xato-ariza ──
 const ARIZA_MSG = "xato-ariza: tx yoki summa+sana; shartnoma A-Z/0-9, hisob raqam, fayl leader_bot_<hex>.<ext>, yubordi 2-120";
 const CUID_RE = /^[a-z0-9]{20,40}$/;
-const ARIZA_FAYL_RE_V = /^leader_bot_[0-9a-f]{16}\.(jpg|jpeg|png|webp|gif)$/;
+const ARIZA_FAYL_RE_V = /^leader_bot_[0-9a-f]{16}\.(jpg|jpeg|png|webp|gif|pdf|doc|docx)$/;
 
 function optStr(v: unknown, max: number): string | null {
   if (v === undefined || v === null || v === '') return null;

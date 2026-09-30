@@ -29,7 +29,7 @@ log = logging.getLogger("agents.ariza")
 
 _KALITLAR = ("tx", "summa", "sana", "hisob", "shartnoma", "tolovchi", "fayl", "tasdiq")
 _KALIT_RE = re.compile(r"(?i)\b(%s)\s*=\s*" % "|".join(_KALITLAR))
-_FAYL_RE = re.compile(r"^leader_bot_[0-9a-f]{16}\.(jpg|jpeg|png|webp|gif)$")
+_FAYL_RE = re.compile(r"^leader_bot_[0-9a-f]{16}\.(jpg|jpeg|png|webp|gif|pdf|doc|docx)$")
 _TOKEN_RE = re.compile(r"^[0-9a-f]{16}$")
 _BG_TASKS: set = set()
 
@@ -113,7 +113,7 @@ def _qisqa_izoh(s: Any, n: int = 160) -> str:
 
 
 def preview_html(k: Dict[str, Any], crm: Dict[str, Any], a: Ariza, hisob_mos: Optional[bool], ai: str,
-                 yubordi: str) -> str:
+                 yubordi: str, fayl: str = "") -> str:
     e = TZ._e
     d = re.match(r"^(\d{4})-(\d{2})-(\d{2})", str(k.get("date") or ""))
     sana = "%s.%s.%s" % (d.group(3), d.group(2), d.group(1)) if d else (k.get("date") or "-")
@@ -137,7 +137,8 @@ def preview_html(k: Dict[str, Any], crm: Dict[str, Any], a: Ariza, hisob_mos: Op
     if eski and yangi and eski != yangi:
         q.append("Diqqat: izohdagi shartnoma boshqa obyektda (%s, yangisi %s) — %s arizani xodimga yuborishi mumkin."
                  % (e(eski), e(yangi), e(ai)))
-    q += ["", "Ariza fayli: shu rasm", "Yuboruvchi: %s" % e(yubordi),
+    tur = {"pdf": "PDF", "doc": "Word", "docx": "Word"}.get(str(fayl).rsplit(".", 1)[-1].lower(), "rasm")
+    q += ["", "Ariza fayli: shu %s" % tur, "Yuboruvchi: %s" % e(yubordi),
           "Yuborilgach %s o'zi tekshiradi, natijani shu yerga yozaman. Tasdiq %d daqiqa amal qiladi: tugmani bosing"
           " yoki \"tasdiqlayman\" / \"yo'q\" deb yozing." % (e(ai), max(1, C.APPROVAL_TTL_S // 60))]
     return "\n".join(q)
@@ -160,8 +161,8 @@ async def _handle(a: Ariza, outbox: Any, reply_to: Optional[int], rasmlar: List[
     say = TZ._say
     fayl = _fayl_nomi(a, rasmlar)
     if not fayl:
-        await say(outbox, "Ariza faylini (rasm) yuboring: bot shu rasmni ariza fayli sifatida biriktiradi. PDF hozircha"
-                          " qabul qilinmaydi, rasmga olib yuboring.", reply_to=reply_to)
+        await say(outbox, "Ariza faylini yuboring (rasm, PDF yoki Word): bot shu faylni ariza fayli sifatida"
+                          " biriktiradi.", reply_to=reply_to)
         return
     if not a.shartnoma:
         await say(outbox, "Qaysi shartnomaga biriktirilsin? To'g'ri shartnoma raqamini yozing.", reply_to=reply_to)
@@ -211,7 +212,7 @@ async def _handle(a: Ariza, outbox: Any, reply_to: Optional[int], rasmlar: List[
                "ai": ai}
     key = C.kv_key(C.KV_AR_APPR, token=token)
     await asyncio.to_thread(db.kv_set_json, key, payload)
-    matn = preview_html(k, crm, a, r.get("hisobMos"), ai, yubordi)
+    matn = preview_html(k, crm, a, r.get("hisobMos"), ai, yubordi, fayl)
     keyboard = [[(C.KNOPKA_AR_HA, C.CB_AR_OK + token), (C.KNOPKA_YOQ, C.CB_AR_NO + token)]]
     mid = await say(outbox, matn, html_mode=True, keyboard=keyboard, reply_to=reply_to,
                     hist=re.sub(r"<[^>]+>", "", html.unescape(matn)))

@@ -70,10 +70,20 @@ describe('TrArizaService', () => {
     oplataKv.findXatoRows.mockResolvedValueOnce([]);
     await expect(svc.submit({ oplataKvId: 'okv1', contractNo: '467RMZ26HA', fayl: FAYL, yubordi: 'S' })).rejects.toBeInstanceOf(ConflictException);
     await expect(svc.submit({ oplataKvId: 'okv1', contractNo: '999XXX9', fayl: FAYL, yubordi: 'S' })).rejects.toThrow("CRM'da topilmadi");
-    for (const bad of ['../etc/passwd', 'leader_bot_0123456789abcdef.pdf', 'x.jpg', 'leader_bot_ffffffffffffffff.jpg']) {
+    for (const bad of ['../etc/passwd', 'leader_bot_0123456789abcdef.exe', 'x.jpg', 'leader_bot_ffffffffffffffff.jpg']) {
       await expect(svc.submit({ oplataKvId: 'okv1', contractNo: '467RMZ26HA', fayl: bad, yubordi: 'S' })).rejects.toBeInstanceOf(BadRequestException);
     }
     expect(correction.createRequestWithFile).not.toHaveBeenCalled();
+  });
+
+  it('PDF va Word ariza fayli: to\'g\'ri mime bilan', async () => {
+    for (const [ext, mime] of [['pdf', 'application/pdf'], ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']]) {
+      const f = `leader_bot_0123456789abcdef.${ext}`;
+      fs.writeFileSync(path.join(dir, f), Buffer.from('%PDF'));
+      correction.createRequestWithFile.mockClear();
+      await svc.submit({ oplataKvId: 'okv1', contractNo: '467RMZ26HA', fayl: f, yubordi: 'S' });
+      expect(correction.createRequestWithFile.mock.calls[0][1]).toMatchObject({ originalname: `ariza_tr_support.${ext}`, mimetype: mime });
+    }
   });
 
   it('allaqachon ariza bor — AI qayta chaqirilmaydi; status', async () => {

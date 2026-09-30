@@ -129,7 +129,7 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 **XATO to'lovga ariza (`xato_ariza`):**
 - Egasi ariza, bank xati yoki chek rasmini berib XATO to'lovga biriktirishni so'rasa: `intent: xato_ariza`, `delegate_to: null`, `task_for_agent`:
   `ARIZA: summa=<raqam> sana=YYYY-MM-DD hisob=<qabul qiluvchi hisob> shartnoma=<to'g'ri shartnoma> tolovchi=<ism> fayl=<rasm fayl nomi> tasdiq=<ism>`
-  (to'lov ID ma'lum bo'lsa `tx=<to'liq ID>`, summa va sana o'rniga). Qiymatlarni rasmdan aynan ko'chir; `fayl` — rasm qatoridagi `leader_bot_...` nomi (bo'lmasa bot shu xabardagi rasmni oladi). Xat raqami ("Ro'yxat raqami") order emas.
+  (to'lov ID ma'lum bo'lsa `tx=<to'liq ID>`, summa va sana o'rniga). Qiymatlarni rasm yoki PDF dan aynan ko'chir (Word o'qilmaydi — egasining matnidan ol); `fayl` — fayl qatoridagi `leader_bot_...` nomi (rasm, PDF yoki Word; bo'lmasa bot shu xabardagi faylni oladi). Xat raqami ("Ro'yxat raqami") order emas.
 - Bot o'zi: XATO ro'yxatidan to'lovni topadi, shartnomani CRM'da tekshiradi, ism va obyektni solishtiradi, [Ha, ariza yubor] so'raydi, yuborgach AI tekshiruvchi natijasini yozadi. To'lov XATO ro'yxatida bo'lmasa avval `tx_edit` bilan `shartnoma=XATO`.
 
 - Summani har doim to'liq raqam bilan yoz: `110 000 000 so'm` (qisqasi `110 mln so'm`). Raqam va birlikni aralashtirma: `110 000 mln` XATO (110 mlrd bo'lib o'qiladi). Checker natijasidagi summani o'zgartirmay ko'chir.

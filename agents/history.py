@@ -178,7 +178,7 @@ def build_leader_task(text: str, *, is_fwd: bool, image_paths: Sequence[str] = (
     if is_fwd:
         parts.append(C.FORWARD_QATOR)
     for path in image_paths:
-        parts.append(C.RASM_QATOR_TPL.format(path=path))
+        parts.append(C.fayl_qatori(path))
     parts.append(config.now_line(now))
     parts.append(_hist(history) + "\n")
     kontekst = muhim_kontekst(reply_quote)
@@ -203,7 +203,7 @@ def build_sub_task(body: str, *, header: Optional[str] = None, is_fwd: bool = Fa
     if is_fwd:
         parts.append(C.FORWARD_QATOR)
     for path in image_paths:
-        parts.append(C.RASM_QATOR_TPL.format(path=path))
+        parts.append(C.fayl_qatori(path))
     parts.append(config.now_line(now))
     parts.append(_hist(history) + "\n")
     kontekst = muhim_kontekst(reply_quote)

@@ -115,7 +115,29 @@ class ArizaOqimTest(_Base):
         self.assertFalse(any(x.get("keyboard") for x in self.out.sent))
         (self.dir / FAYL).unlink()
         await AR.handle("ARIZA: summa=7100000 sana=2026-09-29 shartnoma=467RMZ26HA", self.out, rasmlar=[])
-        self.assertIn("Ariza faylini (rasm) yuboring", self.texts()[-1])
+        self.assertIn("Ariza faylini yuboring (rasm, PDF yoki Word)", self.texts()[-1])
+
+    async def test_pdf_va_word_ariza_fayli(self):
+        for ext, tur in (("pdf", "PDF"), ("docx", "Word")):
+            f = "leader_bot_0123456789abcdef.%s" % ext
+            (self.dir / f).write_bytes(b"%PDF")
+            self.javob["find"] = {"ok": True, "candidates": [KAND], "hisobMos": True, "crm": CRM, "aiName": "Shomurad AI"}
+            await AR.handle("ARIZA: tx=%s shartnoma=467RMZ26HA" % TXF, self.out, rasmlar=[str(self.dir / f)])
+            s = [x for x in self.out.sent if x.get("keyboard")][-1]
+            self.assertIn("Ariza fayli: shu %s" % tur, s["text"])
+            tok = s["keyboard"][0][0][1][len(C.CB_AR_OK):]
+            self.assertEqual(self.kv[C.kv_key(C.KV_AR_APPR, token=tok)]["fayl"], f)
+
+    def test_fayl_qatori_va_bot_qabul(self):
+        self.assertTrue(C.fayl_qatori("/x/leader_bot_ab.pdf").startswith("[Foydalanuvchi PDF fayl yubordi"))
+        self.assertIn("Word fayl yubordi", C.fayl_qatori("/x/leader_bot_ab.docx"))
+        self.assertEqual(C.fayl_qatori("/x/leader_bot_ab.jpg"), C.RASM_QATOR_TPL.format(path="/x/leader_bot_ab.jpg"))
+        from types import SimpleNamespace as NS
+        for name, mime, ext in (("ariza.pdf", "application/pdf", "pdf"), ("x.DOCX", "application/octet-stream", "docx"),
+                                ("x", "application/msword", "doc")):
+            m = NS(photo=None, document=NS(file_name=name, mime_type=mime, file_size=10))
+            self.assertEqual(LB._image_of(m)[1], ext, name)
+        self.assertEqual(LB._image_of(NS(photo=None, document=NS(file_name="a.zip", mime_type="application/zip", file_size=1)))[0], None)
 
     async def test_yoq_va_ai_ochiq(self):
         token = await self._sorov()

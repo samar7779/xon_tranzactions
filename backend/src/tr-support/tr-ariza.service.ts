@@ -16,9 +16,13 @@ import { XATO_DATEFROM_KEY, normContract } from './tr-support.service';
  * Keyin AI tekshiruvchi (agent.aiName, AgentAiService.processRequest) uni odatdagidek o'zi ko'radi.
  * Fayl bot saqlagan rasmdan o'qiladi (static/tg_uploads/leader_bot_<16 hex>.<ext>), nomi qat'iy tekshiriladi.
  */
-export const ARIZA_FAYL_RE = /^leader_bot_[0-9a-f]{16}\.(jpg|jpeg|png|webp|gif)$/;
+export const ARIZA_FAYL_RE = /^leader_bot_[0-9a-f]{16}\.(jpg|jpeg|png|webp|gif|pdf|doc|docx)$/;
 const ARIZA_FAYL_MAX = 20 * 1024 * 1024;               // bot yuklab oladigan chegara (Telegram)
-const MIME: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+const MIME: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+  pdf: 'application/pdf', doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
 const OYNA_KUN = 3;                                     // sana ±3 kun (bank sanasi xatdagidan farq qilishi mumkin)
 
 export interface ArizaCandidate {

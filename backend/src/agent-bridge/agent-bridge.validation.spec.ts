@@ -150,7 +150,10 @@ describe('xato-ariza validatsiya', () => {
     const komp = '6614176749_99517844_29.09.2026_20208000205720456001_17409000900001158111_710000000_-';
     expect(parseArizaSubmit({ ...ok, oplataKvId: komp }).oplataKvId).toBe(komp);
     expect(() => parseArizaSubmit({ ...ok, fayl: 'x.jpg' })).toThrow("ariza fayli nomi noto'g'ri");
-    for (const bad of [{ ...ok, fayl: '../x.jpg' }, { ...ok, fayl: 'leader_bot_0123456789abcdef.pdf' }, { ...ok, oplataKvId: 'X Y' },
+    for (const f of ['leader_bot_0123456789abcdef.pdf', 'leader_bot_0123456789abcdef.docx', 'leader_bot_0123456789abcdef.doc']) {
+      expect(parseArizaSubmit({ ...ok, fayl: f }).fayl).toBe(f);
+    }
+    for (const bad of [{ ...ok, fayl: '../x.jpg' }, { ...ok, fayl: 'leader_bot_0123456789abcdef.exe' }, { ...ok, oplataKvId: 'X Y' },
       { ...ok, yubordi: '' }, { ...ok, contractNo: '' }, null]) {
       expect(() => parseArizaSubmit(bad)).toThrow(BadRequestException);
     }
