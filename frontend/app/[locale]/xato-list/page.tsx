@@ -1028,11 +1028,14 @@ function HeaderStat({ label, value, hint, icon, active, onClick }: {
   label: string; value: string; hint: string; icon: ReactNode; active: boolean; onClick: () => void;
 }) {
   return (
-    <button onClick={onClick}
-      className={`text-left rounded-2xl backdrop-blur-md ring-1 px-3.5 py-2.5 transition-all ${active ? 'bg-white/25 ring-white/50 shadow-lg' : 'bg-white/10 ring-white/20 hover:bg-white/15'}`}>
+    <button onClick={onClick} aria-pressed={active}
+      title={active ? `${label} — filtr yoqilgan` : `${label} bo'yicha filtrlash`}
+      className={`text-left rounded-2xl backdrop-blur-md ring-1 px-3.5 py-2.5 transition-all cursor-pointer ${active ? 'bg-white/30 ring-white/70 shadow-lg' : 'bg-white/10 ring-white/20 hover:bg-white/20 hover:ring-white/45 hover:-translate-y-0.5'}`}>
       <div className="flex items-center justify-between text-white">
-        <span className="text-[9.5px] uppercase tracking-wider text-white/60 font-semibold">{label}</span>
-        <span className="text-white/50">{icon}</span>
+        <span className={`text-[9.5px] uppercase tracking-wider font-semibold ${active ? 'text-white' : 'text-white/60'}`}>
+          {label}{active && ' · filtr'}
+        </span>
+        <span className={active ? 'text-white/80' : 'text-white/50'}>{icon}</span>
       </div>
       <div className="text-[20px] sm:text-[22px] font-black tabular-nums text-white mt-0.5 leading-none">{value}</div>
       <div className="text-[9.5px] text-white/50 truncate mt-1">{hint}</div>
