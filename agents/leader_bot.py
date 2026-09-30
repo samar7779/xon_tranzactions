@@ -1241,25 +1241,55 @@ async def cmd_health(msg: Message) -> None:
     await _say(text, hist=body)
 
 
+def _tolov_tahlil(pc: Any, arg: str) -> Tuple[Any, bool]:
+    """(kirish, savolmi): payment_check.tolov_savol (eski modulda yo'q bo'lsa faqat parse_kirish, savolsiz)."""
+    fn = getattr(pc, "tolov_savol", None)
+    return fn(arg) if callable(fn) else (pc.parse_kirish(arg), False)
+
+
+async def _tolov_savol_delegatsiya(msg: Message, pc: Any, kirish: Any, arg: str) -> None:
+    """Matnli /tolov (identifikator + savol): Checker'ga payment_check delegatsiyasi, javob Leader synth orqali.
+    Topshiriq: 'TOLOV: <identifikatorlar>\\nEgasining savoli: <to'liq matn>' (to'lov bloki _delegate_body'da)."""
+    task = pc.tolov_topshiriq(kirish, arg)
+    await _hist(C.ROLE_LEADER, C.DELEG_HUMAN_REPLY)
+    outbox = _outbox()
+    async with _owner_lock():
+        ack_id = await outbox.send_text(C.ACK_MATN, html=False, reply_to=msg.message_id)
+        try:
+            await delegate("checker", task, intent=C.INTENT_TOLOV, is_fwd=False, image_paths=[], outbox=outbox,
+                           reply_to=msg.message_id)
+        finally:
+            if ack_id:
+                await outbox.delete(ack_id)
+
+
 async def cmd_tolov(msg: Message) -> None:
-    """/tolov <shartnoma | ID | summa sana | mijoz ...>: LLM'siz to'lov tekshiruvi (faqat o'qish).
-    Tarixga faqat qisqa qator (jadval agent_chat_log'ga yozilmaydi)."""
+    """/tolov <shartnoma | ID | summa sana | mijoz ...> [batafsil]: LLM'siz to'lov tekshiruvi (faqat o'qish).
+    Identifikatordan tashqari savol bo'lsa Checker'ga delegatsiya (Leader synth); identifikatorsiz matn Leader'ga
+    oddiy xabar. Tarixga faqat qisqa qator (jadval agent_chat_log'ga yozilmaydi)."""
     if not _is_owner_private(msg):
         return
     if _is_forwarded(msg):
         await on_text(msg)
         return
     arg = _TOLOV_CMD_RE.sub("", _mask_secrets(getattr(msg, "text", None) or ""), count=1).strip()
+    pc = _mod("payment_check") if arg else None
+    kirish, savol = _tolov_tahlil(pc, arg) if pc is not None else (None, False)
+    if savol and kirish is None:
+        await on_text(msg)                                # identifikatorsiz matn: Leader'ga oddiy
+        return
     await _hist(C.ROLE_OWNER, ("/tolov " + C.short(arg, 60)).strip())
     if not arg:
         await _say(C.MSG_TOLOV_FOYDALANISH, escape=True)
         return
-    pc = _mod("payment_check")
     if pc is None:
         await _say(_MSG_MODUL_YOQ_TPL.format(modul="payment_check"), escape=True)
         return
-    if pc.parse_kirish(arg) is None:
+    if kirish is None:
         await _say(C.MSG_TOLOV_FOYDALANISH, escape=True)
+        return
+    if savol:
+        await _tolov_savol_delegatsiya(msg, pc, kirish, arg)
         return
     try:
         natija = await _tolov_prefetch(pc, arg)

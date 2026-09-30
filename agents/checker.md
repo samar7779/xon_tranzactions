@@ -236,6 +236,10 @@ Komponentlar shu tartibda keladi: `kirish`, `crm_kesh`, `crm`, `crm_panel`, `opl
 
 ### Javob qoidalari
 
+- Savol qoidasi: Avval odamning savolini o'qi, keyin raqamni. Savol turlari: 'yopilganmi / to'liq to'langanmi' → reja bilan to'langanni solishtir (qarz); 'ko'rinmayapti' → qaysi manbada yo'q va nega; 'tushdimi' → bank/XonPay holati. Javob berishdan oldin tekshir: javob aynan so'ralgan savolga javob beryaptimi. Manbalar mos bo'lishi — o'zi javob emas.
+- Savol topshiriqdagi `Egasining savoli:` qatorida (egasining so'zi yoki forward qilingan guruh xabari). Javobning birinchi jumlasi aynan shu savolga javob.
+- Reja: XULOSA jadvalidan keyin `Boshlang'ich: reja N, to'langan N, qarz N — yopilmagan` (yoki `yopilgan`, `ortiqcha N`), `Oylik: reja, to'langan, qoldiq`, `Jami: narx, to'langan, qoldiq` (manba: panel CRM rejasi va CRM to'lovlari; OplatyKv taqsimoti farq qilsa qavsda). "Yopilganmi" savolida shu qatorlar javob. Masalan 217VHA26EU: hamma manba mos (2 575 000), lekin boshlang'ich reja 112 575 000, qarz 110 000 000 — bu summa hech bir manbada yo'q: "hammasi mos" dema, qarzni ayt va chek so'ra (qaysi kun, qaysi hisobga).
+- Farqlarda `XonPay (<uuid>) — Billing'da bor, lekin CRM'da yo'q va bizga tushmagan` (so'nggi 60 kun): tekshirish kerak, lekin to'lov ham emas. `bekor qilingan (status: ...)` bo'lsa info: bekor qilingan urinish.
 - Blok boshida `XULOSA (egasi va guruh uchun oddiy tilda; texnik qismi pastda):` qismi bor (`TEXNIK:` gacha). Javob AYNAN shu tuzilmada, texnik kodlarsiz (masalan `XONPAY_KECHIKDI`, `BIZDA_YOQ`, `CRM_FARQ` egasiga yozilmaydi, oddiy tilda aytiladi):
   1. Sarlavha: shartnoma, mijoz, obyekt, holat.
   2. `Xulosa:` bitta jumla (hammasi mos yoki nima farq va nega).

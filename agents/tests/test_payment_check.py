@@ -1816,6 +1816,31 @@ class SinxronTest(unittest.TestCase):
         for p in (c, l):
             self.assertIsNone(C.KIRILL_RE.search(p))
 
+    def test_savol_qoidasi_va_reja_satrlari(self):
+        """217VHA26EU hodisasi: savol qoidasi, reja, shubhali XonPay va matnli /tolov satrlari harfma-harf."""
+        path = config.KNOWLEDGE_DIR / "tolov_tekshirish.md"
+        chk, ldr = config.AGENTS_DIR / "checker.md", config.AGENTS_DIR / "leader.md"
+        if not (path.exists() and chk.exists() and ldr.exists()):
+            raise unittest.SkipTest("bilim fayli yoki prompt yo'q")
+        text, c, l = (p.read_text(encoding="utf-8") for p in (path, chk, ldr))
+        for s in (C.TOLOV_SAVOL_QOIDASI, "Egasining savoli:", "217VHA26EU"):
+            for nom, t in (("bilim", text), ("checker", c), ("leader", l)):
+                self.assertIn(s, t, "%s: %s" % (nom, s[:40]))
+        self.assertIn(C.TOLOV_SAVOL_TPL.split("{")[0], text)
+        for s in (C.TOLOV_XULOSA_BOSH_QARZ_TPL.format(tolangan="N", qarz="N"),
+                  C.TOLOV_GURUH_BOSH_QARZ_TPL.format(reja="N", tolangan="N", qarz="N"),
+                  C.TOLOV_GURUH_CHEK.format(qarz="N"),
+                  C.TOLOV_REJA_BOSH_TPL.format(reja="N", tolangan="N", holat="qarz N — yopilmagan"),
+                  C.TOLOV_REJA_OYLIK_TPL.format(reja="N", tolangan="N", holat="qoldiq N"),
+                  C.TOLOV_REJA_JAMI_TPL.format(narx="N", tolangan="N", holat="qoldiq N"),
+                  C.TOLOV_ODDIY_XONPAY["SHUBHA"][0].format(holat=""),
+                  C.TOLOV_ODDIY_XONPAY["SHUBHA"][1].format(uuid="<uuid>"),
+                  C.TOLOV_ODDIY_XONPAY["BEKOR"][1]):
+            self.assertIn(s, text, s[:50])
+        self.assertEqual(C.TOLOV_XONPAY_SHUBHA_KUN, 60)
+        for s in list(C.TOLOV_ODDIY_XONPAY.values()):
+            self.assertIsNone(C.KIRILL_RE.search(s[0] + s[1]))
+
     def test_index_md_chegarasi(self):
         """INDEX.md jim kesilmasin: har yangi qator chegaraga yaqinlashsa test yiqiladi."""
         path = config.REPO / C.MEMORY_FILES[0][0]
@@ -1836,7 +1861,7 @@ def _kop_shartnoma(sh: str = SH, okv: Any = (("2026-08-20", 0, 6150000),),
                    sheets: Any = (("s1", "Sotuv hisoboti", True, ((812, 0, 6150000),)),
                                   ("s2", "Debitorlik", True, ((44, 0, 6150000),))),
                    crm_found: bool = True, crm_error: str = "", all_match: Optional[bool] = None,
-                   narx: int = 250000000) -> Dict[str, Any]:
+                   narx: Optional[int] = 250000000, reja: Any = (50000000, 200000000)) -> Dict[str, Any]:
     oi, om = sum(f for _d, f, _m in okv), sum(m for _d, _f, m in okv)
     oplata = {"ok": True, "initial": oi, "monthly": om, "total": oi + om, "count": len(okv),
               "payments": [{"date": d, "first": f, "monthly": m, "total": f + m} for d, f, m in okv]}
@@ -1845,8 +1870,9 @@ def _kop_shartnoma(sh: str = SH, okv: Any = (("2026-08-20", 0, 6150000),),
         ci = sum(p[1] for p in crm if p[2] == "initial")
         cm = sum(p[1] for p in crm if p[2] != "initial")
         crm_d: Dict[str, Any] = {
-            "ok": True, "found": True, "price": narx, "initialPlan": 50000000, "monthlyPlan": 200000000,
-            "initial": ci, "monthly": cm, "total": ci + cm, "remaining": narx - ci - cm, "count": len(crm),
+            "ok": True, "found": True, "price": narx, "initialPlan": reja[0], "monthlyPlan": reja[1],
+            "initial": ci, "monthly": cm, "total": ci + cm, "remaining": None if narx is None else narx - ci - cm,
+            "count": len(crm),
             "payments": [{"date": p[0], "amount": p[1], "kind": p[2], "type": p[3],
                           "externalId": p[4] if len(p) > 4 else None, "method": p[5] if len(p) > 5 else None}
                          for p in crm]}
@@ -2826,6 +2852,7 @@ class XonpayPrefetchTest(_CrmEnvBase):
 # 14. Egasi uchun xulosa (/tolov oddiy tilda) va XonPay Billing <-> CRM kelishtiruvi
 # ---------------------------------------------------------------------------
 SH6 = "6326MSO25HN"
+SH217 = "217VHA26EU"
 
 
 def _toza_marshrut(sh: str = SH, tolovlar: Any = (("2026-08-20", KOMP1, "6150000"),), kesh: Optional[Dict[str, Any]] = None,
@@ -2914,7 +2941,8 @@ class EgaXulosaTest(_CrmEnvBase):
                                                 ("2026-08-22", 2000000, "monthly", "", u_b, "Xon Pay"))
         sheets = tuple((sid, nom, True, tuple((10 + i, 0, int(D(x))) for i, (_s, _k, x) in enumerate(tolovlar)))
                        for sid, nom in (("s1", "Sotuv hisoboti"), ("s2", "Debitorlik")))
-        return self._run(SH6, routes, _kop_javob(_kop_shartnoma(sh=SH6, okv=okv, crm=crm, sheets=sheets)))
+        return self._run(SH6, routes, _kop_javob(_kop_shartnoma(sh=SH6, okv=okv, crm=crm, sheets=sheets,
+                                                                reja=(None, None))))
 
     def test_6326_billing_crm_kelishtiruvi(self):
         n = self._6326()
@@ -2960,7 +2988,11 @@ class EgaXulosaTest(_CrmEnvBase):
             "Debitorlik            4   15 470 000  mos",
         ])
         farq = [x for x in m.split("\n") if re.match(r"^\d+\. ", x)]
-        self.assertEqual(len(farq), 2)
+        # shubhali XonPay (CRM'da yo'q, so'nggi 60 kun) ro'yxat oxirida; ularning soni bugungi sanaga bog'liq
+        chegara = (config.today_local() - timedelta(days=C.TOLOV_XONPAY_SHUBHA_KUN)).isoformat()
+        shubha = [x for x in n.xonpay if x.holat == "CRMDA_YOQ" and x.sana >= chegara]
+        self.assertEqual(len(farq), 2 + len(shubha))
+        self.assertTrue(all("Billing'da bor, lekin CRM'da yo'q va bizga tushmagan" in x for x in farq[2:]), farq)
         self.assertTrue(farq[0].startswith("1. 22.08 · 2 000 000 · XonPay 244c5483 — XonPay orqali to'langan, pul"), farq)
         self.assertIn("Nima qilish: OplatyKv > Billing > Tekshirish", farq[0])
         self.assertIn(" · 1 500 000 · XonPay bc843be4 — mijoz XonPay orqali to'lagan", farq[1])
@@ -2979,7 +3011,13 @@ class EgaXulosaTest(_CrmEnvBase):
         self.assertLessEqual(len(pc.format_block(n)), C.TOLOV_BLOK_MAX)
 
     def test_hammasi_mos(self):
-        n = self._run(SH, _toza_marshrut())
+        # boshlang'ich reja yopilgan (6 150 000 = reja), CRM, OplatyKv va sheetlar bir xil
+        res = _kop_shartnoma(okv=(("2026-08-20", 6150000, 0),),
+                             crm=(("2026-08-20", 6150000, "initial", "Первоначальный"),),
+                             sheets=(("s1", "Sotuv hisoboti", True, ((812, 6150000, 0),)),
+                                     ("s2", "Debitorlik", True, ((44, 6150000, 0),))),
+                             reja=(6150000, 200000000))
+        n = self._run(SH, _toza_marshrut(), pc_javob=_kop_javob(res))
         text = pc.format_owner(n)
         m = _html_matn(text)
         self.assertIn("Xulosa: " + C.TOLOV_XULOSA_MOS_TPL.format(n=1, summa="6 150 000") + ".", m)
@@ -2991,6 +3029,103 @@ class EgaXulosaTest(_CrmEnvBase):
         self.assertEqual(pre[1], "CRM                   1    6 150 000  mos")
         self.assertEqual([x.split()[0] for x in pre[1:]], ["CRM", "Bank", "OplatyKv", "Sotuv", "Debitorlik"])
         self.assertTrue(all(x.endswith("  mos") for x in pre[1:]), pre)
+        # reja qatorlari jadvaldan keyin
+        reja = text.split("</pre>\n", 1)[1].split("\n")[:3]
+        self.assertEqual(reja, ["Boshlang'ich: reja 6 150 000, to'langan 6 150 000, yopilgan",
+                                "Oylik: reja 200 000 000, to'langan 0, qoldiq 200 000 000",
+                                "Jami: narx 250 000 000, to'langan 6 150 000, qoldiq 243 850 000"])
+
+    def _217(self, status: Optional[str] = None, muammoli: bool = False) -> pc.Natija:
+        """217VHA26EU'ga o'xshash: CRM 1 to'lov (boshlang'ich 2 575 000, bank kompoziti, bizda bor), reja bosh.
+        112 575 000; Billing: shu to'lov TUSHGAN va 4 kun oldingi bir xil summali qator (CRM'da yo'q: shubhali)."""
+        bugun = config.today_local()
+        d_k, d_e = bugun - timedelta(days=1), bugun - timedelta(days=5)
+        k = _komp(gid="12987961860", num="7", sana=d_k.strftime("%d.%m.%Y"), summa="257500000")
+        billing = [
+            _xp(uuid="e392e2f6-0000-4000-8000-000000000001", sana=d_e.isoformat(), summa=2575000, contract=SH217,
+                status=status, is_problematic=muammoli),
+            _xp(uuid="62ea39f9-0000-4000-8000-000000000002", sana=d_k.isoformat(), summa=2575000, contract=SH217,
+                matched=True, matched_tx_id="ctx%024d" % 0, matched_external_id=k, matched_date=d_k)]
+        kesh = {"contract_number": SH217, "found": True, "status": "Продано", "object_name": "VOHA",
+                "customer_name": "KARIMOVA DILNOZA", "last_verified_at": _vaqt("2026-09-28", 9)}
+        routes = _toza_marshrut(SH217, ((d_k.isoformat(), k, "2575000"),), kesh, **{pc._SQL_XONPAY: billing})
+        res = _kop_shartnoma(sh=SH217, okv=((d_k.isoformat(), 2575000, 0),),
+                             crm=((d_k.isoformat(), 2575000, "initial", "Первоначальный", k, "Банк"),),
+                             sheets=(("s1", "Sotuv hisoboti", True, ((5, 2575000, 0),)),
+                                     ("s2", "Debitorlik", True, ((6, 2575000, 0),))),
+                             narx=562875000, reja=(112575000, 450300000))
+        return self._run(SH217, routes, _kop_javob(res))
+
+    def test_217_boshlangich_yopilmagan(self):
+        n = self._217()
+        text = pc.format_owner(n)
+        m = _html_matn(text)
+        self.assertIn("Xulosa: " + C.TOLOV_XULOSA_BOSH_QARZ_TPL.format(tolangan="2 575 000", qarz="110 000 000"), m)
+        self.assertIn("yopilmagan — qarz 110 000 000", m)
+        self.assertNotIn("hammasi mos", m)
+        pre = html.unescape(text.split("<pre>", 1)[1].split("</pre>", 1)[0]).split("\n")
+        self.assertTrue(all(x.endswith("  mos") for x in pre[1:]), pre)                    # manbalar o'zaro mos
+        reja = text.split("</pre>\n", 1)[1].split("\n")[:3]
+        self.assertEqual(reja, ["Boshlang'ich: reja 112 575 000, to'langan 2 575 000, qarz 110 000 000 — yopilmagan",
+                                "Oylik: reja 450 300 000, to'langan 0, qoldiq 450 300 000",
+                                "Jami: narx 562 875 000, to'langan 2 575 000, qoldiq 560 300 000"])
+        sana_e = pc._sana_qisqa((config.today_local() - timedelta(days=5)).isoformat())
+        self.assertIn("1. %s · 2 575 000 · XonPay (e392e2f6) — Billing'da bor, lekin CRM'da yo'q va bizga tushmagan."
+                      " Bekor qilingan urinish yoki yo'qolgan to'lov bo'lishi mumkin. Nima qilish: OplatyKv → Billing →"
+                      " UUID e392e2f6 holatini ko'ring; aniqlanmasa XonPay bilan tekshiring." % sana_e, m)
+        self.assertIn("Billing'da 1 ta tekshirilishi kerak XonPay yozuvi bor", m)
+        self.assertIn("Guruhga javob: " + C.TOLOV_GURUH_BOSH_QARZ_TPL.format(
+            reja="112 575 000", tolangan="2 575 000", qarz="110 000 000") + " " + C.TOLOV_GURUH_CHEK.format(
+            qarz="110 000 000"), m)
+        self.assertIn("chek kerak (qaysi kun, qaysi hisobga)", m)
+        holat = {x.uuid[:8]: x.holat for x in n.xonpay}
+        self.assertEqual(holat, {"e392e2f6": "CRMDA_YOQ", "62ea39f9": "TUSHGAN"})    # CRM to'lovi band: (b) yo'q
+        blok = pc.format_block(n).split("\n")
+        self.assertIn("Boshlang'ich: reja 112 575 000, to'langan 2 575 000, qarz 110 000 000 — yopilmagan", blok)
+        self.assertLess(blok.index("Boshlang'ich: reja 112 575 000, to'langan 2 575 000, qarz 110 000 000"
+                                   " — yopilmagan"), blok.index(C.TOLOV_XULOSA_BLOK_OXIR))
+
+    def test_217_shubhali_xonpay_status(self):
+        # status bekor ma'nosida: info, "bekor qilingan (status: ...)", xulosada "tekshirish kerak" yo'q
+        n = self._217(status="Отменен")
+        m = _html_matn(pc.format_owner(n))
+        self.assertIn("XonPay (e392e2f6) — Billing'da bekor qilingan (status: Otmenen): CRM'da yo'q, bizga"
+                      " tushmagan. Nima qilish: hech narsa, bekor qilingan urinish.", m)
+        self.assertNotIn("tekshirilishi kerak", m)
+        xb = next(b for b in n.bolimlar if b.komponent == "xonpay")
+        self.assertTrue(any("bekor qilingan (status: Otmenen)" in q for q in xb.qatorlar), xb.qatorlar)
+        # boshqa status va is_problematic: tekshirish kerak, status bilan
+        n = self._217(status="Ожидает", muammoli=True)
+        m = _html_matn(pc.format_owner(n))
+        self.assertIn("bo'lishi mumkin; status: Ojidaet; CRM belgisi: muammoli. Nima qilish: OplatyKv → Billing", m)
+        xb = next(b for b in n.bolimlar if b.komponent == "xonpay")
+        self.assertTrue(any("CRM holati (status: Ojidaet); muammoli" in q for q in xb.qatorlar), xb.qatorlar)
+        # 60 kundan eski CRMDA_YOQ farqlarga kirmaydi
+        eski = pc.XonpayQator(ext="u", uuid="aaaaaaaa-0000-4000-8000-000000000000", summa=D(1), holat="CRMDA_YOQ",
+                              sana=(config.today_local() - timedelta(days=61)).isoformat())
+        self.assertEqual(pc._shubhali_xonpay(pc.Natija(xonpay=[eski])), [])
+
+    def test_tolov_savol_tahlili(self):
+        hollar = {
+            SH: ("shartnoma", False), SH + " batafsil": ("shartnoma", False), UUID1: ("xonpay", False),
+            "mijoz Ahmedov Anvar": ("mijoz", False), "6150000 2026-08-20": ("summa_sana", False),
+            SH + " nega xonadonda ko'rinmayapti?": ("shartnoma", True), UUID1 + " tushdimi?": ("xonpay", True),
+            SH + "\nguruhdan: bosh to'lov yopilgan, ko'rinmayapti": ("shartnoma", True),
+            "salom qalaysan": (None, True), "yaroqsiz": (None, False), "": (None, False),
+        }
+        for matn, (tur, savol) in hollar.items():
+            k, s = pc.tolov_savol(matn)
+            self.assertEqual((getattr(k, "tur", None), s), (tur, savol), matn)
+        k, _s = pc.tolov_savol(SH + " nega ko'rinmayapti?")
+        t = pc.tolov_topshiriq(k, SH + " nega ko'rinmayapti?")
+        self.assertEqual(t, "TOLOV: shartnoma=%s\nEgasining savoli: %s nega ko'rinmayapti?" % (SH, SH))
+        k2 = pc.parse_kirish(t)
+        self.assertEqual((k2.tur, k2.shartnomalar), ("shartnoma", [SH]))
+        for matn in (UUID1 + " tushdimi?", "TOLOV: summa=6150000 sana=2026-08-20\nx", "mijoz Ahmedov Anvar"):
+            k = pc.parse_kirish(matn)
+            k3 = pc.parse_kirish(pc.tolov_topshiriq(k, "savol"))
+            self.assertEqual((k3.tur, k3.id, k3.shartnomalar, k3.summa, k3.sana, k3.mijoz),
+                             (k.tur, k.id, k.shartnomalar, k.summa, k.sana, k.mijoz), matn)
 
     def test_batafsil_eski_chiqish(self):
         k = pc.parse_kirish(SH + " batafsil")
@@ -3057,6 +3192,14 @@ class FakePc:
     @staticmethod
     def qisqa(n: Any) -> str:
         return "To'lov tekshiruvi 821ZUR23V1: CRM 1; OplatyKv 1; bank 1; farq: yo'q"
+
+    @staticmethod
+    def tolov_savol(arg: str) -> Any:            # haqiqiy tahlil (identifikator yoki savol)
+        return pc.tolov_savol(arg)
+
+    @staticmethod
+    def tolov_topshiriq(k: Any, savol: str) -> str:
+        return pc.tolov_topshiriq(k, savol)
 
 
 class LeaderTolovTest(TLR._FlowBase):
@@ -3177,6 +3320,44 @@ class LeaderTolovTest(TLR._FlowBase):
         with self.assertLogs("agents.leader_bot", level="ERROR"):
             await LB.cmd_tolov(self._cmd("/tolov 821ZUR23V1"))
         self.assertTrue(self.last().text.startswith("Shefim, javob bera olmadim: RuntimeError"))
+
+    async def test_tolov_savol_checkerga_delegatsiya(self):
+        """'/tolov X nega ko'rinmayapti?': LLM'siz jadval emas, Checker'ga payment_check (savol bilan), Leader synth."""
+        self._patch(LB, "_owner_id", lambda: 42)
+        self._patch(LB, "_OWNER_LOCK", None)
+        self.replies = [(C.RUN_OK, "Boshlang'ich yopilmagan, qarz 110 000 000."),
+                        (C.RUN_OK, TLR._leader_json("Shefim, boshlang'ich yopilmagan: qarz 110 000 000."))]
+        savol = "217VHA26EU bosh to'lov yopilgan, nega xonadonda ko'rinmayapti?"
+        await LB.cmd_tolov(self._cmd("/tolov " + savol))
+        self.assertEqual([a for a, _ in self.runs], ["checker", "leader"])
+        task = self.runs[0][1]
+        self.assertIn("TOLOV: shartnoma=217VHA26EU", task)
+        self.assertIn(C.TOLOV_SAVOL_TPL.format(savol=savol), task)
+        self.assertIn(TOLOV_BLOK, task)                                   # prefetch bloki (_tolov_block)
+        self.assertEqual(self.pc.calls, ["TOLOV: shartnoma=217VHA26EU\n" + C.TOLOV_SAVOL_TPL.format(savol=savol)])
+        self.assertEqual(self.last().text, "Shefim, boshlang'ich yopilmagan: qarz 110 000 000.")
+        self.assertEqual(self.hist[:2], [(C.ROLE_OWNER, "/tolov " + C.short(savol, 60), False),
+                                         (C.ROLE_LEADER, C.DELEG_HUMAN_REPLY, False)])
+
+    async def test_tolov_identifikator_eski_yol(self):
+        """'/tolov X' va '/tolov X batafsil': eski LLM'siz yo'l (runner chaqirilmaydi)."""
+        self._patch(LB, "_owner_id", lambda: 42)
+        for arg in ("217VHA26EU", "217VHA26EU batafsil"):
+            await LB.cmd_tolov(self._cmd("/tolov " + arg))
+        self.assertEqual(self.pc.calls, ["217VHA26EU", "217VHA26EU batafsil"])
+        self.assertEqual(self.runs, [])
+
+    async def test_tolov_identifikatorsiz_matn_leaderga(self):
+        self._patch(LB, "_owner_id", lambda: 42)
+        seen: List[Any] = []
+
+        async def on_text(msg: Any) -> None:
+            seen.append(msg)
+
+        self._patch(LB, "on_text", on_text)
+        m = self._cmd("/tolov salom, bugun qancha tushum bo'ldi?")
+        await LB.cmd_tolov(m)
+        self.assertEqual((seen, self.pc.calls, self.runs), ([m], [], []))
 
     def test_register_tolov_buyrugi(self):
         dp = SimpleNamespace(message=SimpleNamespace(calls=[]), callback_query=SimpleNamespace(calls=[]))

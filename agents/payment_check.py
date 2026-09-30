@@ -239,6 +239,9 @@ class XonpayQator:
     kompozit_crm: bool = False                # CRM external_id bank kompoziti: pul tushgan, Billing moslamagan
     izoh_qosh: str = ""                       # CRM'dan tuzilgan (Billing'da yo'q yoki o'qilmadi): izohga qo'shiladi
     crm_orqali: bool = False                  # TUSHGAN CRM kompoziti orqali (Billing'da eski TOPILMAGAN qatori)
+    crm_holat: str = ""                       # xonpay_transactions.status (CRM holati, lotinda)
+    muammoli: bool = False                    # xonpay_transactions.is_problematic
+    bekor: bool = False                       # status bekor/qaytarim ma'nosida (cancel, отмен, возврат, refund, fail)
 
     @property
     def yolda(self) -> bool:
@@ -638,6 +641,9 @@ _UUID_MATN_RE = re.compile(
     r"(?<![0-9A-Za-z-])([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})(?![0-9A-Za-z-])")
 
 
+_XONPAY_BEKOR_RE = re.compile(r"(?i)cancel|отмен|возврат|refund|fail|bekor|qaytar")
+
+
 def ish_kunlari(dan: date, gacha: date) -> int:
     """(dan, gacha] oralig'idagi bank ish kunlari (dushanba-juma). gacha <= dan -> 0. Bayramlar hisobga olinmaydi.
     Juma to'lovi: shanba, yakshanba 0; dushanba 1; keyingi payshanba 4."""
@@ -676,6 +682,8 @@ def xonpay_qatorlari(rows: Optional[Sequence[Dict[str, Any]]], hozir: Optional[d
             tushgan_sana=_sana_of(r.get("matched_date")) if r.get("matched_date") is not None else "",
             tushgan_id=_s(r.get("matched_external_id")), tushgan_tx=_s(r.get("matched_tx_id")),
             tushgan_summa=_dec_n(r.get("matched_amount")), tekshirilgan=tek if isinstance(tek, datetime) else None,
+            crm_holat=_toza(_lotin(repair_mojibake(_s(r.get("status")))), 40), muammoli=_bool(r.get("is_problematic")),
+            bekor=bool(_XONPAY_BEKOR_RE.search(repair_mojibake(_s(r.get("status"))))),
         )
         if _bool(r.get("is_matched")):
             # Billing bilan bir xil: faqat is_matched (tryMatchOne topolmasa is_matched=false qiladi, eski
@@ -742,10 +750,14 @@ def _xonpay_tafsil(x: XonpayQator) -> str:
         return t + "; " + x.izoh_qosh if x.izoh_qosh else t
     if x.yolda:
         t = C.TOLOV_XONPAY_IZOH_TPL.format(n=x.ish_kun, chegara=C.TOLOV_XONPAY_ISH_KUNI)
-        return t + "; " + x.izoh_qosh if x.izoh_qosh else t
-    if x.holat == "CRMDA_YOQ":
-        return C.TOLOV_XONPAY_CRMDA_YOQ
-    return "sana yo'q"
+        t = t + "; " + x.izoh_qosh if x.izoh_qosh else t
+    elif x.holat == "CRMDA_YOQ":
+        t = C.TOLOV_XONPAY_CRMDA_YOQ
+    else:
+        t = "sana yo'q"
+    if x.crm_holat:
+        t += "; %s (status: %s)" % ("bekor qilingan" if x.bekor else "CRM holati", x.crm_holat)
+    return t + "; muammoli" if x.muammoli else t
 
 
 def _xonpay_holat_matn(x: XonpayQator) -> str:
@@ -1033,6 +1045,36 @@ def parse_kirish(matn: Any) -> Optional[Kirish]:
     return k
 
 
+def tolov_savol(matn: Any) -> Tuple[Optional[Kirish], bool]:
+    """/tolov argumenti: (kirish, savolmi). savolmi=False: faqat identifikatorlar (shartnoma, ID/UUID, summa+sana,
+    mijoz, 'batafsil') -> LLM'siz javob (kirish None bo'lsa foydalanish matni). savolmi=True: identifikatorlardan
+    tashqari erkin matn yoki savol (kamida 2 so'z yoki bir necha qator) -> kirish bo'lsa Checker'ga delegatsiya
+    (TOLOV: qatori + egasining savoli), kirish None bo'lsa Leader'ga oddiy xabar."""
+    t = _s(matn)
+    if not t or len(t) > 20000:
+        return None, False
+    k = parse_kirish(t)
+    if "\n" not in t:
+        sof = _BATAFSIL_RE.sub("", " " + t).strip() if _BATAFSIL_RE.search(" " + t) else t
+        if sof and len(sof) <= 200 and _argument(sof) is not None:
+            return k, False
+    return k, len(t.split()) >= 2 or "\n" in t
+
+
+def tolov_topshiriq(k: Kirish, savol: Any) -> str:
+    """Checker topshirig'i: 'TOLOV: <identifikatorlar>' (leader.md 5-bo'lim shakli) va egasining to'liq savoli."""
+    if k.tur == "shartnoma":
+        qator = "shartnoma=" + ",".join(k.shartnomalar)
+    elif k.tur in ("id", "xonpay"):
+        qator = "id=" + k.id
+    elif k.tur == "summa_sana":
+        qator = "summa=%s sana=%s kun=%d" % (_s(k.summa), k.sana.isoformat() if k.sana else "", k.kun) + (
+            " bank=" + k.bank if k.bank else "")
+    else:
+        qator = "mijoz=" + k.mijoz
+    return "TOLOV: %s\n%s" % (qator, C.TOLOV_SAVOL_TPL.format(savol=_s(savol)))
+
+
 def kirish_nomi(k: Optional[Kirish], shartnomalar: Sequence[str] = ()) -> str:
     """Sarlavha uchun qisqa nom (ismsiz)."""
     if shartnomalar:
@@ -1178,7 +1220,8 @@ _SQL_ARIZA = (
 # xonpay_transactions (Billing): full_name, purpose, crm_uuid o'qilmaydi
 _XONPAY_USTUN = (
     "x.external_id, x.xonpay_uuid, x.contract, x.amount, x.date_paid, x.is_matched, x.matched_tx_id,"
-    " x.matched_external_id, x.matched_amount, x.matched_date, x.last_checked_at, x.is_received_from_bank"
+    " x.matched_external_id, x.matched_amount, x.matched_date, x.last_checked_at, x.is_received_from_bank,"
+    " x.status, x.is_problematic"
 )
 _SQL_XONPAY = (
     "SELECT " + _XONPAY_USTUN + " FROM xonpay_transactions x"
@@ -4399,6 +4442,8 @@ class Xulosa:
     eslatma: str = ""
     guruh: str = ""
     batafsil: str = ""                        # "Batafsil: /tolov <kirish> batafsil"
+    reja: List[str] = field(default_factory=list)   # "Boshlang'ich: reja ..., to'langan ..., qarz ... — yopilmagan"
+    bosh: Optional[Tuple[Decimal, Decimal, Decimal]] = None   # boshlang'ich (reja, to'langan, qarz)
 
 
 def _holat_oddiy(status: Any) -> str:
@@ -4541,7 +4586,73 @@ def _oddiy_farqlar(n: Natija) -> List[OddiyFarq]:
             sabab, nima = _oddiy(f.kod)
             grp = {"CRM_YOQ": "okv_bor", "QAYTARIM": "crm_bor", "SYNC_KUTILMOQDA": "sync"}.get(f.kod, "okv")
             out.append(OddiyFarq(f.sana, f.summa, turi, sabab, nima, grp))
+    return out + _shubhali_xonpay(n)
+
+
+def _shubhali_xonpay(n: Natija) -> List[OddiyFarq]:
+    """Billing'da bor, CRM'da yo'q, bizga tushmagan (CRMDA_YOQ) XonPay yozuvlari, so'nggi TOLOV_XONPAY_SHUBHA_KUN
+    kun: 'tekshirish kerak'. Status bekor/qaytarim ma'nosida bo'lsa info ('bekor qilingan'). Yangisi birinchi."""
+    chegara = (config.today_local() - timedelta(days=C.TOLOV_XONPAY_SHUBHA_KUN)).isoformat()
+    out: List[OddiyFarq] = []
+    for x in sorted((x for x in n.xonpay or () if x.holat == "CRMDA_YOQ" and x.sana >= chegara),
+                    key=lambda x: x.sana, reverse=True):
+        uuid = _uuid_qisqa(x)
+        if x.bekor:
+            sabab, nima = C.TOLOV_ODDIY_XONPAY["BEKOR"]
+            out.append(OddiyFarq(x.sana, x.summa, "XonPay (%s)" % uuid, sabab.format(status=x.crm_holat), nima,
+                                 "xonpay_bekor"))
+            continue
+        holat = "".join(("; status: %s" % x.crm_holat if x.crm_holat else "", "; CRM belgisi: muammoli"
+                         if x.muammoli else ""))
+        sabab, nima = C.TOLOV_ODDIY_XONPAY["SHUBHA"]
+        out.append(OddiyFarq(x.sana, x.summa, "XonPay (%s)" % uuid, sabab.format(holat=holat), nima.format(uuid=uuid),
+                             "xonpay_shubha"))
     return out
+
+
+def _reja(n: Natija) -> Tuple[List[str], Optional[Tuple[Decimal, Decimal, Decimal]]]:
+    """Reja bo'yicha holat (ko'prik CRM: narx, initialPlan, monthlyPlan; to'langan = CRM to'lovlar ro'yxati turi
+    bo'yicha): 'Boshlang'ich: reja, to'langan, qarz — yopilmagan', 'Oylik: ...', 'Jami: narx, ...'. OplatyKv taqsimoti
+    farq qilsa qavsda. Reja yo'q bo'lsa qator yo'q. Qaytadi: (qatorlar, boshlang'ich (reja, to'langan, qarz) jami yoki
+    None)."""
+    kn = n.koprik
+    if kn is None or kn.xato:
+        return [], None
+    kop = len(kn.shartnomalar) > 1
+    qator: List[str] = []
+    bosh: Optional[Tuple[Decimal, Decimal, Decimal]] = None
+
+    def holat(qolgan: Decimal, soz: str, yopiq: str) -> str:
+        if qolgan >= 1:
+            return "%s %s" % (soz, pul(qolgan)) + (" — yopilmagan" if yopiq else "")
+        if qolgan <= -1:
+            return "ortiqcha %s" % pul(-qolgan) + (" — yopilgan" if yopiq else "")
+        return yopiq or "qoldiq 0"
+
+    for s in kn.shartnomalar:
+        c, o = s.crm, s.okv
+        if not c.topildi:
+            continue
+        cb, co, cj = _crm_yigindi(c)
+        pre = s.shartnoma + ": " if kop else ""
+        if c.reja_bosh is not None and c.reja_bosh > 0:
+            t = C.TOLOV_REJA_BOSH_TPL.format(reja=pul(c.reja_bosh), tolangan=pul(cb),
+                                             holat=holat(c.reja_bosh - cb, "qarz", "yopilgan"))
+            if abs(o.bosh - cb) >= 1:
+                t += " (OplatyKv bo'yicha bosh. %s)" % pul(o.bosh)
+            qator.append(pre + t)
+            b0 = bosh or (_NOL, _NOL, _NOL)
+            bosh = (b0[0] + c.reja_bosh, b0[1] + cb, b0[2] + max(_NOL, c.reja_bosh - cb))
+        if c.reja_oylik is not None and c.reja_oylik > 0:
+            t = C.TOLOV_REJA_OYLIK_TPL.format(reja=pul(c.reja_oylik), tolangan=pul(co),
+                                              holat=holat(c.reja_oylik - co, "qoldiq", ""))
+            if abs(o.oylik - co) >= 1:
+                t += " (OplatyKv bo'yicha oylik %s)" % pul(o.oylik)
+            qator.append(pre + t)
+        if c.narx is not None and c.narx > 0:
+            qator.append(pre + C.TOLOV_REJA_JAMI_TPL.format(narx=pul(c.narx), tolangan=pul(cj),
+                                                             holat=holat(c.narx - cj, "qoldiq", "")))
+    return qator, bosh
 
 
 def _manbalar(n: Natija, d: DbNatija, crm_sabab: Optional[str]) -> List[ManbaQator]:
@@ -4617,11 +4728,20 @@ def _yig(fs: Sequence[OddiyFarq]) -> Decimal:
     return sum((abs(f.summa) for f in fs if f.summa is not None), _NOL)
 
 
-def _xulosa_jumla(manbalar: Sequence[ManbaQator], fs: Sequence[OddiyFarq]) -> str:
-    """Bitta jumla: hammasi mos yoki farqlar toifalari (summasi bilan) va o'qilmagan manbalar."""
+_SHUBHA_GURUH = ("xonpay_shubha", "xonpay_bekor")
+
+
+def _xulosa_jumla(manbalar: Sequence[ManbaQator], fs_hammasi: Sequence[OddiyFarq],
+                  bosh: Optional[Tuple[Decimal, Decimal, Decimal]] = None) -> str:
+    """Xulosa: hammasi mos yoki farqlar toifalari (summasi bilan) va o'qilmagan manbalar. Boshlang'ich yopilmagan
+    bo'lsa (bosh qarz) aytiladi; hamma manba mos bo'lsa bu asosiy javob. Shubhali XonPay yozuvlari alohida jumla."""
     g: Dict[str, List[OddiyFarq]] = {}
+    fs = [f for f in fs_hammasi if f.guruh not in _SHUBHA_GURUH]
     for f in fs:
         g.setdefault(f.guruh, []).append(f)
+    shubha = [f for f in fs_hammasi if f.guruh == "xonpay_shubha"]
+    oxiri = (" Billing'da %d ta tekshirilishi kerak XonPay yozuvi bor (Farqlar)." % len(shubha)) if shubha else ""
+    qarz = bosh[2] if bosh is not None and bosh[2] >= 1 else None
     qism: List[str] = []
     xp = g.get("xonpay", []) + g.get("xonpay_kech", [])
     if xp:
@@ -4650,7 +4770,9 @@ def _xulosa_jumla(manbalar: Sequence[ManbaQator], fs: Sequence[OddiyFarq]) -> st
     if not qism:
         okv = next((m for m in manbalar if m.nomi == "OplatyKv"), None)
         if not oqilmadi and all(m.holat == "mos" or m.holat.startswith("mos ") for m in manbalar) and okv is not None:
-            return C.TOLOV_XULOSA_MOS_TPL.format(n=okv.soni, summa=pul(okv.summa)) + "."
+            if qarz is not None:
+                return C.TOLOV_XULOSA_BOSH_QARZ_TPL.format(tolangan=pul(okv.summa), qarz=pul(qarz)) + oxiri
+            return C.TOLOV_XULOSA_MOS_TPL.format(n=okv.soni, summa=pul(okv.summa)) + "." + oxiri
         farqli = [m.nomi for m in manbalar if not (m.holat == "mos" or m.holat.startswith("mos "))
                   and not m.holat.startswith("o'qilmadi")]
         if farqli:
@@ -4660,13 +4782,17 @@ def _xulosa_jumla(manbalar: Sequence[ManbaQator], fs: Sequence[OddiyFarq]) -> st
     elif boshqa_mos and any(f.guruh in ("xonpay", "xonpay_kech", "bank_sync", "crm_bor", "naqd") for f in fs) \
             and all(f.guruh in ("xonpay", "xonpay_kech", "bank_sync", "crm_bor", "naqd") for f in fs):
         qism.append("bank, OplatyKv va sheetlar o'zaro mos")
+    if qarz is not None:
+        qism.append("boshlang'ich to'lov yopilmagan (qarz %s)" % pul(qarz))
     if oqilmadi:
         qism.append("o'qilmadi: " + ", ".join(oqilmadi))
-    return "; ".join(qism) + "."
+    return "; ".join(qism) + "." + oxiri
 
 
-def _guruh_javobi(n: Natija, manbalar: Sequence[ManbaQator], fs: Sequence[OddiyFarq]) -> str:
-    """Guruhga nusxalash uchun 1-3 jumla: to'lov topildimi, qayerda, nega ko'rinmaydi, qachon ko'rinadi."""
+def _guruh_javobi(n: Natija, manbalar: Sequence[ManbaQator], fs: Sequence[OddiyFarq],
+                  bosh: Optional[Tuple[Decimal, Decimal, Decimal]] = None) -> str:
+    """Guruhga nusxalash uchun 1-3 jumla: to'lov topildimi, qayerda, nega ko'rinmaydi, qachon ko'rinadi.
+    Boshlang'ich yopilmagan bo'lsa reja, to'langan va qarz; pul hech bir manbada yo'q bo'lsa chek so'raladi."""
     k = n.kirish
 
     def ds(sana: str, summa: Optional[Decimal]) -> Tuple[str, str]:
@@ -4721,6 +4847,11 @@ def _guruh_javobi(n: Natija, manbalar: Sequence[ManbaQator], fs: Sequence[OddiyF
         f = g["sheet"][0]
         keyin = " Keyingi eksportda ko'rinadi." if "eksportning oxirgi ishidan keyin" in f.sabab else ""
         jumla.append("To'lovlar bizda bor, lekin %s da hali to'liq ko'rinmaydi.%s" % (f.turi, keyin))
+    if bosh is not None and bosh[2] >= 1:
+        b = C.TOLOV_GURUH_BOSH_QARZ_TPL.format(reja=pul(bosh[0]), tolangan=pul(bosh[1]), qarz=pul(bosh[2]))
+        if not any(g.get(x) for x in ("xonpay", "xonpay_kech", "bank_sync", "crm_bor", "naqd")):
+            b += " " + C.TOLOV_GURUH_CHEK.format(qarz=pul(bosh[2]))
+        jumla = [b] if not jumla else jumla[:2] + [b]
     if not jumla:
         okv = next((m for m in manbalar if m.nomi == "OplatyKv"), None)
         if okv is not None and okv.summa is not None:
@@ -4741,12 +4872,13 @@ def _xulosa_qur(n: Natija, d: DbNatija, crm_sabab: Optional[str]) -> Xulosa:
         if holat:
             x.tavsif += " (%s)" % holat if x.tavsif else holat
     x.manbalar = _manbalar(n, d, crm_sabab)
+    x.reja, x.bosh = _reja(n)
     x.farqlar = _oddiy_farqlar(n)
-    x.xulosa = _xulosa_jumla(x.manbalar, x.farqlar)
+    x.xulosa = _xulosa_jumla(x.manbalar, x.farqlar, x.bosh)
     jami_mos = all(m.holat == "mos" or m.holat.startswith("mos ") for m in x.manbalar if m.nomi in ("CRM", "Bank"))
     if jami_mos and any(not f.yashirin and f.kod in C.TOLOV_TAQSIMOT_KODLAR for f in n.farqlar):
         x.eslatma = C.TOLOV_ESLATMA_TAQSIMOT
-    x.guruh = _guruh_javobi(n, x.manbalar, x.farqlar)
+    x.guruh = _guruh_javobi(n, x.manbalar, x.farqlar, x.bosh)
     k = n.kirish
     x.batafsil = C.TOLOV_BATAFSIL_TPL.format(
         kirish=k.id if k is not None and k.tur in ("xonpay", "id") else ",".join(n.shartnomalar))
@@ -4768,14 +4900,14 @@ def _farq_satr(f: OddiyFarq) -> str:
     return "%s — %s. Nima qilish: %s." % (q, _toza(f.sabab, 300).rstrip("."), _toza(f.nima, 200).rstrip("."))
 
 
-def _xulosa_qatorlari(x: Xulosa, farq_max: int) -> Tuple[List[str], List[str], List[str], List[str]]:
-    """(bosh qatorlar, jadval, farq qatorlari, oxirgi qatorlar) — oddiy matn (HTML'siz)."""
-    bosh = [x.shartnoma + (" — " + x.tavsif if x.tavsif else ""), "Xulosa: " + _toza(x.xulosa, 700)]
+def _xulosa_qatorlari(x: Xulosa, farq_max: int) -> Tuple[List[str], List[str], List[str], List[str], List[str]]:
+    """(bosh qatorlar, jadval, reja qatorlari, farq qatorlari, oxirgi qatorlar) — oddiy matn (HTML'siz)."""
+    bosh = [x.shartnoma + (" — " + x.tavsif if x.tavsif else ""), "Xulosa: " + _toza(x.xulosa, 900)]
     farq = ["%d. %s" % (i, _farq_satr(f)) for i, f in enumerate(x.farqlar[:farq_max], 1)]
     if len(x.farqlar) > farq_max:
         farq.append("... yana %d ta farq: batafsil rejimda" % (len(x.farqlar) - farq_max))
-    oxir = ([x.eslatma] if x.eslatma else []) + ["Guruhga javob: " + _toza(x.guruh, 700)]
-    return bosh, _manba_jadval(x.manbalar), farq, oxir
+    oxir = ([x.eslatma] if x.eslatma else []) + ["Guruhga javob: " + _toza(x.guruh, 900)]
+    return bosh, _manba_jadval(x.manbalar), [_toza(r, 300) for r in x.reja], farq, oxir
 
 
 def format_xulosa(n: Natija) -> str:
@@ -4787,10 +4919,10 @@ def format_xulosa(n: Natija) -> str:
     esc = lambda s: html.escape(s, quote=False)  # noqa: E731
     farq_max = C.TOLOV_EGA_FARQ_MAX
     while True:
-        bosh, jadval, farq, oxir = _xulosa_qatorlari(x, farq_max)
+        bosh, jadval, reja, farq, oxir = _xulosa_qatorlari(x, farq_max)
         qator = ["<b>%s</b>%s" % (esc(x.shartnoma), esc(" — " + x.tavsif) if x.tavsif else ""),
                  "<b>Xulosa:</b> " + esc(bosh[1][len("Xulosa: "):]),
-                 "<pre>" + esc("\n".join(jadval)) + "</pre>"]
+                 "<pre>" + esc("\n".join(jadval)) + "</pre>"] + [esc(r) for r in reja]
         qator += ["<b>Farqlar:</b>"] + [esc(f) for f in farq] if farq else ["<b>Farqlar:</b> yo'q"]
         qator += [esc(o) for o in oxir[:-1]]
         qator += ["<b>Guruhga javob:</b> " + esc(oxir[-1][len("Guruhga javob: "):]), esc(x.batafsil)]
@@ -4804,8 +4936,8 @@ def _xulosa_blok(n: Natija) -> List[str]:
     """Checker bloki boshi: xulosa oddiy matnda (HTML'siz), keyin 'TEXNIK:'. Xulosa yo'q bo'lsa []."""
     if n.xulosa is None:
         return []
-    bosh, jadval, farq, oxir = _xulosa_qatorlari(n.xulosa, C.TOLOV_BLOK_FARQ_MAX)
-    qator = [C.TOLOV_XULOSA_BLOK_BOSH] + [_bir_qator(bosh[0], 300), bosh[1]] + jadval
+    bosh, jadval, reja, farq, oxir = _xulosa_qatorlari(n.xulosa, C.TOLOV_BLOK_FARQ_MAX)
+    qator = [C.TOLOV_XULOSA_BLOK_BOSH] + [_bir_qator(bosh[0], 300), bosh[1]] + jadval + reja
     qator += (["Farqlar:"] + farq) if farq else ["Farqlar: yo'q"]
     return qator + oxir + [C.TOLOV_XULOSA_BLOK_OXIR]
 

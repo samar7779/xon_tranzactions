@@ -840,7 +840,35 @@ TOLOV_ODDIY: Dict[str, Tuple[str, str]] = {
     "QAYTARIM": ("CRM'da qaytarim (manfiy), bizda chiqim yo'q",
                  "bizda chiqim bo'lsa mos; bo'lmasa storno yoki perebroska: egasi qarori"),
 }
-TOLOV_ESLATMA_TAQSIMOT = ("Eslatma: jami mos, faqat boshlang'ich/oylik taqsimoti CRM bilan farq qiladi (odatiy: CRM"
+# Billing'da bor, CRM'da yo'q, bizga tushmagan (CRMDA_YOQ) XonPay yozuvlari: so'nggi shuncha kun ichidagilari egasi
+# Farqlar ro'yxatiga "tekshirish kerak"; xonpay_transactions.status bekor/qaytarim ma'nosida bo'lsa info (bekor).
+TOLOV_XONPAY_SHUBHA_KUN = 60
+TOLOV_ODDIY_XONPAY: Dict[str, Tuple[str, str]] = {
+    "SHUBHA": ("Billing'da bor, lekin CRM'da yo'q va bizga tushmagan. Bekor qilingan urinish yoki yo'qolgan to'lov"
+               " bo'lishi mumkin{holat}",
+               "OplatyKv → Billing → UUID {uuid} holatini ko'ring; aniqlanmasa XonPay bilan tekshiring"),
+    "BEKOR": ("Billing'da bekor qilingan (status: {status}): CRM'da yo'q, bizga tushmagan",
+              "hech narsa, bekor qilingan urinish"),
+}
+# Reja bo'yicha holat (ko'prik CRM: price, initialPlan, monthlyPlan; to'langan = CRM to'lovlar ro'yxati, turi bo'yicha)
+TOLOV_REJA_BOSH_TPL = "Boshlang'ich: reja {reja}, to'langan {tolangan}, {holat}"
+TOLOV_REJA_OYLIK_TPL = "Oylik: reja {reja}, to'langan {tolangan}, {holat}"
+TOLOV_REJA_JAMI_TPL = "Jami: narx {narx}, to'langan {tolangan}, {holat}"
+TOLOV_XULOSA_BOSH_QARZ_TPL = ("Barcha manbalar mos: to'langan {tolangan}. Boshlang'ich to'lov yopilmagan — qarz {qarz},"
+                              " bu summa hech bir manbada yo'q.")
+TOLOV_GURUH_BOSH_QARZ_TPL = ("Boshlang'ich to'lov yopilmagan: reja {reja}, to'langan {tolangan}, qarz {qarz}.")
+TOLOV_GURUH_CHEK = ("{qarz} so'm hech bir manbada (CRM, bank, OplatyKv, xonadon hisoboti) yo'q; mijoz to'lagan bo'lsa,"
+                    " chek kerak (qaysi kun, qaysi hisobga).")
+# Matnli /tolov: identifikatorlardan tashqari savol bo'lsa Checker'ga delegatsiya (Leader synth bilan)
+TOLOV_SAVOL_TPL = "Egasining savoli: {savol}"
+# Prompt qoidasi (leader.md, checker.md, bilim fayli 6.2 da harfma-harf; hodisa 217VHA26EU, 2026-09-30)
+TOLOV_SAVOL_QOIDASI = (
+    "Avval odamning savolini o'qi, keyin raqamni. Savol turlari: 'yopilganmi / to'liq to'langanmi' → reja bilan"
+    " to'langanni solishtir (qarz); 'ko'rinmayapti' → qaysi manbada yo'q va nega; 'tushdimi' → bank/XonPay holati."
+    " Javob berishdan oldin tekshir: javob aynan so'ralgan savolga javob beryaptimi. Manbalar mos bo'lishi — o'zi"
+    " javob emas."
+)
+TOLOV_ESLATMA_TAQSIMOT =("Eslatma: jami mos, faqat boshlang'ich/oylik taqsimoti CRM bilan farq qiladi (odatiy: CRM"
                           " turi bo'yicha, bizda reja bo'yicha).")
 TOLOV_GURUH_XONPAY_KECHIKDI_TPL = ("Bu to'lov XonPay orqali qilingan ({sana}, {summa} so'm). Pul XonPay'dan bizning"
                                    " hisobga hali o'tmagan (odatdagi 1-3 ish kunidan oshdi), XonPay bilan tekshirish"

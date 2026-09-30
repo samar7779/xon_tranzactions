@@ -3,7 +3,7 @@
 > Bu faylni Claude sessiyasiga (yoki @TRanSupport_bot agentlariga) berib so'raladi:
 > "shu yo'riqnoma bo'yicha <shartnoma> / <chek> ni tekshir". Hammasi Xon Tranzaksiyalar
 > loyihasi (`/var/www/xon_tranzactions`, panel `transactions.xonapps.uz`) uchun.
-> Yangilangan: 2026-09-29.
+> Yangilangan: 2026-09-30.
 
 ## 0. Sen kimsan va qoidalar
 
@@ -120,6 +120,9 @@ CRM'dagi haqiqiy raqam `224VHA26E4` (A va 4 aralashgan). Chekdagi qabul qiluvchi
 | OplatyKv'da bitta to'lov ikki qator (sana har xil) | Bank sanani ko'chirgan, eski qator yetim qolgan (dublikat) | Yetimni topish: `source_tx_id` tranzaksiyada yo'q. Zaxira + tombstone bilan o'chirish (egasi tasdig'i) |
 | OplatyKv qatori yo'qolgan | Qo'lda o'chirilgan | `GET /oplata-kv/:id/history` — kim, qachon o'chirgan |
 | CRM'da shartnoma "topilmadi" yoki bekor | Shartnoma bekor qilingan (trashed) yoki raqam xato | `/uz/check-crm` (bekor va qaytarim belgisi); kanonik raqam bilan qayta qidirish |
+| Billing'da **TOPILMAGAN**, lekin CRM'da shu summa bir necha kundan keyin **kompozit** Внешний ID bilan bor va bizda ham bor | Pul tushgan. XonPay to'lovi tushgach CRM'da ID UUID'dan kompozitga o'zgaradi, Billing'da esa eski UUID qatori "TOPILMAGAN" bo'lib qolib ketadi (Billing'dagi "Topilmagan" jami shu sabab oshib ko'rinadi) | "Kechikkan" dema. Haqiqiy kechikish faqat CRM'da hali ham **UUID** turgan to'lov |
+| **Yangi shartnoma** (1-3 kun oldin tuzilgan) bo'yicha bank to'lovi CRM'da ko'rinmaydi, bizda XATO'da | To'lov kelgan paytda CRM keshi yangi shartnomani hali "topilmadi" degan, to'lov XATO'ga tushgan va CRM'ga shartnomasiz ketgan | OplatyKv → XATO → CRM orqali biriktirish ("Qayta tekshir"); shundan keyin CRM'da ko'rinadi |
+| Bir nechta hisobda bir vaqtda "Puli o'tmayapti", sverka ko'p hisobda "biz tomonda" farq ko'rsatadi | Bank sync shu hisoblar bo'yicha ishlamayapti. Masalan bank **MFO**'ni o'zgartirgan, bizda eski MFO qolgan (hisob tizimda MFO + hisob raqami bilan saqlanadi) yoki bank paroli eskirgan | Admin → Sync tarixi va Banklar: hisobning MFO'si, oxirgi sync vaqti va xatosi; MFO'ni yangilab, o'tkazib yuborilgan sanalar bo'yicha qayta sync; keyin sverka |
 | Hech qaysi manbada yo'q | To'lov hali qilinmagan, boshqa hisobga ketgan yoki chekdagi ma'lumot noto'g'ri | Chekdagi hisob raqami (qabul qiluvchi) bizniki ekanini tekshir; nima bo'yicha qidirganingni aniq ayt |
 | Panelda o'zgarish ko'rinmaydi | Deploy yiqilgan (masalan `public` da begona jadval) yoki brauzer keshi | Deploy holati: `https://transactions.xonapps.uz/api/_deploy/status`; brauzerda Ctrl+Shift+R |
 
@@ -143,7 +146,10 @@ Yechim: <kim, qayerda, nima qiladi>
 ## 5. Tezkor vositalar
 
 **Telegram bot (@TRanSupport_bot):**
-- `/tolov <shartnoma>` — besh manba bo'yicha tezkor jadval.
+- `/tolov <shartnoma>` — oddiy tilda javob: Xulosa, 5 manba jadvali (CRM, Bank, OplatyKv, Sotuv hisoboti,
+  Debitorlik), Farqlar (sabab + "Nima qilish"), Guruhga javob.
+- `/tolov <XonPay UUID>` — XonPay to'lovini UUID bo'yicha topib, shartnomasini to'liq tekshiradi.
+- `/tolov <shartnoma> batafsil` — texnik tafsilot (farq kodlari, eksport sozlamasi, tarix).
 - Guruh xabarini forward qilib, ostiga "tekshir" — Checker solishtiradi, Leader tushuntiradi.
 
 **Serverda (root), ko'prik orqali panel bilan bir xil natija (OplatyKv + CRM + sheetlar):**
@@ -171,6 +177,19 @@ SELECT (txn_date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tashkent' AS sana, amoun
   FROM transactions
  WHERE contract_number ILIKE '%2592VTN26LM%' OR description ILIKE '%2592VTN26LM%'
  ORDER BY txn_date DESC LIMIT 50;
+
+-- Bank hisobi tizimda bormi, MFO, oxirgi sync (hisob raqamini chekdan oling)
+SELECT a.account_no, a.branch AS mfo, a.owner_name, a.sync_enabled, b.code AS bank,
+       (a.last_synced_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tashkent' AS oxirgi_sync
+  FROM bank_accounts a JOIN banks b ON b.id = a.bank_id
+ WHERE a.account_no = '20208000601024034002';
+
+-- Shu hisobning oxirgi sync natijalari
+SELECT (l.started_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tashkent' AS boshlandi, l.status, l.errors,
+       left(l.error_message, 120) AS xato
+  FROM sync_logs l JOIN bank_accounts a ON a.id = l.account_id
+ WHERE a.account_no = '20208000601024034002'
+ ORDER BY l.started_at DESC LIMIT 8;
 
 -- Tranzaksiya: chekdagi summa va sana bo'yicha (±3 kun)
 SELECT (txn_date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tashkent' AS sana, amount, status,
