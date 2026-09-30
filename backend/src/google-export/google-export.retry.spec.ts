@@ -112,6 +112,28 @@ describe('GoogleExportService.run (replace)', () => {
     expect(res.writtenRange).toBe('Лист1!A2:C3');
   });
 
+  it('ma\'lumot jadval oxirigacha to\'lgan (grid 3 qator) — tozalash CHAQIRILMAYDI, xato yo\'q', async () => {
+    // Real holat 30.09: 'Туловлар'!A270009:A — grid 270008 qator, Google "exceeds grid limits" dedi.
+    const order: string[] = [];
+    const api = makeApi(order);
+    const svc = makeService(api, [{ id: 'r1', paymentAmount: 10 }, { id: 'r2', paymentAmount: 5 }]);
+    jest.spyOn(svc as any, 'ensureGrid').mockResolvedValue(3); // startRow 2 + 2 qator = 3-qatorgacha
+    const res: any = await svc.run(target);
+    expect(res.ok).toBe(true);
+    expect(order).toEqual(['write']);
+    expect(res.clearedRanges).toEqual([]);
+  });
+
+  it('pastda eski qatorlar bor (grid 10) — faqat yozilganidan pastini tozalaydi', async () => {
+    const order: string[] = [];
+    const api = makeApi(order);
+    const svc = makeService(api, [{ id: 'r1', paymentAmount: 10 }, { id: 'r2', paymentAmount: 5 }]);
+    jest.spyOn(svc as any, 'ensureGrid').mockResolvedValue(10);
+    const res: any = await svc.run(target);
+    expect(order).toEqual(['write', 'clear']);
+    expect(api.spreadsheets.values.batchClear.mock.calls[0][0].requestBody.ranges).toEqual(["'Лист1'!A4:A", "'Лист1'!C4:C"]);
+  });
+
   it('0 qator — faqat startRow dan tozalaydi (avvalgi xulq)', async () => {
     const order: string[] = [];
     const api = makeApi(order);

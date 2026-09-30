@@ -749,23 +749,25 @@ export class GoogleExportService {
    * Grid chegarasidan tashqariga yozib bo'lmaydi ("exceeds grid limits" xatosi) —
    * shuning uchun kerak bo'lsa jadvalni oldindan kengaytiramiz (rowCount/columnCount oshiramiz).
    * Faqat o'stiradi, hech qачон kichraytirmaydi (mavjud ma'lumot yo'qolmaydi).
+   * Qaytaradi: amaldagi (kengaytirilgandan keyingi) qator soni; tab topilmasa null.
+   * neededRows=0, neededCols=0 — faqat qator sonini o'qish (hech narsa o'zgarmaydi).
    */
   private async ensureGrid(
     sheetsApi: any, spreadsheetId: string, tabName: string,
     neededRows: number, neededCols: number,
-  ): Promise<void> {
+  ): Promise<number | null> {
     const meta = await sheetsApi.spreadsheets.get({
       spreadsheetId,
       fields: 'sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))',
     });
     const sheet = (meta.data.sheets || []).find((s: any) => s.properties?.title === tabName);
-    if (!sheet?.properties) return; // tab topilmasa — keyingi bosqich aniq xato beradi
+    if (!sheet?.properties) return null; // tab topilmasa — keyingi bosqich aniq xato beradi
     const gp = sheet.properties.gridProperties || {};
     const curRows = Number(gp.rowCount || 0);
     const curCols = Number(gp.columnCount || 0);
     const wantRows = Math.max(curRows, Math.ceil(neededRows));
     const wantCols = Math.max(curCols, Math.ceil(neededCols));
-    if (wantRows <= curRows && wantCols <= curCols) return; // joy yetarli
+    if (wantRows <= curRows && wantCols <= curCols) return curRows; // joy yetarli
     await sheetsApi.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: {
@@ -781,6 +783,7 @@ export class GoogleExportService {
       },
     });
     this.log.log(`Grid kengaytirildi: "${tabName}" → ${wantRows} qator × ${wantCols} ustun`);
+    return wantRows;
   }
 
   /**
@@ -994,6 +997,7 @@ export class GoogleExportService {
         });
 
         step = 'write';
+        let gridRows: number | null | undefined; // jadvaldagi qator soni (tozalash chegarasi uchun)
         if (rows.length > 0) {
           const data = columns.map((c) => ({
             range: `${quotedTab}!${c.col}${startRow}`,
@@ -1002,7 +1006,7 @@ export class GoogleExportService {
           }));
           // Grid yetarli bo'lsin — "exceeds grid limits" xatosining oldini olamiz.
           const maxColIdx = Math.max(...columns.map((c) => this.colToIdx(c.col)));
-          await retry('grid', () => this.ensureGrid(sheetsApi, spreadsheetId, target.tabName, startRow + rows.length - 1, maxColIdx + 1));
+          gridRows = await retry('grid', () => this.ensureGrid(sheetsApi, spreadsheetId, target.tabName, startRow + rows.length - 1, maxColIdx + 1));
           await retry('yozish', () => sheetsApi.spreadsheets.values.batchUpdate({
             spreadsheetId,
             requestBody: { valueInputOption: 'USER_ENTERED', data },
@@ -1012,13 +1016,22 @@ export class GoogleExportService {
         }
 
         // Yozilgan qatorlardan PASTDAGI eski qoldiqni tozalaymiz (qatorlar kamaygan bo'lsa).
+        // Ma'lumot jadvalning oxirgi qatorigacha to'lgan bo'lsa pastda qator YO'Q — Google grid'dan
+        // tashqaridagi diapazonni rad etadi ("exceeds grid limits"), shuning uchun tozalash kerak emas.
         step = 'clear';
         const tailStart = startRow + rows.length;
-        await retry('tozalash', () => sheetsApi.spreadsheets.values.batchClear({
-          spreadsheetId,
-          requestBody: { ranges: columns.map((c) => `${quotedTab}!${c.col}${tailStart}:${c.col}`) },
-        }));
-        clearedRanges = columns.map((c) => `${target.tabName}!${c.col}${tailStart}:${c.col}`);
+        if (rows.length === 0) {
+          gridRows = await retry('grid', () => this.ensureGrid(sheetsApi, spreadsheetId, target.tabName, 0, 0));
+        }
+        if (typeof gridRows === 'number' && tailStart > gridRows) {
+          clearedRanges = []; // pastda tozalanadigan qator yo'q
+        } else {
+          await retry('tozalash', () => sheetsApi.spreadsheets.values.batchClear({
+            spreadsheetId,
+            requestBody: { ranges: columns.map((c) => `${quotedTab}!${c.col}${tailStart}:${c.col}`) },
+          }));
+          clearedRanges = columns.map((c) => `${target.tabName}!${c.col}${tailStart}:${c.col}`);
+        }
         // REPLACE ham yozgan kalitlarini eslaydi — keyin filtrlangan UPSERT'da
         // eski (filtrga tushmagan) qatorlarni tozalay olsin.
         const keyF = target.keyField || columns.find((c) => c.field === 'id' || c.field === 'externalId')?.field || columns[0]?.field;
