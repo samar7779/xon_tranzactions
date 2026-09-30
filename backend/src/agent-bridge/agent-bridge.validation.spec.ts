@@ -146,6 +146,10 @@ describe('xato-ariza validatsiya', () => {
   it('submit: oplataKvId cuid, fayl faqat leader_bot_<hex>.<ext>, yubordi majburiy', () => {
     const ok = { oplataKvId: 'ck3q9x0000abcd0000abcd', contractNo: '467RMZ26HA', fayl: 'leader_bot_0123456789abcdef.jpg', yubordi: 'TR Support · Samar' };
     expect(parseArizaSubmit(ok)).toEqual(ok);
+    // sync qatorlari: OplatyKv id = bank kompozit ID (real holat 30.09: 400 berardi)
+    const komp = '6614176749_99517844_29.09.2026_20208000205720456001_17409000900001158111_710000000_-';
+    expect(parseArizaSubmit({ ...ok, oplataKvId: komp }).oplataKvId).toBe(komp);
+    expect(() => parseArizaSubmit({ ...ok, fayl: 'x.jpg' })).toThrow("ariza fayli nomi noto'g'ri");
     for (const bad of [{ ...ok, fayl: '../x.jpg' }, { ...ok, fayl: 'leader_bot_0123456789abcdef.pdf' }, { ...ok, oplataKvId: 'X Y' },
       { ...ok, yubordi: '' }, { ...ok, contractNo: '' }, null]) {
       expect(() => parseArizaSubmit(bad)).toThrow(BadRequestException);

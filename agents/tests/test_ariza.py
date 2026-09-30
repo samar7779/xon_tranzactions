@@ -17,7 +17,8 @@ from agents.tests.test_tuzatish import _Base
 
 FAYL = "leader_bot_0123456789abcdef.jpg"
 TXF = "6614176749_99517844_29.09.2026_20208000205720456001_17409000900001158111_710000000_-"
-KAND = {"oplataKvId": "ck3q9x0000abcd0000abcd", "txId": TXF, "date": "2026-09-29", "amount": 7100000,
+# sync qatori: OplatyKv id = bank kompozit ID
+KAND = {"oplataKvId": TXF, "txId": TXF, "date": "2026-09-29", "amount": 7100000,
         "contractNo": "467RZM26HA", "client": None, "purpose": "Suyunova Karomat Faxriddin Qizi uy joy", "toAccount":
         "20208000205720456001", "fromAccount": None, "direction": "IN", "pending": None}
 CRM = {"contract": "467RMZ26HA", "found": True, "customerName": "СУЮНОВА КАРОМАТ ФАХРИДДИН КИЗИ", "objectName": "RMZ"}
@@ -80,7 +81,8 @@ class ArizaOqimTest(_Base):
         self.assertEqual(c["q"], {"summa": ["7100000"], "sana": ["2026-09-29"], "hisob": ["20208000205720456001"],
                                   "shartnoma": ["467RMZ26HA"]})
         t = [x for x in self.out.sent if x.get("keyboard")][-1]["text"]
-        for frag in ("XATO to'lovga ariza", "<code>%s</code>" % TXF, "Hozir: shartnoma 467RZM26HA (XATO)",
+        for frag in ("XATO to'lovga ariza", "To'lov: 29.09.2026 · 7 100 000 so'm", "<code>%s</code>" % TXF,
+                     "Hozir: shartnoma 467RZM26HA (XATO)",
                      "Yangi shartnoma: <b>467RMZ26HA</b>", "CRM mijozi bilan mos", "boshqa obyektda (RZM, yangisi RMZ)",
                      "Shomurad AI arizani xodimga yuborishi mumkin", "TR Support · Samar", "\"tasdiqlayman\""):
             self.assertIn(frag, t)

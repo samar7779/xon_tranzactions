@@ -115,10 +115,13 @@ def _qisqa_izoh(s: Any, n: int = 160) -> str:
 def preview_html(k: Dict[str, Any], crm: Dict[str, Any], a: Ariza, hisob_mos: Optional[bool], ai: str,
                  yubordi: str) -> str:
     e = TZ._e
+    d = re.match(r"^(\d{4})-(\d{2})-(\d{2})", str(k.get("date") or ""))
+    sana = "%s.%s.%s" % (d.group(3), d.group(2), d.group(1)) if d else (k.get("date") or "-")
     q = ["<b>XATO to'lovga ariza</b> — tasdiqlang", "",
-         "To'lov: %s · %s so'm" % (e(k.get("date") or "-"), e(TZ._pul(k.get("amount")))),
+         "To'lov: %s · %s so'm" % (e(sana), e(TZ._pul(k.get("amount")))),
          "ID: <code>%s</code>" % e(k.get("txId") or "-"),
-         "Hozir: shartnoma %s (XATO)" % e(k.get("contractNo") or "yo'q")]
+         "Hozir: shartnoma %s" % e(k.get("contractNo") or "yo'q") + ("" if str(k.get("contractNo") or "").upper() == "XATO"
+                                                                     else " (XATO)")]
     if k.get("purpose"):
         q.append("Izoh: " + e(_qisqa_izoh(k.get("purpose"))))
     q += ["", "Yangi shartnoma: <b>%s</b>" % e(crm.get("contract")),
