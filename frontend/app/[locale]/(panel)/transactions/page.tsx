@@ -21,7 +21,6 @@ import {
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { IdInspectorDialog } from '@/components/id-inspector-dialog';
-import { TrSupportTab } from '@/components/tr-support-tab';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
 import { TimeDiagnosticsDialog } from '@/components/time-diagnostics-dialog';
 import { PurposeInfoButton, PurposeModal } from '@/components/purpose-modal';
@@ -2120,7 +2119,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const tc = useTranslations('common');
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected' | 'raw' | 'trsupport'>('pending');
+  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected' | 'raw'>('pending');
 
   // ── Raw (Barcha XATO) — mavjud tab holati ──
   const [rawPage, setRawPage] = useState(1);
@@ -2534,7 +2533,6 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <TabBtn id="approved" icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Tasdiqlangan" count={stats?.approved} />
             <TabBtn id="rejected" icon={<XCircle className="h-3.5 w-3.5" />} label="Rad etilgan" />
             <TabBtn id="raw" icon={<AlertCircle className="h-3.5 w-3.5" />} label="Barcha XATO" />
-            <TabBtn id="trsupport" icon={<Bot className="h-3.5 w-3.5" />} label="TR Support" />
           </div>
         </div>
 
@@ -2966,9 +2964,6 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <Pager page={rawPage} total={rawTotal} onPrev={() => setRawPage((p) => Math.max(1, p - 1))} onNext={() => setRawPage((p) => p + 1)} />
           </>
         )}
-
-        {/* ═══ TAB: TR SUPPORT — agent (Telegram) orqali qilingan tahrirlar, kirish kodi bilan ═══ */}
-        {tab === 'trsupport' && <TrSupportTab />}
 
         {/* Footer — Yopish */}
         <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-end shrink-0">
