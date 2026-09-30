@@ -829,6 +829,46 @@ export class XonpayService implements OnModuleInit {
     return true;
   }
 
+  /**
+   * DUBLIKAT (initsiatsiya yozuvi) larni belgilaydi.
+   *
+   * CRM bitta XonPay to'lovini ikki marta yozadi:
+   *   1) mijoz to'lovni boshlaganda — external_id = UUID, purpose bo'sh;
+   *   2) pul bankdan kelganda — external_id = bank kompozit ID, purpose bor.
+   * Ikkinchisi UUID orqali moslashadi, birinchisi esa hech qachon moslashmaydi
+   * (unda qidiradigan UUID yo'q) va "topilmagan" hisobini ikki karra shishiradi.
+   *
+   * Juftlik belgisi — `crm_created_at` + shartnoma + summa AYNAN mos kelishi,
+   * ustiga struktura sharti: initsiatsiya yozuvining ID si UUID ko'rinishida,
+   * haqiqiy yozuvniki esa UUID EMAS. Bu ikkisi birga noto'g'ri belgilash
+   * ehtimolini deyarli nolga tushiradi (bir soniyada bir xil summali ikkita
+   * alohida to'lov bo'lsa ham, ikkalasining ID si UUID bo'lardi).
+   */
+  async markDuplicates(): Promise<{ ok: true; marked: number }> {
+    const UUID_RE = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+    const marked = await this.prisma.$executeRawUnsafe(
+      `
+      UPDATE xonpay_transactions a
+         SET is_duplicate = true,
+             duplicate_of = b.external_id
+        FROM xonpay_transactions b
+       WHERE a.is_matched = false
+         AND a.is_duplicate = false
+         AND (a.purpose IS NULL OR a.purpose = '')
+         AND a.external_id ~ $1
+         AND a.crm_created_at IS NOT NULL
+         AND b.is_matched = true
+         AND b.external_id !~ $1
+         AND b.crm_created_at = a.crm_created_at
+         AND b.amount = a.amount
+         AND b.contract IS NOT DISTINCT FROM a.contract
+      `,
+      UUID_RE,
+    );
+    this.log.log(`xonpay markDuplicates: ${marked} ta initsiatsiya yozuvi dublikat deb belgilandi`);
+    return { ok: true, marked };
+  }
+
   /** Bita externalId uchun majburiy recheck (API) */
   async recheckOne(externalId: string): Promise<{ ok: true; matched: boolean }> {
     const ok = await this.tryMatchOne(externalId);
@@ -874,6 +914,12 @@ export class XonpayService implements OnModuleInit {
         }
         this.matchProgress.done++;
       }
+
+      // Moslashtirishdan keyin — juftligi topilgan initsiatsiya yozuvlarini
+      // dublikat deb belgilaymiz, aks holda ular "topilmagan" hisobini shishiradi.
+      await this.markDuplicates().catch((e: any) =>
+        this.log.warn(`markDuplicates xato: ${e?.message}`),
+      );
     } finally {
       this.matchRunning = false;
     }
@@ -894,10 +940,15 @@ export class XonpayService implements OnModuleInit {
     dateTo?: string;
     matched?: 'all' | 'matched' | 'unmatched';
     received?: 'all' | 'yes' | 'no';
+    duplicate?: 'hide' | 'only' | 'all';
     q?: string;
     contract?: string;
   }): any {
     const where: any = {};
+    // Dublikat (initsiatsiya yozuvi) — standart holda YASHIRILADI, chunki u
+    // haqiqiy to'lov emas, o'sha to'lovning ikkinchi nusxasi.
+    if (opts.duplicate === 'only') where.isDuplicate = true;
+    else if (opts.duplicate !== 'all') where.isDuplicate = false;
     if (opts.dateFrom || opts.dateTo) {
       where.datePaid = {};
       if (opts.dateFrom) where.datePaid.gte = new Date(opts.dateFrom);
@@ -926,6 +977,7 @@ export class XonpayService implements OnModuleInit {
     dateTo?: string;
     matched?: 'all' | 'matched' | 'unmatched';
     received?: 'all' | 'yes' | 'no';
+    duplicate?: 'hide' | 'only' | 'all';
     q?: string;
     contract?: string;
   }) {
@@ -976,6 +1028,7 @@ export class XonpayService implements OnModuleInit {
     dateTo?: string;
     matched?: 'all' | 'matched' | 'unmatched';
     received?: 'all' | 'yes' | 'no';
+    duplicate?: 'hide' | 'only' | 'all';
     q?: string;
     contract?: string;
   }): Promise<{ buffer: Buffer; filename: string; count: number }> {
@@ -1018,6 +1071,7 @@ export class XonpayService implements OnModuleInit {
       { h: 'CRM ID', w: 12 },
       { h: 'Order ID', w: 12 },
       { h: 'Izoh', w: 50 },
+      { h: 'Dublikat', w: 10 },
     ];
     ws.columns = HEAD.map((c) => ({ width: c.w }));
 
@@ -1063,6 +1117,7 @@ export class XonpayService implements OnModuleInit {
       row.getCell(16).value = x.crmId != null ? x.crmId.toString() : null;
       row.getCell(17).value = x.orderId != null ? x.orderId.toString() : null;
       row.getCell(18).value = x.purpose;
+      row.getCell(19).value = ha(x.isDuplicate);
     }
 
     // Jami qatori
@@ -1104,9 +1159,11 @@ export class XonpayService implements OnModuleInit {
       if (opts.dateFrom) where.datePaid.gte = new Date(opts.dateFrom);
       if (opts.dateTo) where.datePaid.lte = new Date(opts.dateTo);
     }
-    // groupBy datePaid + isMatched
+    // groupBy datePaid + isMatched + isDuplicate.
+    // Dublikat = CRM ning initsiatsiya yozuvi, haqiqiy to'lov emas — u na jamiga,
+    // na "qolgan"ga qo'shiladi, alohida ko'rsatiladi.
     const grouped = await this.prisma.xonpayTransaction.groupBy({
-      by: ['datePaid', 'isMatched'],
+      by: ['datePaid', 'isMatched', 'isDuplicate'],
       where,
       _count: true,
       _sum: { amount: true, matchedAmount: true },
@@ -1124,15 +1181,23 @@ export class XonpayService implements OnModuleInit {
         matchedAmount: 0n,
         missingCount: 0,
         missingAmount: 0n,
+        duplicateCount: 0,
+        duplicateAmount: 0n,
       };
-      row.totalCount += g._count;
-      row.totalAmount += g._sum.amount || 0n;
-      if (g.isMatched) {
-        row.matchedCount += g._count;
-        row.matchedAmount += g._sum.amount || 0n;
+      if (g.isDuplicate) {
+        // Initsiatsiya nusxasi — jamiga ham, qolganga ham kirmaydi
+        row.duplicateCount += g._count;
+        row.duplicateAmount += g._sum.amount || 0n;
       } else {
-        row.missingCount += g._count;
-        row.missingAmount += g._sum.amount || 0n;
+        row.totalCount += g._count;
+        row.totalAmount += g._sum.amount || 0n;
+        if (g.isMatched) {
+          row.matchedCount += g._count;
+          row.matchedAmount += g._sum.amount || 0n;
+        } else {
+          row.missingCount += g._count;
+          row.missingAmount += g._sum.amount || 0n;
+        }
       }
       byDay.set(dateKey, row);
     }
@@ -1147,6 +1212,8 @@ export class XonpayService implements OnModuleInit {
         matchedAmount: r.matchedAmount.toString(),
         missingCount: r.missingCount,
         missingAmount: r.missingAmount.toString(),
+        duplicateCount: r.duplicateCount,
+        duplicateAmount: r.duplicateAmount.toString(),
       }));
 
     // Umumiy
@@ -1158,8 +1225,13 @@ export class XonpayService implements OnModuleInit {
         matchedAmount: acc.matchedAmount + BigInt(r.matchedAmount),
         missingCount: acc.missingCount + r.missingCount,
         missingAmount: acc.missingAmount + BigInt(r.missingAmount),
+        duplicateCount: acc.duplicateCount + r.duplicateCount,
+        duplicateAmount: acc.duplicateAmount + BigInt(r.duplicateAmount),
       }),
-      { totalCount: 0, totalAmount: 0n, matchedCount: 0, matchedAmount: 0n, missingCount: 0, missingAmount: 0n },
+      {
+        totalCount: 0, totalAmount: 0n, matchedCount: 0, matchedAmount: 0n,
+        missingCount: 0, missingAmount: 0n, duplicateCount: 0, duplicateAmount: 0n,
+      },
     );
 
     return {
@@ -1169,6 +1241,7 @@ export class XonpayService implements OnModuleInit {
         totalAmount: summary.totalAmount.toString(),
         matchedAmount: summary.matchedAmount.toString(),
         missingAmount: summary.missingAmount.toString(),
+        duplicateAmount: summary.duplicateAmount.toString(),
       },
       days,
     };

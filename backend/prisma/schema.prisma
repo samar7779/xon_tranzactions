@@ -316,6 +316,38 @@ model XatoCorrectionRequest {
   @@map("xato_correction_requests")
 }
 
+// TR Support: Telegram agenti (@TRanSupport_bot) orqali egasi tasdig'i bilan qilingan to'lov tahrirlari
+// (Kontragent = top kategoriya, Kategoriya = subkategoriya, Shartnoma). Har qator — bitta tranzaksiya;
+// bir tasdiqdagi bir nechta tahrir bitta batchId. "Ortga qaytarish" before holatini tiklaydi.
+model TrSupportEdit {
+  id           String    @id @default(cuid())
+  batchId      String    @map("batch_id") @db.VarChar(40)
+  txId         String    @map("tx_id")
+  txExternalId String?   @map("tx_external_id") @db.VarChar(255)
+  txDate       DateTime? @map("tx_date")
+  amount       Decimal?  @db.Decimal(18, 2)
+  direction    String?   @db.VarChar(8)
+  // {categoryId, categoryCode, categoryName, subcategoryId, subcategoryCode, subcategoryName, contractNumber, isContractManual}
+  before       Json
+  after        Json
+  changed      String[]  // kontragent | kategoriya | shartnoma
+  approvedBy   String    @map("approved_by") @db.VarChar(120)  // kim tasdiqladi (egasi aytgan ism)
+  comment      String?   @db.Text                               // izoh: nima uchun
+  requestedBy  String?   @map("requested_by") @db.VarChar(120) // qayerdan: "Telegram egasi"
+  status       String    @default("applied") @db.VarChar(20)   // applied | failed | rolled_back
+  error        String?   @db.Text
+  syncResult   Json?     @map("sync_result")
+  rolledBackAt DateTime? @map("rolled_back_at")
+  rolledBackBy String?   @map("rolled_back_by") @db.VarChar(120)
+  rollbackNote String?   @map("rollback_note") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([txId])
+  @@index([batchId])
+  @@map("tr_support_edits")
+}
+
 // AI Agent chat tarixi (admin bilan suhbat)
 model AgentChatMessage {
   id        String   @id @default(cuid())
@@ -651,6 +683,16 @@ model XonpayTransaction {
   matchedAt         DateTime?    @map("matched_at")
   lastCheckedAt     DateTime?    @map("last_checked_at")
 
+  // ── DUBLIKAT (XonPay initsiatsiya yozuvi) ──
+  // CRM bitta to'lovni IKKI marta yozadi: (1) mijoz to'lovni boshlaganda —
+  // external_id = UUID, purpose bo'sh, pul hali kelmagan; (2) pul bankdan
+  // kelganda — external_id = bank kompozit ID, purpose bor. Ikkinchisi
+  // moslashadi, birinchisi esa abadiy "topilmagan" bo'lib qolardi va hisobni
+  // ikki karra ko'rsatardi. Juftligi topilgan initsiatsiya yozuvi shu yerda
+  // belgilanadi va "qolgan" hisobidan chiqariladi (o'chirilmaydi).
+  isDuplicate       Boolean      @default(false) @map("is_duplicate")
+  duplicateOf       String?      @map("duplicate_of") @db.VarChar(255) // juft yozuvning external_id si
+
   syncedAt  DateTime @default(now()) @map("synced_at")
   updatedAt DateTime @updatedAt @map("updated_at_local")
 
@@ -659,6 +701,8 @@ model XonpayTransaction {
   @@index([xonpayUuid])
   @@index([isMatched, datePaid])
   @@index([matchedTxId])
+  @@index([isDuplicate])
+  @@index([crmCreatedAt])
   @@map("xonpay_transactions")
 }
 

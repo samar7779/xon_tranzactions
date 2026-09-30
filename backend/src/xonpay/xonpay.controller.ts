@@ -179,6 +179,7 @@ export class XonpayController {
     @Query('dateTo') dateTo?: string,
     @Query('matched') matched?: 'all' | 'matched' | 'unmatched',
     @Query('received') received?: 'all' | 'yes' | 'no',
+    @Query('duplicate') duplicate?: 'hide' | 'only' | 'all',
     @Query('q') q?: string,
     @Query('contract') contract?: string,
   ) {
@@ -189,9 +190,24 @@ export class XonpayController {
       dateTo,
       matched: matched || 'all',
       received: received || 'all',
+      duplicate: duplicate || 'hide',
       q,
       contract,
     });
+  }
+
+  @Post('admin/mark-duplicates')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: "Dublikat (XonPay initsiatsiya) yozuvlarini belgilash",
+    description:
+      "CRM bitta to'lovni ikki marta yozadi: initsiatsiya (UUID id, izohsiz) va " +
+      "bankdan kelgani (kompozit id, izohli). Juftligi topilgan initsiatsiya " +
+      "yozuvi dublikat deb belgilanadi va 'qolgan' hisobidan chiqariladi. " +
+      "Hech narsa o'chirilmaydi. Moslashtirishdan keyin avtomat ham ishlaydi.",
+  })
+  markDuplicates() {
+    return this.svc.markDuplicates();
   }
 
   @Get('export.xlsx')
@@ -208,11 +224,13 @@ export class XonpayController {
     @Query('dateTo') dateTo?: string,
     @Query('matched') matched?: 'all' | 'matched' | 'unmatched',
     @Query('received') received?: 'all' | 'yes' | 'no',
+    @Query('duplicate') duplicate?: 'hide' | 'only' | 'all',
     @Query('q') q?: string,
     @Query('contract') contract?: string,
   ) {
     const { buffer, filename } = await this.svc.exportXlsx({
-      dateFrom, dateTo, matched: matched || 'all', received: received || 'all', q, contract,
+      dateFrom, dateTo, matched: matched || 'all', received: received || 'all',
+      duplicate: duplicate || 'hide', q, contract,
     });
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

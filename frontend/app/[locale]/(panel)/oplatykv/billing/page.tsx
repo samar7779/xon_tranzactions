@@ -52,8 +52,8 @@ interface SyncStatus {
 }
 interface DailyStats {
   ok: true;
-  summary: { totalCount: number; totalAmount: string; matchedCount: number; matchedAmount: string; missingCount: number; missingAmount: string };
-  days: Array<{ date: string; totalCount: number; totalAmount: string; matchedCount: number; matchedAmount: string; missingCount: number; missingAmount: string }>;
+  summary: { totalCount: number; totalAmount: string; matchedCount: number; matchedAmount: string; missingCount: number; missingAmount: string; duplicateCount?: number; duplicateAmount?: string };
+  days: Array<{ date: string; totalCount: number; totalAmount: string; matchedCount: number; matchedAmount: string; missingCount: number; missingAmount: string; duplicateCount?: number; duplicateAmount?: string }>;
 }
 interface XonpayRow {
   externalId: string;
@@ -92,6 +92,9 @@ export default function BilingPage() {
   // XonPay'ning o'z belgisi: pul bankdan kelganmi (is_received_from_bank).
   // Topilmaganlarning ko'pchiligi hali kelmagan to'lovlar — shuni ajratish uchun.
   const [received, setReceived] = useState<'all' | 'yes' | 'no'>('all');
+  // CRM bitta to'lovni ikki marta yozadi (initsiatsiya + bankdan kelgani).
+  // Initsiatsiya nusxasi dublikat deb belgilanadi va standart holda yashiriladi.
+  const [duplicate, setDuplicate] = useState<'hide' | 'only' | 'all'>('hide');
   const [excelYuklanmoqda, setExcelYuklanmoqda] = useState(false);
 
   // Collapsible holatlar (default yopiq — bosgnda ochiladi)
@@ -169,16 +172,16 @@ export default function BilingPage() {
     queryFn: () => api.get(`/xonpay/stats/daily?dateFrom=${dateFrom}&dateTo=${dateTo}`),
   });
 
-  const params = new URLSearchParams({ page: String(page), perPage: String(perPage), dateFrom, dateTo, matched, received });
+  const params = new URLSearchParams({ page: String(page), perPage: String(perPage), dateFrom, dateTo, matched, received, duplicate });
   if (debouncedQ) params.set('q', debouncedQ);
   const listQuery = useQuery<{ ok: true; total: number; items: XonpayRow[] }>({
-    queryKey: ['xonpay-list', page, perPage, dateFrom, dateTo, matched, received, debouncedQ],
+    queryKey: ['xonpay-list', page, perPage, dateFrom, dateTo, matched, received, duplicate, debouncedQ],
     queryFn: () => api.get(`/xonpay?${params.toString()}`),
   });
 
   /** Jadvaldagi filtrlar bo'yicha Excel yuklab olish (sahifalashsiz — hammasi). */
   async function excelYuklab() {
-    const p = new URLSearchParams({ dateFrom, dateTo, matched, received });
+    const p = new URLSearchParams({ dateFrom, dateTo, matched, received, duplicate });
     if (debouncedQ) p.set('q', debouncedQ);
     const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     const token = typeof window !== 'undefined' ? window.localStorage.getItem('xt_token') : null;
@@ -322,6 +325,9 @@ export default function BilingPage() {
             icon={<AlertCircle className="h-4 w-4" />}
             loading={statsQuery.isLoading}
             countLabel={t('paymentsCount', { n: fmt(summary?.missingCount || 0) })}
+            extra={summary?.duplicateCount
+              ? `${fmt(summary.duplicateCount)} ta dublikat hisobdan chiqarildi`
+              : undefined}
           />
         </div>
 
@@ -720,6 +726,14 @@ export default function BilingPage() {
                     <SelectItem value="all">Bankdan: hammasi</SelectItem>
                     <SelectItem value="yes">Bankdan kelgan</SelectItem>
                     <SelectItem value="no">Bankdan kelmagan</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={duplicate} onValueChange={(v: any) => { setDuplicate(v); setPage(1); }}>
+                  <SelectTrigger className="h-9 w-52 text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hide">Dublikatsiz</SelectItem>
+                    <SelectItem value="only">Faqat dublikat</SelectItem>
+                    <SelectItem value="all">Dublikat bilan</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
