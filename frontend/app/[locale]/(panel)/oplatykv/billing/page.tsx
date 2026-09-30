@@ -12,6 +12,7 @@ import {
   TrendingUp, Hash, Calendar, ExternalLink, Play, X, History, Zap,
   Receipt, Activity, ChevronLeft, ChevronRight, Eye, Copy, FileSearch,
   ChevronDown, ChevronUp, Home, ScanLine, Trash2, ArrowUpRight, ArrowDownLeft,
+  Sheet as SheetIcon,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -88,6 +89,10 @@ export default function BilingPage() {
 
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(today);
+  // XonPay'ning o'z belgisi: pul bankdan kelganmi (is_received_from_bank).
+  // Topilmaganlarning ko'pchiligi hali kelmagan to'lovlar — shuni ajratish uchun.
+  const [received, setReceived] = useState<'all' | 'yes' | 'no'>('all');
+  const [excelYuklanmoqda, setExcelYuklanmoqda] = useState(false);
 
   // Collapsible holatlar (default yopiq — bosgnda ochiladi)
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -164,12 +169,43 @@ export default function BilingPage() {
     queryFn: () => api.get(`/xonpay/stats/daily?dateFrom=${dateFrom}&dateTo=${dateTo}`),
   });
 
-  const params = new URLSearchParams({ page: String(page), perPage: String(perPage), dateFrom, dateTo, matched });
+  const params = new URLSearchParams({ page: String(page), perPage: String(perPage), dateFrom, dateTo, matched, received });
   if (debouncedQ) params.set('q', debouncedQ);
   const listQuery = useQuery<{ ok: true; total: number; items: XonpayRow[] }>({
-    queryKey: ['xonpay-list', page, perPage, dateFrom, dateTo, matched, debouncedQ],
+    queryKey: ['xonpay-list', page, perPage, dateFrom, dateTo, matched, received, debouncedQ],
     queryFn: () => api.get(`/xonpay?${params.toString()}`),
   });
+
+  /** Jadvaldagi filtrlar bo'yicha Excel yuklab olish (sahifalashsiz — hammasi). */
+  async function excelYuklab() {
+    const p = new URLSearchParams({ dateFrom, dateTo, matched, received });
+    if (debouncedQ) p.set('q', debouncedQ);
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('xt_token') : null;
+    setExcelYuklanmoqda(true);
+    try {
+      const r = await fetch(`${base}/xonpay/export.xlsx?${p.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) throw new Error(`Status ${r.status}`);
+      const nomi = r.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1]
+        || `xonpay_${dateFrom}_${dateTo}.xlsx`;
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nomi;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Excel yuklab olindi');
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklab bo‘lmadi');
+    } finally {
+      setExcelYuklanmoqda(false);
+    }
+  }
 
   // ── Mutations ──
   const startSyncMut = useMutation({
@@ -678,6 +714,27 @@ export default function BilingPage() {
                 <Input type="date" value={dateFrom} max={dateTo} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-9 w-36 text-[12px]" />
                 <span className="text-slate-400 dark:text-slate-500 text-xs">—</span>
                 <Input type="date" value={dateTo} min={dateFrom} max={today} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-9 w-36 text-[12px]" />
+                <Select value={received} onValueChange={(v: any) => { setReceived(v); setPage(1); }}>
+                  <SelectTrigger className="h-9 w-48 text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Bankdan: hammasi</SelectItem>
+                    <SelectItem value="yes">Bankdan kelgan</SelectItem>
+                    <SelectItem value="no">Bankdan kelmagan</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-[12px] gap-1.5"
+                  onClick={excelYuklab}
+                  disabled={excelYuklanmoqda}
+                  title="Jadvaldagi filtrlar bo'yicha barcha qatorlarni Excel qilib yuklab olish"
+                >
+                  {excelYuklanmoqda
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <SheetIcon className="h-3.5 w-3.5" />}
+                  Excel
+                </Button>
               </div>
             </div>
 

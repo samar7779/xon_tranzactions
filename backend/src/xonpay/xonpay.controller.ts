@@ -1,6 +1,7 @@
 // Backend rebuild marker: xonpay v3 (cron/toggle endpoint)
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -177,6 +178,7 @@ export class XonpayController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('matched') matched?: 'all' | 'matched' | 'unmatched',
+    @Query('received') received?: 'all' | 'yes' | 'no',
     @Query('q') q?: string,
     @Query('contract') contract?: string,
   ) {
@@ -186,9 +188,38 @@ export class XonpayController {
       dateFrom,
       dateTo,
       matched: matched || 'all',
+      received: received || 'all',
       q,
       contract,
     });
+  }
+
+  @Get('export.xlsx')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: 'XonPay ro\'yxatini Excel qilib yuklab olish (paneldagi filtrlar bilan)',
+    description:
+      "matched=all|matched|unmatched, received=all|yes|no (bankdan kelganmi), " +
+      "dateFrom/dateTo, q, contract. Sahifalash yo'q — filtrga tushgan hamma qator.",
+  })
+  async exportXlsx(
+    @Res() res: Response,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('matched') matched?: 'all' | 'matched' | 'unmatched',
+    @Query('received') received?: 'all' | 'yes' | 'no',
+    @Query('q') q?: string,
+    @Query('contract') contract?: string,
+  ) {
+    const { buffer, filename } = await this.svc.exportXlsx({
+      dateFrom, dateTo, matched: matched || 'all', received: received || 'all', q, contract,
+    });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
   }
 
   @Get('stats/daily')

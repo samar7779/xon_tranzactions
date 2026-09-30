@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
 import { Prisma } from '@prisma/client';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
 
@@ -882,17 +883,20 @@ export class XonpayService implements OnModuleInit {
   //  LIST / STATS
   // ════════════════════════════════════════════════════
 
-  async list(opts: {
-    page?: number;
-    perPage?: number;
+  /**
+   * List va Excel eksport uchun umumiy filtr.
+   * `received` — XonPay'ning o'z belgisi (is_received_from_bank): pul bankdan
+   * kelganmi. Topilmaganlarning ko'pchiligi aslida hali kelmagan to'lovlar,
+   * shuning uchun ularni ajratib olish kerak bo'ladi.
+   */
+  private buildListWhere(opts: {
     dateFrom?: string;
     dateTo?: string;
     matched?: 'all' | 'matched' | 'unmatched';
+    received?: 'all' | 'yes' | 'no';
     q?: string;
     contract?: string;
-  }) {
-    const page = opts.page || 1;
-    const perPage = Math.min(opts.perPage || 50, 500);
+  }): any {
     const where: any = {};
     if (opts.dateFrom || opts.dateTo) {
       where.datePaid = {};
@@ -901,6 +905,8 @@ export class XonpayService implements OnModuleInit {
     }
     if (opts.matched === 'matched') where.isMatched = true;
     if (opts.matched === 'unmatched') where.isMatched = false;
+    if (opts.received === 'yes') where.isReceivedFromBank = true;
+    if (opts.received === 'no') where.isReceivedFromBank = false;
     if (opts.contract) where.contract = opts.contract;
     if (opts.q) {
       where.OR = [
@@ -910,6 +916,22 @@ export class XonpayService implements OnModuleInit {
         { externalId: { contains: opts.q } },
       ];
     }
+    return where;
+  }
+
+  async list(opts: {
+    page?: number;
+    perPage?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    matched?: 'all' | 'matched' | 'unmatched';
+    received?: 'all' | 'yes' | 'no';
+    q?: string;
+    contract?: string;
+  }) {
+    const page = opts.page || 1;
+    const perPage = Math.min(opts.perPage || 50, 500);
+    const where = this.buildListWhere(opts);
 
     const [total, items] = await Promise.all([
       this.prisma.xonpayTransaction.count({ where }),
@@ -943,6 +965,135 @@ export class XonpayService implements OnModuleInit {
         matchedTx: x.matchedTx ? { ...x.matchedTx, amount: x.matchedTx.amount.toString() } : null,
       })),
     };
+  }
+
+  /**
+   * Ro'yxatni Excel (.xlsx) qilib beradi — paneldagi filtrlar bilan bir xil.
+   * Sahifalash yo'q: filtrga tushgan HAMMA qator faylga kiradi (chegara MAX_ROWS).
+   */
+  async exportXlsx(opts: {
+    dateFrom?: string;
+    dateTo?: string;
+    matched?: 'all' | 'matched' | 'unmatched';
+    received?: 'all' | 'yes' | 'no';
+    q?: string;
+    contract?: string;
+  }): Promise<{ buffer: Buffer; filename: string; count: number }> {
+    const MAX_ROWS = 100_000;
+    const where = this.buildListWhere(opts);
+
+    const rows = await this.prisma.xonpayTransaction.findMany({
+      where,
+      orderBy: [
+        { datePaid: 'desc' as Prisma.SortOrder },
+        { amount: 'desc' as Prisma.SortOrder },
+      ],
+      take: MAX_ROWS,
+      include: {
+        matchedTx: { select: { externalId: true, txnDate: true, amount: true } },
+      },
+    });
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('XonPay');
+
+    const HEAD: Array<{ h: string; w: number }> = [
+      { h: "To'lov sanasi", w: 13 },
+      { h: 'Shartnoma', w: 16 },
+      { h: 'Mijoz', w: 32 },
+      { h: 'Obyekt', w: 22 },
+      { h: 'Summa', w: 16 },
+      { h: 'Turi', w: 18 },
+      { h: 'Kategoriya', w: 18 },
+      { h: 'Status', w: 14 },
+      { h: 'Topilgan', w: 11 },
+      { h: 'Bankdan kelgan', w: 15 },
+      { h: 'Muammoli', w: 10 },
+      { h: 'Topilgan tx sanasi', w: 16 },
+      { h: 'Topilgan tx summasi', w: 17 },
+      { h: 'XonPay UUID', w: 38 },
+      { h: 'External ID', w: 30 },
+      { h: 'CRM ID', w: 12 },
+      { h: 'Order ID', w: 12 },
+      { h: 'Izoh', w: 50 },
+    ];
+    ws.columns = HEAD.map((c) => ({ width: c.w }));
+
+    const headRow = ws.getRow(1);
+    HEAD.forEach((c, i) => {
+      const cell = headRow.getCell(i + 1);
+      cell.value = c.h;
+      cell.font = { bold: true, size: 10 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+      cell.border = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' },
+      };
+    });
+    headRow.height = 30;
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+    const MONEY = '#,##0';
+    const ha = (b: boolean) => (b ? 'ha' : "yo'q");
+    let r = 2;
+    for (const x of rows) {
+      const row = ws.getRow(r++);
+      row.getCell(1).value = x.datePaid ? x.datePaid.toISOString().slice(0, 10) : null;
+      row.getCell(2).value = x.contract;
+      row.getCell(3).value = x.fullName;
+      row.getCell(4).value = x.objectName;
+      row.getCell(5).value = Number(x.amount);
+      row.getCell(5).numFmt = MONEY;
+      row.getCell(6).value = x.type;
+      row.getCell(7).value = x.category;
+      row.getCell(8).value = x.status;
+      row.getCell(9).value = ha(x.isMatched);
+      row.getCell(10).value = ha(x.isReceivedFromBank);
+      row.getCell(11).value = ha(x.isProblematic);
+      row.getCell(12).value = x.matchedTx?.txnDate ? x.matchedTx.txnDate.toISOString().slice(0, 10) : null;
+      if (x.matchedTx?.amount != null) {
+        row.getCell(13).value = Number(x.matchedTx.amount);
+        row.getCell(13).numFmt = MONEY;
+      }
+      row.getCell(14).value = x.xonpayUuid;
+      row.getCell(15).value = x.externalId;
+      row.getCell(16).value = x.crmId != null ? x.crmId.toString() : null;
+      row.getCell(17).value = x.orderId != null ? x.orderId.toString() : null;
+      row.getCell(18).value = x.purpose;
+    }
+
+    // Jami qatori
+    if (rows.length) {
+      const total = ws.getRow(r);
+      total.getCell(4).value = 'JAMI';
+      total.getCell(4).font = { bold: true, size: 10 };
+      total.getCell(5).value = rows.reduce((s, x) => s + Number(x.amount), 0);
+      total.getCell(5).numFmt = MONEY;
+      total.getCell(5).font = { bold: true, size: 10 };
+      total.getCell(3).value = `${rows.length} ta to'lov`;
+      total.getCell(3).font = { bold: true, size: 10 };
+    }
+
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: HEAD.length } };
+
+    const raw = await wb.xlsx.writeBuffer();
+    const buffer: Buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+
+    const qism =
+      opts.matched === 'unmatched' ? 'topilmagan'
+      : opts.matched === 'matched' ? 'topilgan'
+      : 'hammasi';
+    const bank =
+      opts.received === 'yes' ? '_bankdan'
+      : opts.received === 'no' ? '_bankdan-emas'
+      : '';
+    const davr = `${opts.dateFrom || 'boshidan'}_${opts.dateTo || 'oxirigacha'}`;
+    const filename = `xonpay_${qism}${bank}_${davr}.xlsx`;
+
+    return { buffer, filename, count: rows.length };
   }
 
   /** Kunlik statistika: kuniga jami / topilgan / qolgan */
