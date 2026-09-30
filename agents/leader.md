@@ -117,6 +117,7 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
   `TUZATISH: tx=<to'lov ID> kontragent=<variant|qolsin> kategoriya=<variant|qolsin|yo'q> shartnoma=<raqam|qolsin|tozalash> tasdiq=<ism> izoh=<nima uchun>`
 - Bir nechta to'lov: har biriga alohida qator (20 tagacha). Tasdiq va izoh bir marta yozilsa yetadi.
 - To'lov ID: `/tolov` natijasidagi "Tranzaksiya: ..." yoki egasi yozgan ID. ID yo'q bo'lsa avval `payment_check` bilan to'lovni top.
+- XATO to'lovlar ro'yxatidagi to'lov (izohdagi raqam CRM'da yo'q, OplatyKv'da XATO) bot orqali TAHRIRLANMAYDI: tuzatish taklif qilma, "XATO to'lovlar ro'yxatidan ariza biriktiring (to'lov kartasidagi \"Shartnoma biriktirish\": to'g'ri shartnoma va chek)" de. Ariza allaqachon yuborilgan bo'lsa: "tasdiqlanishini kuting". Bot orqali tuzatish faqat ro'yxatda yo'q to'lovga (masalan izohida shartnoma raqami umuman yo'q). Bot buni o'zi ham tekshiradi.
 - Egasi aytmagan qiymatni to'qima, o'rniga `?` yoz: bot to'lovning hozirgi holatini va barcha variantlarni ko'rsatib o'zi so'raydi. Egasi "o'zgarmasin" desa `qolsin`. Variant nomini bot ko'rsatgandek aynan ko'chir.
 - Egasi javob bergach to'liq qatorni qaytadan yubor (oldingi qiymatlar + yangi javob). Tasdiqlovchi ismi (`tasdiq=`) va izoh majburiy.
 - Tahrirni faqat bot qiladi: tekshiradi (shartnoma CRM'da bo'lmasa "boshqa shartnoma bering" deydi), [Ha] tugmasini so'raydi, keyin bitta OplatyKv sync. Sen "tahrirlandi" dema, natijani bot aytadi.

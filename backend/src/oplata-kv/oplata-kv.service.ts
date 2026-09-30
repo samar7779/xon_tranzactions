@@ -1877,6 +1877,21 @@ export class OplataKvService {
    * Agent web ro'yxati: XATO qatorlar + count'ni BITTA buildXatoFilter bilan
    * (ilgari getXatoRows + countXatoForAgent alohida 2 marta qurardi — sekin edi).
    */
+  /**
+   * TR Support: shu tranzaksiya XATO to'lovlar ro'yxatida bormi — xato-list sahifasi (getXatoListForAgent)
+   * bilan AYNAN bir xil filtr (buildXatoFilter) va sana (agent.dateFrom). Topilsa OplatyKv qatori.
+   */
+  async findXatoRowForTx(keys: Array<string | null | undefined>, dateFrom: string | null) {
+    const k = keys.filter((x): x is string => !!x);
+    if (!k.length) return null;
+    const xf = await this.buildXatoFilter();
+    return this.prisma.oplataKv.findFirst({
+      where: { AND: [xf, { sourceTxId: { in: k } }, ...(dateFrom ? [{ date: { gte: new Date(dateFrom) } }] : [])] },
+      orderBy: { date: 'desc' },
+      select: { id: true, contractNo: true, date: true },
+    });
+  }
+
   async getXatoListForAgent(opts: { dateFrom?: string | null; limit?: number }) {
     const xatoFilter = await this.buildXatoFilter();
     const dateWhere = opts.dateFrom ? { date: { gte: new Date(opts.dateFrom) } } : {};

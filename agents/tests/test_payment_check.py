@@ -3487,7 +3487,10 @@ class ChekCrmIdTest(_CrmEnvBase):
         self.assertIn("XATO → CRM tabi ham topadi", b.xabar)
         ega = html.unescape(pc.format_owner(n))
         self.assertIn("bizda shartnomasiz (XATO) turibdi; CRM'da u 821ZUR23V1", ega)
-        self.assertIn(C.TOLOV_TUZ_XATO_CRM, ega)
+        # shartnomasiz: XATO ro'yxatida emas -> bot (fixture'dagi boshqa XATO to'lov o'z qatorida ariza oladi)
+        birinchi = next(x for x in ega.split("\n") if x.startswith("1. "))
+        self.assertIn(C.TOLOV_TUZ_BOT_TPL.format(sh=SH), birinchi)
+        self.assertNotIn("ariza biriktiring", birinchi)
         self.assertIn(C.TOLOV_GURUH_CRMDA_TPL.format(sana=pc._sana_qisqa("2026-09-29"), summa="8 132 000", sh=SH), ega)
         self.assertIn("1. " + pc._sana_qisqa("2026-09-29") + " · 8 132 000 · bank", ega)
         blok = pc.format_block(n)
@@ -3496,8 +3499,25 @@ class ChekCrmIdTest(_CrmEnvBase):
 
     def test_crmda_sana_boshqa_qolda_tuzatish(self):
         n = self._run("TOLOV: id=" + KOMP_C, _id_marshrut(), crm=_crm_lookup(exact=[SH], via="transaction_id"))
-        self.assertIn(C.TOLOV_TUZ_XATO_QOLDA.format(sh=SH), html.unescape(pc.format_owner(n)))
+        self.assertIn(C.TOLOV_TUZ_BOT_TPL.format(sh=SH), html.unescape(pc.format_owner(n)))
         self.assertIn("XATO → CRM tabi topmaydi", self._bolim(n, "crm_id").xabar)
+
+    def test_xato_royxatidagi_tolov_ariza_biriktiriladi(self):
+        """Izohda xato raqam (217VHA23EU, CRM'da yo'q), OplatyKv'da XATO qatori: bot tuzatmaydi, ariza yo'li."""
+        routes = _id_marshrut()
+        routes[pc._SQL_ID_TX] = [dict(routes[pc._SQL_ID_TX][0], contract_number="217VHA23EU")]
+        routes[pc._SQL_ID_OKV] = [dict(routes[pc._SQL_ID_OKV][0], contract_no="217VHA23EU")]
+        n = self._run("TOLOV: id=" + KOMP_C, routes, crm=_crm_lookup(exact=[SH]))
+        self.assertEqual((n.shartnomalar, n.crm_id.eski), ([SH], ["217VHA23EU"]))
+        ega = html.unescape(pc.format_owner(n))
+        self.assertIn(C.TOLOV_TUZ_ARIZA_SH_TPL.format(sh=SH), ega)
+        self.assertIn("izohdagi raqam (217VHA23EU) CRM'da yo'q", ega)
+        self.assertNotIn('"tuzat" deb yozing', ega)
+        # CRM'da ham topilmasa ham ariza (bot emas)
+        n = self._run("TOLOV: id=" + KOMP_C, routes, crm=_crm_lookup())
+        ega = html.unescape(pc.format_owner(n))
+        self.assertIn(C.TOLOV_TUZ_ARIZA, ega)
+        self.assertNotIn(C.TOLOV_TUZ_SHARTNOMASIZ, ega)
 
     def test_chek_topildi_crmda_yoq_oddiy_xulosa(self):
         chek = {"ok": True, "result": "found",
@@ -3519,6 +3539,7 @@ class ChekCrmIdTest(_CrmEnvBase):
         self.assertIn("to'lovchi: G'aybullayeva Dilrabo Nutfilloyeva", ega)
         self.assertIn("hech bir shartnomaga biriktirilmagan; CRM'da ham", ega)
         self.assertIn("5VTN11AA shartnomasi (Ismoilova Nigora)", ega)
+        self.assertIn(C.TOLOV_TUZ_SHARTNOMASIZ, ega)                 # OplatyKv'da XATO qatori yo'q -> bot
         self.assertIn(C.TOLOV_GURUH_SHARTNOMASIZ_TPL.format(sana=pc._sana_qisqa("2026-09-29"), summa="8 132 000"), ega)
         blok = pc.format_block(n)
         self.assertIn("[chek] OK:", blok)

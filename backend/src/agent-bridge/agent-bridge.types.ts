@@ -160,14 +160,21 @@ export interface BridgeTxView {
   kategoriya: { code: string; name: string } | null;           // subkategoriya
   shartnoma: string | null; isContractManual: boolean;
 }
+export interface BridgeTxXato {
+  inList: boolean; contractNo: string | null; pending: boolean;
+  pendingBy: string | null; pendingAt: string | null; pendingContract: string | null;
+  xabar: string | null;                                        // ro'yxatda bo'lsa egasiga tayyor matn
+}
 export interface BridgeTxOptions {
   ok: true;
   tx: BridgeTxView | null;
+  xato: BridgeTxXato | null;                                   // XATO to'lovlar ro'yxatida — tahrir yo'q, ariza
   kontragentlar: Array<{ code: string; name: string; kategoriyalar: Array<{ code: string; name: string }> }>;
 }
 export interface BridgeTxChange { field: 'kontragent' | 'kategoriya' | 'shartnoma'; from: string | null; to: string | null }
 export interface BridgeTxPreview {
   ok: true; valid: boolean; errors: string[]; tx: BridgeTxView | null; changes: BridgeTxChange[];
+  xato: BridgeTxXato | null;
   crm: { contract: string; found: boolean; customerName: string | null; objectName: string | null } | null;
 }
 export interface BridgeTxApply {

@@ -51,8 +51,19 @@ export interface TrTxView {
 
 export interface TrChange { field: 'kontragent' | 'kategoriya' | 'shartnoma'; from: string | null; to: string | null }
 
+/** XATO to'lovlar ro'yxati (xato-list) holati: ro'yxatdagi to'lov agent orqali TAHRIRLANMAYDI — ariza orqali. */
+export interface TrXato {
+  inList: boolean;
+  contractNo: string | null;
+  pending: boolean;                 // shu to'lovga kutilayotgan ariza bor
+  pendingBy: string | null; pendingAt: string | null; pendingContract: string | null;
+  xabar: string | null;             // egasiga tayyor matn (inList bo'lsa)
+}
+export const XATO_DATEFROM_KEY = 'agent.dateFrom'; // xato-list sahifasi bilan bir xil sozlama
+
 export interface TrPreview {
   valid: boolean;
+  xato: TrXato | null;
   errors: string[];
   tx: TrTxView | null;
   changes: TrChange[];
@@ -147,20 +158,52 @@ export class TrSupportService {
     };
   }
 
-  async options(ref: string): Promise<{ ok: true; tx: TrTxView | null; tree: TrTop[] }> {
+  async options(ref: string): Promise<{ ok: true; tx: TrTxView | null; tree: TrTop[]; xato: TrXato | null }> {
     const [tx, tree] = await Promise.all([this.findTx(ref), this.loadTree()]);
-    return { ok: true, tx: tx ? this.viewOf(tx) : null, tree };
+    return { ok: true, tx: tx ? this.viewOf(tx) : null, tree, xato: tx ? await this.xatoStatus(tx) : null };
+  }
+
+  /** XATO to'lovlar ro'yxatida bormi (xato-list bilan bir xil filtr va sana) va kutilayotgan ariza. */
+  async xatoStatus(tx: { id: string; externalId: string | null }): Promise<TrXato> {
+    const dateFrom = (await this.prisma.setting.findUnique({ where: { key: XATO_DATEFROM_KEY } }))?.value || null;
+    const row = await this.oplataKv.findXatoRowForTx([tx.externalId, tx.id], dateFrom);
+    if (!row) {
+      return { inList: false, contractNo: null, pending: false, pendingBy: null, pendingAt: null, pendingContract: null, xabar: null };
+    }
+    const p = await this.prisma.xatoCorrectionRequest.findFirst({
+      where: { status: 'pending', OR: [{ oplataKvId: row.id }, { txId: tx.id }] },
+      orderBy: { submittedAt: 'desc' },
+      select: { submittedByName: true, submittedAt: true, proposedContractNo: true },
+    });
+    const sh = row.contractNo || "yo'q";
+    const at = p?.submittedAt ? new Date(p.submittedAt).toISOString() : null;
+    const xabar = p
+      ? `Bu to'lov XATO to'lovlar ro'yxatida (shartnoma ${sh}) va unga ariza allaqachon yuborilgan`
+        + ` (${p.submittedByName || "noma'lum"}${at ? ', ' + at.slice(0, 10) : ''}${p.proposedContractNo ? ', taklif: ' + p.proposedContractNo : ''}).`
+        + ' Tahrir qilinmaydi: ariza tasdiqlanishini kuting.'
+      : `Bu to'lov XATO to'lovlar ro'yxatida (shartnoma ${sh}). Tahrir qilinmaydi: XATO to'lovlar ro'yxatidan ariza`
+        + ` biriktiring — to'lov kartasidagi "Shartnoma biriktirish" (to'g'ri shartnoma va chek).`;
+    return {
+      inList: true, contractNo: row.contractNo || null, pending: !!p, pendingBy: p?.submittedByName || null,
+      pendingAt: at, pendingContract: p?.proposedContractNo || null, xabar,
+    };
   }
 
   // ─── Tekshiruv (FAQAT O'QISH; CRM faqat o'qiladi) ─────────────────
   async preview(ref: string, choice: TrChoice, tree?: TrTop[]): Promise<TrPreview> {
-    const out: TrPreview = { valid: false, errors: [], tx: null, changes: [], crm: null, plan: null };
+    const out: TrPreview = { valid: false, xato: null, errors: [], tx: null, changes: [], crm: null, plan: null };
     const tx = await this.findTx(ref);
     if (!tx) {
       out.errors.push(`To'lov topilmadi: ${String(ref).slice(0, 80)}`);
       return out;
     }
     out.tx = this.viewOf(tx);
+    // XATO to'lovlar ro'yxatidagi to'lov — tahrir yo'q, ariza orqali (egasi qoidasi)
+    out.xato = await this.xatoStatus(tx);
+    if (out.xato.inList) {
+      out.errors.push(out.xato.xabar as string);
+      return out;
+    }
     if (tx.source === 'ALOQA_BANK') out.errors.push("Aloqa Bank import qatorini tahrirlab bo'lmaydi (faqat o'qish)");
     const tops = tree || await this.loadTree();
     const curTop = tops.find((t) => t.id === tx.categoryId) || null;

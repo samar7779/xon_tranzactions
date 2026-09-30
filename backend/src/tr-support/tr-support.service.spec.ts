@@ -18,7 +18,7 @@ describe('TrSupportService', () => {
   let prisma: any;
   let cat: { setManual: jest.Mock; setContract: jest.Mock; restoreSnapshot: jest.Mock };
   let crmCache: { lookup: jest.Mock };
-  let oplataKv: { syncNowRespectingSettings: jest.Mock };
+  let oplataKv: { syncNowRespectingSettings: jest.Mock; findXatoRowForTx: jest.Mock };
   let rows: any[];
   let svc: TrSupportService;
 
@@ -37,6 +37,8 @@ describe('TrSupportService', () => {
     rows = [];
     prisma = {
       category: { findMany: jest.fn(async () => CATS) },
+      setting: { findUnique: jest.fn(async () => ({ value: '2026-07-01' })) },
+      xatoCorrectionRequest: { findFirst: jest.fn(async () => null) },
       transaction: { findFirst: jest.fn(async ({ where }: any) => (where.OR.some((w: any) => w.id === tx.id || w.externalId === tx.externalId) ? txRow() : null)) },
       trSupportEdit: {
         create: jest.fn(async ({ data }: any) => { const r = { id: `e${rows.length + 1}`, ...data }; rows.push(r); return r; }),
@@ -55,7 +57,10 @@ describe('TrSupportService', () => {
     };
     crmCache = { lookup: jest.fn(async (c: string) => (c === '206FZO25A2' || c === '206FZ025A2'
       ? { contractNumber: '206FZO25A2', found: true, customerName: 'ISM', objectName: 'FZO' } : { contractNumber: c, found: false })) };
-    oplataKv = { syncNowRespectingSettings: jest.fn(async () => ({ ok: true, added: 1, updated: 0, skipped: 0, objectsBackground: true })) };
+    oplataKv = {
+      syncNowRespectingSettings: jest.fn(async () => ({ ok: true, added: 1, updated: 0, skipped: 0, objectsBackground: true })),
+      findXatoRowForTx: jest.fn(async () => null),
+    };
     svc = new TrSupportService(prisma, cat as any, crmCache as any, oplataKv as any, { get: () => undefined } as any);
   });
   afterEach(() => jest.restoreAllMocks());
@@ -158,6 +163,38 @@ describe('TrSupportService', () => {
       tx.contractNumber = 'BOSHQA1';
       await expect(svc.rollback('e1', 'Admin')).rejects.toThrow("yana o'zgargan");
       expect(cat.restoreSnapshot).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('XATO to\'lovlar ro\'yxati', () => {
+    it('ro\'yxatda bo\'lsa tahrir yo\'q — "ariza biriktiring"; filtr xato-list bilan bir xil (dateFrom)', async () => {
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv9', contractNo: '217VHA23EU', date: new Date() });
+      const p = await svc.preview(tx.externalId, { shartnoma: '206FZO25A2' });
+      expect(p.valid).toBe(false);
+      expect(p.xato).toMatchObject({ inList: true, contractNo: '217VHA23EU', pending: false });
+      expect(p.errors[0]).toContain("XATO to'lovlar ro'yxatidan ariza biriktiring");
+      expect(oplataKv.findXatoRowForTx).toHaveBeenCalledWith([tx.externalId, 'ctx1'], '2026-07-01');
+      expect(prisma.setting.findUnique).toHaveBeenCalledWith({ where: { key: 'agent.dateFrom' } });
+      expect(crmCache.lookup).not.toHaveBeenCalled();
+      const r = await svc.apply([{ tx: 'ctx1', shartnoma: '206FZO25A2' }], { approvedBy: 'Samar' });
+      expect(r.results[0].status).toBe('skipped');
+      expect(cat.setContract).not.toHaveBeenCalled();
+      expect(oplataKv.syncNowRespectingSettings).not.toHaveBeenCalled();
+    });
+
+    it('ariza allaqachon yuborilgan — "tasdiqlanishini kuting"', async () => {
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv9', contractNo: '217VHA23EU', date: new Date() });
+      prisma.xatoCorrectionRequest.findFirst.mockResolvedValue({ submittedByName: 'Dilnoza', submittedAt: new Date('2026-09-30T08:00:00Z'), proposedContractNo: '217VHA26EU' });
+      const o = await svc.options('ctx1');
+      expect(o.xato).toMatchObject({ inList: true, pending: true, pendingBy: 'Dilnoza', pendingContract: '217VHA26EU' });
+      expect(o.xato!.xabar).toContain('ariza allaqachon yuborilgan (Dilnoza, 2026-09-30, taklif: 217VHA26EU)');
+      expect(o.xato!.xabar).toContain('tasdiqlanishini kuting');
+    });
+
+    it("ro'yxatda yo'q — xato null emas, inList=false, tahrir oqimi davom etadi", async () => {
+      const o = await svc.options('ctx1');
+      expect(o.xato).toMatchObject({ inList: false, xabar: null });
+      expect((await svc.preview('ctx1', { shartnoma: '206FZO25A2' })).valid).toBe(true);
     });
   });
 

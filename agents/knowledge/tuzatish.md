@@ -16,6 +16,7 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
 5. [Ha]: `POST /api/agent-bridge/tx-edit/apply` → har to'lov panelning o'z yo'li bilan (`CategorizationService.setManual`, `setContract`: tarix `transaction_category_history`, OplatyKv propagation), keyin HAMMASIDAN keyin BITTA OplatyKv sync (`syncNowRespectingSettings`, panel "Sync" tugmasi bilan bir xil). Natija egasiga.
 
 ## Qoidalar (backend `tr-support.service.ts` tekshiradi)
+- **XATO to'lovlar ro'yxatidagi to'lov tahrirlanmaydi** (egasi qoidasi, 2026-09-30). Ro'yxat = xato-list sahifasi bilan AYNAN bir xil: `OplataKvService.findXatoRowForTx` (`buildXatoFilter`: `source_tx_id` bor, shartnoma CRM'da found emas, `xato_hidden` emas) va sana `settings.agent.dateFrom` dan. Bunda bot savol bermaydi, "XATO to'lovlar ro'yxatidan ariza biriktiring: to'lov kartasidagi \"Shartnoma biriktirish\" (to'g'ri shartnoma va chek)" deydi. Kutilayotgan ariza (`xato_correction_requests.status=pending`) bo'lsa: "ariza allaqachon yuborilgan (kim, qachon, taklif) — tasdiqlanishini kuting". Bot orqali tuzatish faqat ro'yxatda yo'q to'lovga (masalan izohida shartnoma raqami umuman yo'q, OplatyKv'ga tushmagan).
 - Kontragent o'zgarsa kategoriya ham tanlanadi (yangi kontragentning bolalari bo'lsa). Bolasiz kontragentda kategoriya bo'sh.
 - Kategoriya faqat tanlangan (yoki hozirgi) kontragent ichidan.
 - Shartnoma faqat `Клиент / Физ.Л / Юр.Л` yoki `Переброска` kontragentida (panel qoidasi). CRM'da `found=true` bo'lishi SHART; O/0 varianti bilan topilsa CRM'dagi kanonik shakl yoziladi.

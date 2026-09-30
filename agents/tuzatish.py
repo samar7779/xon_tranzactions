@@ -327,6 +327,11 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
             if opt.get("tx") is None:
                 await _say(outbox, "To'lov topilmadi: %s. ID ni tekshiring." % q.tx, reply_to=reply_to)
                 return
+            xato = opt.get("xato") or {}
+            if xato.get("inList"):                      # XATO ro'yxatidagi to'lov: savol yo'q, ariza yo'li
+                await _say(outbox, "%s\n%s" % (_tx_sarlavha(opt.get("tx"), q.tx), xato.get("xabar") or ""),
+                           reply_to=reply_to)
+                return
             await _say(outbox, savol_matni(q, opt), reply_to=reply_to)
             return
     if len(tasdiqlar) > 1:
@@ -339,6 +344,7 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
     # 2) backend tekshiruvi (faqat o'qish; CRM'da shartnoma bormi)
     previews: List[Tuple[Qator, Dict[str, Any]]] = []
     xatolar: List[str] = []
+    xato_royxat: List[str] = []
     for q in qatorlar:
         try:
             p = await asyncio.to_thread(_koprik, C.TUZATISH_KOPRIK_PREVIEW, params={
@@ -347,12 +353,17 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
         except KoprikXato as exc:
             await _say(outbox, "Tekshiruv bajarilmadi: %s." % exc.sabab, reply_to=reply_to)
             return
-        if not p.get("valid"):
+        if (p.get("xato") or {}).get("inList"):
+            xato_royxat.append("%s\n%s" % (_tx_sarlavha(p.get("tx"), q.tx), (p.get("xato") or {}).get("xabar") or ""))
+        elif not p.get("valid"):
             xatolar.append("%s:\n%s" % (_tx_sarlavha(p.get("tx"), q.tx),
                                         "\n".join("• " + str(e) for e in (p.get("errors") or ["tekshiruvdan o'tmadi"]))))
         previews.append((q, p))
-    if xatolar:
-        await _say(outbox, "Tahrirlab bo'lmaydi, to'g'rilang:\n\n" + "\n\n".join(xatolar), reply_to=reply_to)
+    if xato_royxat or xatolar:
+        qism = (["Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida):\n\n" + "\n\n".join(xato_royxat)]
+                if xato_royxat else [])
+        qism += ["Tahrirlab bo'lmaydi, to'g'rilang:\n\n" + "\n\n".join(xatolar)] if xatolar else []
+        await _say(outbox, "\n\n".join(qism), reply_to=reply_to)
         return
 
     # 3) tasdiq so'rovi

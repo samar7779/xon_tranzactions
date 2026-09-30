@@ -222,6 +222,9 @@ To'lov topilgach uni bot orqali to'g'rilash mumkin. O'zgaradigan 3 ustun: **Kont
 2. Bot to'lovning hozirgi holatini va barcha variantlarni ko'rsatadi, so'raydi: kontragent, kategoriya, shartnoma,
    **kim tasdiqlaydi** va **izoh**. O'zgarmaydigan ustun uchun "qolsin" deng.
 3. Shartnoma CRM'da topilmasa bot aytadi: "boshqa shartnoma bering". Tahrir qilinmaydi.
+   **To'lov XATO to'lovlar ro'yxatida bo'lsa** (izohdagi raqam CRM'da yo'q) bot uni tahrirlamaydi:
+   "XATO to'lovlar ro'yxatidan ariza biriktiring" deydi (to'lov kartasidagi "Shartnoma biriktirish": to'g'ri
+   shartnoma va chek). Ariza allaqachon yuborilgan bo'lsa: "tasdiqlanishini kuting".
 4. Bot oldin/keyin ko'rinishini ko'rsatadi: **[Ha, tahrirla]** bosilsa tahrir bo'ladi, keyin OplatyKv sync bir marta
    ishlaydi (bir nechta to'lov bo'lsa ham bitta sync).
 5. Tarix: panel > Tranzaksiyalar > Klient · XATO shartnoma > **TR Support** (kirish kodi bilan): qachon, kim tasdiqladi,

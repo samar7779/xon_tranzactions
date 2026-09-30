@@ -5265,7 +5265,9 @@ def _crm_id_farq(n: Natija) -> Optional[OddiyFarq]:
     sabab = ("To'lov bankdan tushgan, lekin %s, shu sababli bizda shartnomasiz (XATO) turibdi. CRM'da esa u %s"
              " shartnomasiga yozilgan (bank ID bir xil)" % (
                  "izohdagi raqam (%s) CRM'da yo'q" % ", ".join(eski) if eski else "izohida shartnoma raqami yo'q", sh))
-    nima = C.TOLOV_TUZ_XATO_CRM if c.via == "sana" else C.TOLOV_TUZ_XATO_QOLDA.format(sh=sh)
+    # XATO to'lovlar ro'yxatida (OplatyKv qatori XATO raqam bilan) — ariza; aks holda shu botda tuzatish
+    xato_royxat = bool(y.get("okv_bor") and y.get("okv_sh"))
+    nima = C.TOLOV_TUZ_ARIZA_SH_TPL.format(sh=sh) if xato_royxat else C.TOLOV_TUZ_BOT_TPL.format(sh=sh)
     return OddiyFarq(sana=_s(y.get("sana")), summa=_dec(y.get("summa")), turi="bank", sabab=sabab, nima=nima,
                      guruh="xato_crm")
 
@@ -5299,7 +5301,8 @@ def _xulosa_shartnomasiz(n: Natija, d: DbNatija) -> Xulosa:
         "izohdagi raqam %s CRM'da yo'q" % izoh_sh if izoh_sh else "izohida shartnoma raqami yo'q")
     if c is not None and not c.xato:
         sabab += ", CRM'da ham bu to'lov bank ID bo'yicha topilmadi"
-    x.farqlar = [OddiyFarq(sana=sana, summa=summa, turi="bank", sabab=sabab, nima=C.TOLOV_TUZ_SHARTNOMASIZ,
+    nima = C.TOLOV_TUZ_ARIZA if (y.get("okv_bor") and okv_sh) else C.TOLOV_TUZ_SHARTNOMASIZ
+    x.farqlar = [OddiyFarq(sana=sana, summa=summa, turi="bank", sabab=sabab, nima=nima,
                            guruh="shartnomasiz")]
     for r in (c.summa_teng if c is not None else [])[:3]:
         kim = r["mijoz"] or r["obyekt"] or "-"

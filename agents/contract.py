@@ -611,12 +611,16 @@ TOLOV_KOPRIK_EKSPORT_YOL = "/api/agent-bridge/exports"   # faqat GET (sozlama + 
 # (panel "Chek order > Tekshirish" matchOrder). Ikkalasi faqat GET, faqat o'qish.
 TOLOV_KOPRIK_CRM_YOL = "/api/agent-bridge/crm-lookup"
 TOLOV_KOPRIK_CHEK_YOL = "/api/agent-bridge/chek-find"
-TOLOV_TUZ_XATO_CRM = "OplatyKv > XATO → CRM > shu to'lov > Qo'shish (shartnoma va boshlang'ich/oylik CRM'dan qo'yiladi)"
-TOLOV_TUZ_XATO_QOLDA = ("OplatyKv > CRM'dan qidir (ID) bilan tasdiqlang va to'lov shartnomasini qo'lda {sh} ga"
-                        " o'zgartiring (CRM'da sana boshqacha kiritilgan, XATO → CRM tabi topmaydi)")
-TOLOV_TUZ_SHARTNOMASIZ = ("to'lovchidan yoki sotuv bo'limidan shartnoma raqamini aniqlang; sotuv bo'limi to'lovni"
-                          " CRM'ga kiritgach " + "OplatyKv > XATO → CRM > Qo'shish (yoki XATO to'lovni ariza orqali"
-                          " tuzating)")
+# Egasi qoidasi (2026-09-30): XATO to'lovlar ro'yxatidagi to'lov bot orqali TAHRIRLANMAYDI — ro'yxatdan ariza.
+# Ro'yxatda yo'q (masalan shartnomasiz) to'lov — shu botda tuzatish (TR Support, [Ha] bilan).
+TOLOV_TUZ_ARIZA = ("XATO to'lovlar ro'yxatidan ariza biriktiring: to'lov kartasidagi \"Shartnoma biriktirish\" (to'g'ri"
+                   " shartnoma va chek). Bot orqali tahrirlanmaydi")
+TOLOV_TUZ_ARIZA_SH_TPL = ("XATO to'lovlar ro'yxatidan ariza biriktiring: to'lov kartasidagi \"Shartnoma biriktirish\" -> {sh}"
+                          " (chek bilan). Bot orqali tahrirlanmaydi")
+TOLOV_TUZ_BOT_TPL = ("shu botda tuzating: \"tuzat\" deb yozing (shartnoma {sh}); kim tasdiqlaydi va izoh kerak,"
+                     " keyin Ha tugmasini bosing")
+TOLOV_TUZ_SHARTNOMASIZ = ("to'lovchidan yoki sotuv bo'limidan shartnoma raqamini aniqlang, keyin shu botda tuzating"
+                          " (\"tuzat\" deb yozing, Ha tugmasi bilan)")
 TOLOV_GURUH_SHARTNOMASIZ_TPL = ("To'lov {sana} da {summa} so'm bizning hisobga tushgan, lekin izohida shartnoma raqami"
                                 " ko'rsatilmagani uchun hech bir xonadonga avtomatik biriktirilmagan. Shartnoma"
                                 " raqamini yuboring, biriktirib qo'yamiz.")
@@ -766,7 +770,7 @@ _TUZ_KUTILGAN = "odatiy; schetchik keyin oylikka o'tishi mumkin"
 _TUZ_KUTISH = "kutish yoki qo'lda qo'shish"
 # "tuzatish" maslahati (blokka tushadi, <= 90 belgi). CRM'ga yozish hech qachon bot/agent ishi emas.
 TOLOV_FARQ_TUZATISH: Dict[str, str] = {
-    "XATO": "OplatyKv > XATO → CRM (oplatakv:xato_crm) yoki tx shartnomasi",
+    "XATO": "XATO to'lovlar ro'yxatidan ariza (Shartnoma biriktirish); bot orqali tahrirlanmaydi",
     "KANONIK_EMAS": "tx shartnomasini CRM kanonik shakliga (setContract)",
     "BOSHQA_SHARTNOMA": "kim to'g'ri: egasi yoki CRM operatori; bizda tx shartnomasi",
     "CRM_YOQ": "CRM operatori (CRM'ga biz yozmaymiz)",
@@ -845,8 +849,7 @@ TOLOV_ODDIY: Dict[str, Tuple[str, str]] = {
     "CRM_FARQ": ("CRM va OplatyKv jami {summa} farq qiladi", "batafsil rejimda qaysi to'lovlar mos emasligini ko'rish"),
     "CRM_YOQ": ("bizda bor, CRM'da yo'q",
                 "bizda XATO yoki split yo'q bo'lsa avval shuni tuzatish; qolgani CRM operatori"),
-    "XATO": ("bank izohidagi shartnoma raqami {raqam} CRM'da topilmagan (XATO)",
-             "OplatyKv > XATO → CRM tabida to'g'ri shartnomaga biriktirish yoki tx shartnomasini tuzatish"),
+    "XATO": ("bank izohidagi shartnoma raqami {raqam} CRM'da topilmagan (XATO)", TOLOV_TUZ_ARIZA),
     "BOSHQA_SHARTNOMA": ("to'lov boshqa shartnoma ostida: {izoh}",
                          "qaysi shartnoma to'g'riligini hal qilish; bizda tx shartnomasi, CRM'da CRM operatori"),
     "SHEET_YOQ": ("sheetda bu shartnoma to'lovlari ko'rinmaydi: {sabab}", "{tuzatish}"),

@@ -12,7 +12,7 @@ import { parseSheetIds } from './agent-bridge.validation';
 import {
   BridgeChekFindResponse, BridgeContractResult, BridgeCrmLookupResponse, BridgeCrmLookupRow, BridgeCrmPart, BridgeExportItem, BridgeExportLastRun, BridgeExportsResponse,
   BridgeOplataPart, BridgePaymentCheckResponse, BridgeRunResponse, BridgeSheetPart,
-  BridgeTxApply, BridgeTxChange, BridgeTxOptions, BridgeTxPreview, BridgeTxView,
+  BridgeTxApply, BridgeTxChange, BridgeTxOptions, BridgeTxPreview, BridgeTxView, BridgeTxXato,
 } from './agent-bridge.types';
 
 const ERR_MAX = 300;
@@ -73,6 +73,15 @@ export class AgentBridgeService implements OnModuleInit {
     };
   }
 
+  private pickXato(x: any): BridgeTxXato | null {
+    if (!x) return null;
+    return {
+      inList: !!x.inList, contractNo: strOrNull(x.contractNo), pending: !!x.pending, pendingBy: strOrNull(x.pendingBy),
+      pendingAt: strOrNull(x.pendingAt), pendingContract: strOrNull(x.pendingContract),
+      xabar: x.xabar != null ? cut(x.xabar) : null,
+    };
+  }
+
   private pickChanges(cs: any[]): BridgeTxChange[] {
     return (cs || []).map((c) => ({ field: c.field, from: strOrNull(c.from), to: strOrNull(c.to) }));
   }
@@ -80,7 +89,7 @@ export class AgentBridgeService implements OnModuleInit {
   async txEditOptions(tx: string): Promise<BridgeTxOptions> {
     const r = await this.trSupport.options(tx);
     return {
-      ok: true, tx: this.pickTx(r.tx),
+      ok: true, tx: this.pickTx(r.tx), xato: this.pickXato(r.xato),
       kontragentlar: r.tree.map((t) => ({
         code: t.code, name: t.name, kategoriyalar: t.children.map((c) => ({ code: c.code, name: c.name })),
       })),
@@ -91,6 +100,7 @@ export class AgentBridgeService implements OnModuleInit {
     const p = await this.trSupport.preview(tx, choice);
     return {
       ok: true, valid: p.valid, errors: p.errors.map(cut), tx: this.pickTx(p.tx), changes: this.pickChanges(p.changes),
+      xato: this.pickXato(p.xato),
       crm: p.crm ? { contract: p.crm.contract, found: p.crm.found, customerName: p.crm.customerName, objectName: p.crm.objectName } : null,
     };
   }

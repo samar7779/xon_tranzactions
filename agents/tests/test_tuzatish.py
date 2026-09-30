@@ -185,6 +185,27 @@ class OqimTest(_Base):
         self.assertFalse([c for c in self.calls if c["path"] == C.TUZATISH_KOPRIK_APPLY])
         self.assertEqual(await TZ.decide("zz", True, self.out, None), C.MSG_MUDDAT_OTGAN)
 
+    async def test_xato_royxatida_savol_yoq_ariza(self):
+        xabar = ("Bu to'lov XATO to'lovlar ro'yxatida (shartnoma 217VHA23EU). Tahrir qilinmaydi: XATO to'lovlar"
+                 " ro'yxatidan ariza biriktiring")
+        self.javob["options"] = dict(OPTIONS, xato={"inList": True, "contractNo": "217VHA23EU", "pending": False, "xabar": xabar})
+        await TZ.handle("TUZATISH: tx=%s shartnoma=217VHA26EU" % TX, self.out)
+        [t] = self.texts()
+        self.assertIn(xabar, t)
+        self.assertNotIn("Kim tasdiqlaydi", t)                   # variantlar so'ralmaydi
+        self.assertFalse([c for c in self.calls if c["path"] != C.TUZATISH_KOPRIK_OPTIONS])
+        # to'liq qator bilan ham: preview xato.inList -> tugmasiz, "Bot orqali tahrirlanmaydi"
+        self.javob["preview"] = {"ok": True, "valid": False, "tx": TX_VIEW, "changes": [], "crm": None, "errors": [xabar],
+                                 "xato": {"inList": True, "xabar": xabar}}
+        await TZ.handle("TUZATISH: tx=%s kontragent=qolsin kategoriya=qolsin shartnoma=217VHA26EU tasdiq=Samar izoh=x" % TX,
+                        self.out)
+        t = self.texts()[-1]
+        self.assertIn("Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida)", t)
+        self.assertIn(xabar, t)
+        self.assertNotIn("to'g'rilang", t)
+        self.assertFalse(any(s.get("keyboard") for s in self.out.sent))
+        self.assertEqual(self.kv, {})
+
     async def test_tx_idsiz_va_koprik_kalitsiz(self):
         await TZ.handle("TUZATISH: kontragent=qolsin", self.out)
         self.assertIn("To'lov ID si yo'q", self.texts()[-1])
