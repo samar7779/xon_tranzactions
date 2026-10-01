@@ -212,6 +212,16 @@ export class XonpayController {
     return this.svc.markDuplicates();
   }
 
+  @Get('admin/zaxira-match/nomzodlar')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: "Zaxira moslashtirish — NIMA bog'lanishini ko'rish (hech narsa o'zgarmaydi)",
+    description: "Tasdiqlashdan oldin ro'yxatni ko'rish uchun. Faqat o'qiydi.",
+  })
+  zaxiraNomzodlar() {
+    return this.svc.zaxiraNomzodlar();
+  }
+
   @Post('admin/zaxira-match')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   @ApiOperation({

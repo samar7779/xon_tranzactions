@@ -887,6 +887,57 @@ export class XonpayService implements OnModuleInit {
    * Natija match_method='zaxira' bilan belgilanadi, ya'ni keyin ajratib
    * ko'rish yoki bitta so'rov bilan bekor qilish mumkin.
    */
+  /** Zaxira moslashtirishning yagona SQL asosi — ko'rish va tasdiqlash uchun bir xil. */
+  private zaxiraCTE(): string {
+    return `
+      WITH juft AS (
+        SELECT a.external_id AS xp_id, t.id AS tx_id
+          FROM xonpay_transactions a
+          JOIN transactions t
+            ON t.contract_number = a.contract
+           AND t.amount = a.amount
+           AND t.txn_date BETWEEN a.date_paid - $1::int AND a.date_paid + $1::int
+         WHERE a.is_matched = false
+           AND a.is_duplicate = false
+           AND a.is_received_from_bank = true
+           AND a.date_paid < CURRENT_DATE - 3
+           AND a.contract IS NOT NULL
+           AND NOT EXISTS (
+                 SELECT 1 FROM xonpay_transactions x WHERE x.matched_tx_id = t.id)
+      ),
+      yagona AS (
+        SELECT xp_id, tx_id FROM juft
+         WHERE xp_id IN (SELECT xp_id FROM juft GROUP BY xp_id HAVING count(*) = 1)
+           AND tx_id IN (SELECT tx_id FROM juft GROUP BY tx_id HAVING count(*) = 1)
+      )`;
+  }
+
+  /**
+   * KO'RISH (dry-run) — nima bog'lanishini ro'yxat qilib qaytaradi, hech narsani
+   * o'zgartirmaydi. Foydalanuvchi shuni ko'rib tasdiqlaydi.
+   */
+  async zaxiraNomzodlar(kunOraliq = 20): Promise<{ ok: true; soni: number; summa: string; items: any[] }> {
+    const rows: any[] = await this.prisma.$queryRawUnsafe(
+      `${this.zaxiraCTE()}
+      SELECT a.external_id AS "xpId", a.contract, a.full_name AS "mijoz",
+             a.object_name AS "obyekt", a.amount, a.date_paid AS "tolovSanasi",
+             t.id AS "txId", t.external_id AS "txExternalId", t.txn_date AS "txSanasi",
+             t.description AS "txIzoh"
+        FROM yagona y
+        JOIN xonpay_transactions a ON a.external_id = y.xp_id
+        JOIN transactions t        ON t.id = y.tx_id
+       ORDER BY a.amount DESC`,
+      kunOraliq,
+    );
+    const items = rows.map((r) => ({
+      ...r,
+      amount: r.amount?.toString?.() ?? String(r.amount),
+      txIzoh: typeof r.txIzoh === 'string' ? r.txIzoh.slice(0, 160) : null,
+    }));
+    const summa = rows.reduce((s, r) => s + BigInt(r.amount ?? 0), 0n);
+    return { ok: true, soni: items.length, summa: summa.toString(), items };
+  }
+
   async zaxiraMoslashtirish(kunOraliq = 20): Promise<{ ok: true; bogllandi: number }> {
     const n = await this.prisma.$executeRawUnsafe(
       `
@@ -981,11 +1032,10 @@ export class XonpayService implements OnModuleInit {
         this.log.warn(`markDuplicates xato: ${e?.message}`),
       );
 
-      // Izohi bo'sh bo'lgani uchun UUID bilan topilmaganlarni shartnoma+summa
-      // bo'yicha bog'laymiz (qat'iy himoyalar bilan — metodga qarang).
-      await this.zaxiraMoslashtirish().catch((e: any) =>
-        this.log.warn(`zaxiraMoslashtirish xato: ${e?.message}`),
-      );
+      // ⚠️ Zaxira moslashtirish BU YERDA chaqirilmaydi. U taxminga asoslanadi
+      // (shartnoma+summa+sana), shuning uchun faqat foydalanuvchi ro'yxatni
+      // ko'rib tasdiqlaganda ishlaydi — xonpay.controller.ts dagi
+      // zaxira-match/nomzodlar (ko'rish) va zaxira-match (tasdiqlash).
     } finally {
       this.matchRunning = false;
     }

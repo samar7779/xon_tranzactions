@@ -12,7 +12,7 @@ import {
   TrendingUp, Hash, Calendar, ExternalLink, Play, X, History, Zap,
   Receipt, Activity, ChevronLeft, ChevronRight, Eye, Copy, FileSearch,
   ChevronDown, ChevronUp, Home, ScanLine, Trash2, ArrowUpRight, ArrowDownLeft,
-  Sheet as SheetIcon,
+  Sheet as SheetIcon, Link2,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -99,6 +99,8 @@ export default function BilingPage() {
   // (puli bankka 1-2 kunda o'tadi). Bu filtr yangilarini chiqarib tashlaydi.
   const [olderThan, setOlderThan] = useState<'0' | '3' | '7' | '30'>('0');
   const [excelYuklanmoqda, setExcelYuklanmoqda] = useState(false);
+  // Zaxira moslashtirish — avval ro'yxat ko'rsatiladi, keyin tasdiqlanadi.
+  const [zaxiraOchiq, setZaxiraOchiq] = useState(false);
 
   // Collapsible holatlar (default yopiq — bosgnda ochiladi)
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -181,6 +183,28 @@ export default function BilingPage() {
   const listQuery = useQuery<{ ok: true; total: number; items: XonpayRow[] }>({
     queryKey: ['xonpay-list', page, perPage, dateFrom, dateTo, matched, received, duplicate, olderThan, debouncedQ],
     queryFn: () => api.get(`/xonpay?${params.toString()}`),
+  });
+
+  type ZaxiraNomzod = {
+    xpId: string; contract: string | null; mijoz: string | null; obyekt: string | null;
+    amount: string; tolovSanasi: string; txId: string; txExternalId: string | null;
+    txSanasi: string; txIzoh: string | null;
+  };
+  const zaxiraQuery = useQuery<{ ok: true; soni: number; summa: string; items: ZaxiraNomzod[] }>({
+    queryKey: ['xonpay-zaxira-nomzodlar'],
+    queryFn: () => api.get('/xonpay/admin/zaxira-match/nomzodlar'),
+    enabled: zaxiraOchiq,
+  });
+  const zaxiraMut = useMutation({
+    mutationFn: () => api.post<{ ok: true; bogllandi: number }>('/xonpay/admin/zaxira-match', {}),
+    onSuccess: (r) => {
+      toast.success(`${r.bogllandi} ta to'lov bog'landi`);
+      setZaxiraOchiq(false);
+      qc.invalidateQueries({ queryKey: ['xonpay-list'] });
+      qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
+      qc.invalidateQueries({ queryKey: ['xonpay-zaxira-nomzodlar'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
   /** Jadvaldagi filtrlar bo'yicha Excel yuklab olish (sahifalashsiz — hammasi). */
@@ -399,6 +423,15 @@ export default function BilingPage() {
                 className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all disabled:opacity-50"
               >
                 {(matchAllMut.isPending || matchRunning) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              </button>
+
+              {/* Zaxira moslashtirish — ro'yxatni ko'rib tasdiqlash */}
+              <button
+                onClick={() => setZaxiraOchiq(true)}
+                title="Zaxira moslashtirish — izohi bo'sh to'lovlarni shartnoma+summa bo'yicha topish (tasdiqlash bilan)"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 ring-1 ring-teal-200 dark:ring-teal-900 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-all"
+              >
+                <Link2 className="h-4 w-4" />
               </button>
 
               {/* Tozalash (orphan'lar) — icon */}
@@ -914,6 +947,81 @@ export default function BilingPage() {
         {cleanupModalOpen && (
           <CleanupOrphansDialog onClose={() => setCleanupModalOpen(false)} />
         )}
+
+        {/* ═══ ZAXIRA MOSLASHTIRISH — ko'rib tasdiqlash ═══ */}
+        <Dialog open={zaxiraOchiq} onOpenChange={(v) => !v && setZaxiraOchiq(false)}>
+          <DialogContent className="sm:max-w-[920px] max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <DialogHeader className="px-6 py-4 border-b shrink-0">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Link2 className="h-4 w-4 text-teal-600" />
+                Zaxira moslashtirish — tasdiqlash
+              </DialogTitle>
+              <DialogDescription className="text-[12px] leading-relaxed">
+                Bu to&apos;lovlarning izohi bo&apos;sh, shuning uchun UUID bilan topilmagan.
+                Shartnoma, summa va sana bo&apos;yicha mos tranzaksiya topildi.
+                Faqat <b>ikki tomonlama yagona</b> mosliklar ko&apos;rsatiladi — ikkilanish bo&apos;lsa ro&apos;yxatga kirmaydi.
+                Tasdiqlamaguningizcha hech narsa o&apos;zgarmaydi.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-auto px-6 py-3">
+              {zaxiraQuery.isLoading ? (
+                <div className="space-y-1.5">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
+              ) : !zaxiraQuery.data?.items?.length ? (
+                <div className="py-12 text-center text-sm text-slate-400">
+                  Bog&apos;lash mumkin bo&apos;lgan to&apos;lov topilmadi.
+                </div>
+              ) : (
+                <table className="w-full text-[12px]">
+                  <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 uppercase text-[10px] tracking-wider sticky top-0">
+                    <tr>
+                      <th className="text-left px-2 py-2 font-bold">Shartnoma</th>
+                      <th className="text-left px-2 py-2 font-bold">Obyekt</th>
+                      <th className="text-right px-2 py-2 font-bold">Summa</th>
+                      <th className="text-center px-2 py-2 font-bold">To&apos;lov sanasi</th>
+                      <th className="text-center px-2 py-2 font-bold">Tranzaksiya sanasi</th>
+                      <th className="text-left px-2 py-2 font-bold">Tranzaksiya izohi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {zaxiraQuery.data.items.map((it) => (
+                      <tr key={it.xpId} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="px-2 py-1.5 font-mono">{it.contract || '—'}</td>
+                        <td className="px-2 py-1.5">{it.obyekt || '—'}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{fmt(it.amount)}</td>
+                        <td className="px-2 py-1.5 text-center">{String(it.tolovSanasi).slice(0, 10)}</td>
+                        <td className="px-2 py-1.5 text-center">{String(it.txSanasi).slice(0, 10)}</td>
+                        <td className="px-2 py-1.5 text-slate-500 truncate max-w-[280px]" title={it.txIzoh || ''}>
+                          {it.txIzoh || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t shrink-0 flex items-center gap-3">
+              <div className="text-[12px] text-slate-500 mr-auto">
+                {zaxiraQuery.data
+                  ? <><b>{fmt(zaxiraQuery.data.soni)}</b> ta to&apos;lov · <b>{fmt(zaxiraQuery.data.summa)}</b> UZS</>
+                  : '…'}
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setZaxiraOchiq(false)}>
+                Bekor qilish
+              </Button>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={!zaxiraQuery.data?.soni || zaxiraMut.isPending}
+                onClick={() => zaxiraMut.mutate()}
+              >
+                {zaxiraMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Tasdiqlash va bog&apos;lash
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
