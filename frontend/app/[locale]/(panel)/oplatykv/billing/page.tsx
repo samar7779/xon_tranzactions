@@ -95,6 +95,9 @@ export default function BilingPage() {
   // CRM bitta to'lovni ikki marta yozadi (initsiatsiya + bankdan kelgani).
   // Initsiatsiya nusxasi dublikat deb belgilanadi va standart holda yashiriladi.
   const [duplicate, setDuplicate] = useState<'hide' | 'only' | 'all'>('hide');
+  // Kechikish — bugungi/kechagi to'lovlarning "topilmagan" bo'lishi normal
+  // (puli bankka 1-2 kunda o'tadi). Bu filtr yangilarini chiqarib tashlaydi.
+  const [olderThan, setOlderThan] = useState<'0' | '3' | '7' | '30'>('0');
   const [excelYuklanmoqda, setExcelYuklanmoqda] = useState(false);
 
   // Collapsible holatlar (default yopiq — bosgnda ochiladi)
@@ -173,15 +176,17 @@ export default function BilingPage() {
   });
 
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage), dateFrom, dateTo, matched, received, duplicate });
+  if (olderThan !== '0') params.set('olderThan', olderThan);
   if (debouncedQ) params.set('q', debouncedQ);
   const listQuery = useQuery<{ ok: true; total: number; items: XonpayRow[] }>({
-    queryKey: ['xonpay-list', page, perPage, dateFrom, dateTo, matched, received, duplicate, debouncedQ],
+    queryKey: ['xonpay-list', page, perPage, dateFrom, dateTo, matched, received, duplicate, olderThan, debouncedQ],
     queryFn: () => api.get(`/xonpay?${params.toString()}`),
   });
 
   /** Jadvaldagi filtrlar bo'yicha Excel yuklab olish (sahifalashsiz — hammasi). */
   async function excelYuklab() {
     const p = new URLSearchParams({ dateFrom, dateTo, matched, received, duplicate });
+    if (olderThan !== '0') p.set('olderThan', olderThan);
     if (debouncedQ) p.set('q', debouncedQ);
     const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     const token = typeof window !== 'undefined' ? window.localStorage.getItem('xt_token') : null;
@@ -734,6 +739,15 @@ export default function BilingPage() {
                     <SelectItem value="hide">Dublikatsiz</SelectItem>
                     <SelectItem value="only">Faqat dublikat</SelectItem>
                     <SelectItem value="all">Dublikat bilan</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={olderThan} onValueChange={(v: any) => { setOlderThan(v); setPage(1); }}>
+                  <SelectTrigger className="h-9 w-56 text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Kechikish: hammasi</SelectItem>
+                    <SelectItem value="3">3 kundan eski</SelectItem>
+                    <SelectItem value="7">7 kundan eski</SelectItem>
+                    <SelectItem value="30">30 kundan eski</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button

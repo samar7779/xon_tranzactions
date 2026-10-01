@@ -180,6 +180,7 @@ export class XonpayController {
     @Query('matched') matched?: 'all' | 'matched' | 'unmatched',
     @Query('received') received?: 'all' | 'yes' | 'no',
     @Query('duplicate') duplicate?: 'hide' | 'only' | 'all',
+    @Query('olderThan') olderThan?: string,
     @Query('q') q?: string,
     @Query('contract') contract?: string,
   ) {
@@ -191,6 +192,7 @@ export class XonpayController {
       matched: matched || 'all',
       received: received || 'all',
       duplicate: duplicate || 'hide',
+      olderThanDays: olderThan ? Number(olderThan) : undefined,
       q,
       contract,
     });
@@ -225,12 +227,15 @@ export class XonpayController {
     @Query('matched') matched?: 'all' | 'matched' | 'unmatched',
     @Query('received') received?: 'all' | 'yes' | 'no',
     @Query('duplicate') duplicate?: 'hide' | 'only' | 'all',
+    @Query('olderThan') olderThan?: string,
     @Query('q') q?: string,
     @Query('contract') contract?: string,
   ) {
     const { buffer, filename } = await this.svc.exportXlsx({
       dateFrom, dateTo, matched: matched || 'all', received: received || 'all',
-      duplicate: duplicate || 'hide', q, contract,
+      duplicate: duplicate || 'hide',
+      olderThanDays: olderThan ? Number(olderThan) : undefined,
+      q, contract,
     });
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

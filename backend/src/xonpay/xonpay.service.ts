@@ -941,6 +941,7 @@ export class XonpayService implements OnModuleInit {
     matched?: 'all' | 'matched' | 'unmatched';
     received?: 'all' | 'yes' | 'no';
     duplicate?: 'hide' | 'only' | 'all';
+    olderThanDays?: number;
     q?: string;
     contract?: string;
   }): any {
@@ -954,6 +955,19 @@ export class XonpayService implements OnModuleInit {
       if (opts.dateFrom) where.datePaid.gte = new Date(opts.dateFrom);
       if (opts.dateTo) where.datePaid.lte = new Date(opts.dateTo);
     }
+    // Kechikish — "N kundan eski" to'lovlar.
+    // Karta to'lovi bankka 1-2 kunda o'tadi, shuning uchun bugungi va kechagi
+    // to'lovlarning "topilmagan" bo'lishi NORMAL — puli hali yo'lda. Ularni
+    // chiqarib tashlasak, ro'yxatda faqat haqiqiy muammolar qoladi.
+    const kun = Number(opts.olderThanDays);
+    if (Number.isFinite(kun) && kun > 0) {
+      const t = new Date(Date.now() + 5 * 3_600_000); // Toshkent kuni
+      t.setUTCDate(t.getUTCDate() - kun);
+      const kesim = new Date(`${t.toISOString().slice(0, 10)}T23:59:59.999Z`);
+      where.datePaid = where.datePaid || {};
+      if (!where.datePaid.lte || kesim < where.datePaid.lte) where.datePaid.lte = kesim;
+    }
+
     if (opts.matched === 'matched') where.isMatched = true;
     if (opts.matched === 'unmatched') where.isMatched = false;
     if (opts.received === 'yes') where.isReceivedFromBank = true;
@@ -978,6 +992,7 @@ export class XonpayService implements OnModuleInit {
     matched?: 'all' | 'matched' | 'unmatched';
     received?: 'all' | 'yes' | 'no';
     duplicate?: 'hide' | 'only' | 'all';
+    olderThanDays?: number;
     q?: string;
     contract?: string;
   }) {
@@ -1029,6 +1044,7 @@ export class XonpayService implements OnModuleInit {
     matched?: 'all' | 'matched' | 'unmatched';
     received?: 'all' | 'yes' | 'no';
     duplicate?: 'hide' | 'only' | 'all';
+    olderThanDays?: number;
     q?: string;
     contract?: string;
   }): Promise<{ buffer: Buffer; filename: string; count: number }> {
