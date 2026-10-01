@@ -336,6 +336,8 @@ VADA_DEFAULT_S = 2 * 3600
 VADA_ESLATMA_ORALIQ_S = 25 * 60
 VADA_MAX_ESLATMA = 3
 VADA_ESLATMA_TPL = "Va'da eslatma — muddat o'tdi: «{matn}»"
+VADA_IQTIBOS_RE = re.compile("«[^»]*»|\"[^\"]*\"|“[^”]*”")  # iqtibos ichi tekshirilmaydi
+VADA_OZI = "va'da"                                 # "va'da" haqidagi javob yangi va'da hisoblanmaydi
 
 # ---------------------------------------------------------------------------
 # 10. Yolg'on detektori (Q8, KOD 1.3)

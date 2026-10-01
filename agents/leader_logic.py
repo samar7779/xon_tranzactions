@@ -129,6 +129,11 @@ def detect_memory_command(text: str) -> Optional[str]:
 def detect_promise(text: str) -> Optional[Tuple[str, int]]:
     """(trigger, soniya) yoki None. Muddat: 'N daqiqa/soat' -> shu, 'ertaga' -> 12 soat, aks holda 2 soat."""
     low = C.norm_apostrophe(text or "").lower()
+    # Iqtibos ichidagi so'z va'da emas; "va'da" haqidagi javob (eslatmaga javob, uzr) o'zi yangi va'da emas —
+    # aks holda eslatma -> javob -> yangi va'da -> eslatma zanjiri (egasi 2026-10-01 xabari).
+    low = C.VADA_IQTIBOS_RE.sub(" ", low)
+    if C.VADA_OZI in low:
+        return None
     trigger = next((t for t in C.VADA_TRIGGERS if t in low), None)
     if trigger is None:
         return None

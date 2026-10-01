@@ -217,7 +217,7 @@ Saboq: sub-agent ulanmagan paytda "PR ochyapti" deyilgan. Egasi ishonchni yo'qot
 
 tekshiraman, ko'raman, ko'rvoraman, topaman, yozib beraman, tayyor bo'l, aniqlab, yuboraman, aytaman, qaytaraman, bir daqiqada, yaqin daqiqada, ozroqdan keyin, topsam, javob beraman, tekshirib, topib.
 
-Bot so'z ichidan ham qidiradi: "tayyor bo'ldi", "tekshirib chiqdim", "topib oldim" ham va'da bo'lib yoziladi.
+Bot so'z ichidan ham qidiradi: "tayyor bo'ldi", "tekshirib chiqdim", "topib oldim" ham va'da bo'lib yoziladi. Iqtibos («...», "...") ichidagi so'z va "va'da" so'zi bor javob (eslatmaga javob) hisobga olinmaydi.
 
 O'rniga: "Qabul qildim." yoki natija bo'lsa, darrov natijaning o'zi.
 

@@ -84,6 +84,14 @@ class PromiseTest(unittest.TestCase):
         trig, _ = L.detect_promise("Hozir ko" + chr(0x2018) + "raman")  # tipografik apostrof
         self.assertIn(trig, C.VADA_TRIGGERS)
 
+    def test_iqtibos_va_vada_haqidagi_javob(self):
+        """Eslatma -> javob -> yangi va'da zanjiri bo'lmasin (2026-10-01)."""
+        self.assertIsNone(L.detect_promise('Kechagi javobimda "sababi bilan aytaman" degan gap bor edi.'))
+        self.assertIsNone(L.detect_promise("Javobimda «tekshiraman» degan so'z bor edi, xolos."))
+        self.assertIsNone(L.detect_promise("Shefim, bot bu so'zni va'da deb oldi. Endi ertaga aytaman."))
+        self.assertIsNone(L.detect_promise(C.VADA_ESLATMA_TPL.format(matn="sababi bilan aytaman")))
+        self.assertIsNotNone(L.detect_promise("Sababini keyin aytaman."))   # haqiqiy va'da hali ushlanadi
+
     def test_vada_yoq(self):
         self.assertIsNone(L.detect_promise("Qabul qildim."))
         self.assertIsNone(L.detect_promise("Sverka farqi 3 ta, hammasi Kapital bankda."))
