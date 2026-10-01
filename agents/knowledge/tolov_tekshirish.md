@@ -328,7 +328,7 @@ Muhim tuzoqlar:
 | `FILTR_HISOB` | tranzaksiya hisobi eksport filtrida yo'q (manba transaction) | odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: hisob |
 | `FILTR_SANA` | qator sanasi eksport dateFrom dan oldin | odatiy (dateFrom); kerak bo'lsa Admin > Export > {sheet} > sana |
 | `FILTR_BELGI` | summa belgisi eksport amountSign filtriga mos emas | odatiy (summa belgisi filtri); kerak bo'lsa Admin > Export > {sheet} > filtr |
-| `EKSPORT_ESKI` | qator eksportning oxirgi ishidan keyin yaratilgan yoki o'zgargan, yoki oxirgi ish xato | Admin > Export > {sheet} > Bajarish (yoki keyinroq bot orqali, Ha tugmasi bilan) |
+| `EKSPORT_ESKI` | qator eksportning oxirgi ishidan keyin yaratilgan yoki o'zgargan, yoki oxirgi ish xato | Admin > Export > {sheet} > Bajarish yoki botda `/eksport <sheet nomi>` |
 | `XATO_RAQAM` | qator XATO yoki contract_no kanonik emas: sheet shartnoma bo'yicha topmaydi | OplatyKv > XATO → CRM yoki tx shartnomasini kanonik shaklga, keyin eksport |
 
 - `{sheet}` blokda sheet nomi bilan almashadi. Filtrlar backend nusxasi: `oplataKv.getRowsForExport` (obyekt, `payment_category`, `tx_type` aniq `in`, bo'sh ro'yxat = hammasi; `date >= dateFrom`; `amountSign` pos `> 0`, neg `< 0`). Manba `transaction`: `transactions.getRowsForExport` faqat hisob (oxirgi 4 raqam bilan solishtiriladi) va sana (`txn_date` UTC kuni) filtrini qo'llaydi.

@@ -40,7 +40,7 @@ _TX_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+\-]{5,199}$")
 _NOMALUM = {"", "?", "??", "nomalum", "noma'lum"}
 _MAYDON_NOMI = {"kontragent": "Kontragent", "kategoriya": "Kategoriya", "shartnoma": "Shartnoma"}
 _YOLLAR = (C.TUZATISH_KOPRIK_OPTIONS, C.TUZATISH_KOPRIK_PREVIEW, C.TUZATISH_KOPRIK_APPLY,
-           C.ARIZA_KOPRIK_FIND, C.ARIZA_KOPRIK_SUBMIT, C.ARIZA_KOPRIK_STATUS)
+           C.ARIZA_KOPRIK_FIND, C.ARIZA_KOPRIK_SUBMIT, C.ARIZA_KOPRIK_STATUS, C.TOLOV_KOPRIK_EKSPORT_YOL)
 _BG_TASKS: set = set()
 
 
@@ -111,10 +111,11 @@ def _urlopen(req: urllib.request.Request, timeout: float) -> Any:
 
 
 def _koprik(yol: str, *, params: Optional[Dict[str, str]] = None, body: Optional[Dict[str, Any]] = None,
-            timeout: float = 90.0) -> Dict[str, Any]:
-    """GET (params) yoki POST (body) — faqat _YOLLAR. Kalit faqat header'da, xato matni kalitsiz."""
+            timeout: float = 90.0, ruxsat_run: bool = False) -> Dict[str, Any]:
+    """GET (params) yoki POST (body) — faqat _YOLLAR. Kalit faqat header'da, xato matni kalitsiz.
+    Eksport run (Sheets'ga yozadi) faqat ruxsat_run=True bilan (eksport.py, egasi [Ha] bosgach)."""
     from . import payment_check as pc
-    if yol not in _YOLLAR:
+    if yol not in _YOLLAR and not (ruxsat_run and C.EKSPORT_RUN_RE.match(yol)):
         raise ValueError("ko'prik yo'li oq ro'yxatda yo'q")
     base = pc._koprik_base()
     if not base:
@@ -156,6 +157,9 @@ def _koprik(yol: str, *, params: Optional[Dict[str, str]] = None, body: Optional
         out = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         raise KoprikXato("javob JSON emas") from None
+    if isinstance(out, dict) and out.get("ok") is False and out.get("error"):
+        bosqich = (" (bosqich: %s)" % out.get("step")) if out.get("step") else ""
+        raise KoprikXato(str(out.get("error"))[:300] + bosqich)
     if not isinstance(out, dict) or out.get("ok") is not True:
         raise KoprikXato("javob shakli kutilmagan")
     return out

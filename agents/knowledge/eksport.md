@@ -44,6 +44,12 @@ Admin > Export sahifasi. (1) Google Sheets: `oplata_kv` yoki `transactions` qato
 - Autsourcing: `autsourcing.contracts`, `autsourcing.columns`, `autsourcing.dateFrom`; cron `autsourcing.cronEnabled` + `autsourcing.cronTime`, kuniga 1 marta. `autsourcing.botToken`, `autsourcing.groupId`.
 - SHMITD: sana `shmitd.dateOffset` (default -1 = kecha); G ustuni shu sanaga teng qatorlar; sariq = K>L va J<L, qizil = J>L (`buildReport`). Cron `shmitd.enabled` + `shmitd.cronTimes`. SA: avval `shmitd.saJson`, keyin `GOOGLE_SA_JSON`. empty = o'lchov yo'q, xato emas.
 
+## Bot orqali qayta ishga tushirish (TR Support)
+- Egasi botga "eksportni qayta yurgiz" yoki `/eksport [sheet nomi]` deydi. Leader: `intent: eksport`, `EKSPORT: <nom>`.
+- Bot (`agents/eksport.py`): `GET /api/agent-bridge/exports` — nom bitta eksportga mos kelsa darrov tasdiq so'rovi, aks holda ro'yxat (oxirgi ish vaqti, holati, qatorlar, cron) va har eksport uchun tugma (`ek_t:<token>:<i>`).
+- Tasdiq: [Ha, ishga tushir] yoki "tasdiqlayman" -> `POST /api/agent-bridge/exports/<id>/run` (panel "Bajarish" bilan bir xil `runAndLog`, `triggeredBy=manual:agent-bridge`, ExportCronLog'ga yoziladi; bir eksport bir vaqtda bir marta, 409 "hozir ishlayapti"; 3/daq). Natija: yozilgan/olingan qatorlar va vaqt yoki xato (bosqich bilan).
+- Run yo'li botda faqat shu modul orqali ochiq (`tuzatish._koprik(..., ruxsat_run=True)`), payment_check uni chaqira olmaydi.
+
 ## Bog'liqliklar — "X ni o'zgartirsang, Y ta'sirlanadi"
 - `oplata-kv.service.ts::getRowsForExport` → Sheets eksport va `downloadData`.
 - `export.sheets` tuzilmasi → `chek-order.service.ts` (`readContractsPayments` sheet'ni o'qiydi).

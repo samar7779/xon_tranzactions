@@ -37,8 +37,9 @@ LEADER_JSON_KEYS: Tuple[str, ...] = ("intent", "delegate_to", "task_for_agent", 
 INTENT_TOLOV = "payment_check"  # checker'ga: bot TOLOV bloki qo'shadi (18-bo'lim)
 INTENT_TUZATISH = "tx_edit"  # to'lov ustunlarini tahrirlash: bot TUZATISH qatorini o'zi bajaradi (19-bo'lim)
 INTENT_ARIZA = "xato_ariza"  # XATO to'lovga ariza: bot ARIZA qatorini o'zi bajaradi (19-bo'lim)
+INTENT_EKSPORT = "eksport"  # Google Sheets eksportini qayta ishga tushirish: bot EKSPORT qatorini bajaradi
 INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV, INTENT_TUZATISH,
-                            INTENT_ARIZA)
+                            INTENT_ARIZA, INTENT_EKSPORT)
 JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S | re.I)
 
 DELEG_HUMAN_REPLY = "Qabul qildim."
@@ -398,7 +399,7 @@ SEZGIR_PREFIKSLAR: Tuple[str, ...] = (
     "agents/reja.py", "agents/config.py", "agents/contract.py", "agents/db.py",
     "agents/db_migrations.py", "agents/history.py", "agents/memory_blocks.py", "agents/notify.py",
     "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py", "agents/tuzatish.py",
-    "agents/ariza.py",
+    "agents/ariza.py", "agents/eksport.py",
     "agents/bin", "agents/deploy", "agents/requirements.txt", "agents/.gitignore", ".gitignore",
     "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth", "backend/src/agent-bridge",
     "backend/src/tr-support",
@@ -429,6 +430,9 @@ CB_TZ_OK = "tz_ok:"          # TR Support: to'lov tahririni tasdiqlash
 CB_TZ_NO = "tz_no:"
 CB_AR_OK = "ar_ok:"          # TR Support: XATO to'lovga ariza yuborishni tasdiqlash
 CB_AR_NO = "ar_no:"
+CB_EK_TANLA = "ek_t:"        # eksportlar ro'yxatidan tanlash: ek_t:<token>:<i>
+CB_EK_OK = "ek_ok:"          # eksportni ishga tushirishni tasdiqlash
+CB_EK_NO = "ek_no:"
 KNOPKA_HA = "Ha"
 KNOPKA_YOQ = "Yo'q"
 
@@ -441,6 +445,9 @@ KV_TZ_APPR = "tz_appr_{token}"
 KV_TZ_RUN = "tz_run_{token}"
 KV_AR_APPR = "ar_appr_{token}"
 KV_AR_RUN = "ar_run_{token}"
+KV_EK_APPR = "ek_appr_{token}"
+KV_EK_RUN = "ek_run_{token}"
+KV_EK_ROY = "ek_roy_{token}"
 KV_SUP_EXEC_LOCK = "sup_exec_lock"
 KV_SUP_EXEC_ACTIVE = "sup_exec_active"
 KV_TW_APPR = "tw_appr_{token}"
@@ -693,7 +700,7 @@ TOLOV_SHEET_SABAB_TUZATISH: Dict[str, str] = {
     "FILTR_HISOB": "odatiy (filtr); kerak bo'lsa Admin > Export > {sheet} > filtr: hisob",
     "FILTR_SANA": "odatiy (dateFrom); kerak bo'lsa Admin > Export > {sheet} > sana",
     "FILTR_BELGI": "odatiy (summa belgisi filtri); kerak bo'lsa Admin > Export > {sheet} > filtr",
-    "EKSPORT_ESKI": "Admin > Export > {sheet} > Bajarish (yoki keyinroq bot orqali, Ha tugmasi bilan)",
+    "EKSPORT_ESKI": "Admin > Export > {sheet} > Bajarish yoki botda `/eksport <sheet nomi>`",
     "XATO_RAQAM": "OplatyKv > XATO → CRM yoki tx shartnomasini kanonik shaklga, keyin eksport",
 }
 TOLOV_EKSPORT_ESKI_TPL = "eksport oxirgi marta {vaqt} da ishlagan ({holat}), cron: {cron}"
@@ -1040,3 +1047,14 @@ TASDIQ_YOQ_RE = re.compile(r"(?i)^\s*(yo'q|yoq|yo‘q|yoʻq|bekor|bekor qil|beko
 TASDIQ_MATN_MAX = 40
 MSG_TASDIQ_QAYSI = ("Bir nechta tasdiq kutilmoqda. Qaysi biri ekanini aytish uchun kerakli tasdiq xabariga reply qilib"
                     " yozing.")
+
+# Google Sheets eksportini qayta ishga tushirish (eksport.py; /eksport; Leader intent eksport): ro'yxat -> tanlash ->
+# [Ha] -> agent-bridge POST exports/<id>/run (panel "Bajarish" bilan bir xil runAndLog).
+EKSPORT_RE = re.compile(r"(?im)^\s*EKSPORT:[ \t]*(.*)$")
+EKSPORT_RUN_YOL_TPL = "/api/agent-bridge/exports/{id}/run"
+EKSPORT_RUN_RE = re.compile(r"^/api/agent-bridge/exports/[A-Za-z0-9_-]{1,80}/run$")
+EKSPORT_RUN_TIMEOUT_S = 600
+KNOPKA_EK_HA = "Ha, ishga tushir"
+MSG_EKSPORT_QABUL = "Qabul qilindi, eksport ishga tushirilmoqda..."
+MSG_EKSPORT_BEKOR = "Bekor qilindi. Eksport ishga tushirilmadi."
+MSG_EKSPORT_FOYDALANISH = "Foydalanish: /eksport [sheet nomi]. Nomsiz — barcha eksportlar ro'yxati, tanlab ishga tushirasiz."

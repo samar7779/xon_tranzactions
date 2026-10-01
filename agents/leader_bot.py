@@ -62,7 +62,8 @@ _DOC_MIME = {"application/pdf": "pdf", "application/msword": "doc",
 _MIME_EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
 _TOKEN_RE = re.compile(r"^[0-9a-f]{6,32}$")
 _TOLOV_CMD_RE = re.compile(r"^\s*/tolov(?:@\S+)?\s*", re.I)
-_TUZAT_CMD_RE = re.compile(r"^\s*/tuzat(?:@\S+)?\s*", re.I)  # /tuzat <to'lov ID> [kalit=qiymat ...]  # /tolov yoki /tolov@bot_nomi
+_TUZAT_CMD_RE = re.compile(r"^\s*/tuzat(?:@\S+)?\s*", re.I)  # /tuzat <to'lov ID> [kalit=qiymat ...]
+_EKSPORT_CMD_RE = re.compile(r"^\s*/eksport(?:@\S+)?\s*", re.I)  # /eksport [sheet nomi]  # /tolov yoki /tolov@bot_nomi
 _JAVOB_TURLARI = frozenset({"sticker", "video", "animation", "document", "location", "contact",
                             "venue", "poll", "dice", "story"})
 _WATCH_INTERVAL_S = 15
@@ -787,7 +788,7 @@ async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
     if qaror is None:
         return False
     kutilgan: List[Tuple[Any, str, Dict[str, Any]]] = []
-    for name in ("tuzatish", "ariza"):
+    for name in ("tuzatish", "ariza", "eksport"):
         mod = _mod(name)
         if mod is None or not callable(getattr(mod, "kutilayotgan", None)):
             continue
@@ -807,9 +808,9 @@ async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
         return True
     mod, tok, p = tanlov[0]
     toast = await mod.decide(tok, qaror, _outbox(), p.get("mid"))
-    if qaror and toast in (C.MSG_TUZATISH_QABUL, C.MSG_ARIZA_QABUL):
+    if qaror and toast in (C.MSG_TUZATISH_QABUL, C.MSG_ARIZA_QABUL, C.MSG_EKSPORT_QABUL):
         await _say(toast, escape=True, reply_to=getattr(msg, "message_id", None))
-    elif qaror and toast not in (C.MSG_TUZATISH_BEKOR, C.MSG_ARIZA_BEKOR, C.MSG_MUDDAT_OTGAN):
+    elif qaror and toast not in (C.MSG_TUZATISH_BEKOR, C.MSG_ARIZA_BEKOR, C.MSG_EKSPORT_BEKOR, C.MSG_MUDDAT_OTGAN):
         await _say(toast, escape=True, reply_to=getattr(msg, "message_id", None))
     return True
 
@@ -960,6 +961,14 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
     # 6b. To'lovni tuzatish (TR Support): TUZATISH qatori bo'lsa bot o'zi so'raydi / tekshiradi / [Ha] so'raydi.
     #     Leader'ning delegatsiyasi va human_reply o'rniga (tahrirni faqat bot, egasi tasdig'i bilan qiladi).
     tz_matn = "\n".join(str(x) for x in (data.get("task_for_agent"), data.get("human_reply")) if x)
+    if C.EKSPORT_RE.search(tz_matn):
+        ek = _mod("eksport")
+        if ek is None:
+            await _say(_MSG_MODUL_YOQ_TPL.format(modul="eksport"), escape=True, reply_to=reply_to)
+            return
+        state["react"] = emoji
+        await ek.handle(tz_matn, _outbox(), reply_to=reply_to)
+        return
     if C.ARIZA_RE.search(tz_matn):
         ar = _mod("ariza")
         if ar is None:
@@ -1245,6 +1254,20 @@ async def on_callback(cb: CallbackQuery) -> None:
                 toast = _MSG_MODUL_YOQ_TPL.format(modul="reja")
             else:
                 toast = await rj.decide(token, approve, _outbox(), message_id)
+        elif data.startswith(C.CB_EK_TANLA):
+            ek = _mod("eksport")
+            toast = (await ek.tanla(data, _outbox(), message_id) if ek is not None
+                     else _MSG_MODUL_YOQ_TPL.format(modul="eksport"))
+        elif data.startswith(C.CB_EK_OK) or data.startswith(C.CB_EK_NO):
+            approve = data.startswith(C.CB_EK_OK)
+            token = data[len(C.CB_EK_OK if approve else C.CB_EK_NO):]
+            ek = _mod("eksport")
+            if not _TOKEN_RE.match(token):
+                toast = C.MSG_MUDDAT_OTGAN
+            elif ek is None:
+                toast = _MSG_MODUL_YOQ_TPL.format(modul="eksport")
+            else:
+                toast = await ek.decide(token, approve, _outbox(), message_id)
         elif data.startswith(C.CB_AR_OK) or data.startswith(C.CB_AR_NO):
             approve = data.startswith(C.CB_AR_OK)
             token = data[len(C.CB_AR_OK if approve else C.CB_AR_NO):]
@@ -1410,6 +1433,22 @@ async def cmd_tuzat(msg: Message) -> None:
     await tz.handle(matn, _outbox(), reply_to=msg.message_id)
 
 
+async def cmd_eksport(msg: Message) -> None:
+    """/eksport [sheet nomi]: Google Sheets eksportini qayta ishga tushirish (ro'yxat -> tanlash -> [Ha])."""
+    if not _is_owner_private(msg):
+        return
+    if _is_forwarded(msg):
+        await on_text(msg)
+        return
+    arg = _EKSPORT_CMD_RE.sub("", _mask_secrets(getattr(msg, "text", None) or ""), count=1).strip()
+    await _hist(C.ROLE_OWNER, ("/eksport " + C.short(arg, 60)).strip())
+    ek = _mod("eksport")
+    if ek is None:
+        await _say(_MSG_MODUL_YOQ_TPL.format(modul="eksport"), escape=True)
+        return
+    await ek.handle("EKSPORT: " + arg, _outbox(), reply_to=msg.message_id)
+
+
 async def cmd_reset(msg: Message) -> None:
     if not _is_owner_private(msg):
         return
@@ -1417,7 +1456,7 @@ async def cmd_reset(msg: Message) -> None:
         await on_text(msg)
         return
     await asyncio.to_thread(history.clear_history)
-    for name in ("reja", "memory_blocks", "tuzatish", "ariza"):
+    for name in ("reja", "memory_blocks", "tuzatish", "ariza", "eksport"):
         module = _mod(name)
         if module is None:
             continue
@@ -1655,6 +1694,7 @@ def _register(dp: Dispatcher) -> None:
     dp.message.register(cmd_health, Command("health"), ~F.forward_origin)
     dp.message.register(cmd_tolov, Command("tolov"), ~F.forward_origin)
     dp.message.register(cmd_tuzat, Command("tuzat"), ~F.forward_origin)
+    dp.message.register(cmd_eksport, Command("eksport"), ~F.forward_origin)
     dp.message.register(cmd_reset, Command("reset"), ~F.forward_origin)
     dp.message.register(on_text)
     dp.callback_query.register(on_callback)
