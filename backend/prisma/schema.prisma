@@ -682,6 +682,10 @@ model XonpayTransaction {
   isMatched         Boolean      @default(false) @map("is_matched")
   matchedAt         DateTime?    @map("matched_at")
   lastCheckedAt     DateTime?    @map("last_checked_at")
+  // Qanday topilgan: 'uuid' — izohdagi XONPAY uuid orqali (asosiy yo'l),
+  // 'zaxira' — izoh bo'sh bo'lgani uchun shartnoma+summa+sana bo'yicha.
+  // Zaxira usulda bog'langanlarni keyin ajratib ko'rish/bekor qilish mumkin.
+  matchMethod       String?      @map("match_method") @db.VarChar(16)
 
   // ── DUBLIKAT (XonPay initsiatsiya yozuvi) ──
   // CRM bitta to'lovni IKKI marta yozadi: (1) mijoz to'lovni boshlaganda —

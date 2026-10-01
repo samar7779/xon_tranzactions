@@ -212,6 +212,20 @@ export class XonpayController {
     return this.svc.markDuplicates();
   }
 
+  @Post('admin/zaxira-match')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: "Zaxira moslashtirish — izohi bo'sh to'lovlarni shartnoma+summa bo'yicha bog'lash",
+    description:
+      "CRM izohni bo'sh bergan to'lovlarda XONPAY uuid yo'q, shuning uchun asosiy " +
+      "moslashtirish ularni topa olmaydi. Bu yerda shartnoma + summa + sana bo'yicha " +
+      "qidiramiz. Faqat: XonPay 'pul keldi' degan, 3 kundan eski, tranzaksiyasi bo'sh " +
+      "va moslik ikki tomonlama YAGONA bo'lganlar bog'lanadi. match_method='zaxira'.",
+  })
+  zaxiraMatch() {
+    return this.svc.zaxiraMoslashtirish();
+  }
+
   @Get('export.xlsx')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   @ApiOperation({

@@ -869,6 +869,66 @@ export class XonpayService implements OnModuleInit {
     return { ok: true, marked };
   }
 
+  /**
+   * ZAXIRA MOSLASHTIRISH — izohi bo'sh to'lovlar uchun.
+   *
+   * Asosiy yo'l (tryMatchOne) izohdagi XONPAY uuid ni bank matnidan qidiradi.
+   * CRM ba'zan izohni bo'sh beradi — unda qidiradigan kalit qolmaydi va to'lov
+   * abadiy "topilmagan" bo'lib turadi, garchi puli kelgan bo'lsa ham.
+   *
+   * Bu yerda shartnoma + summa + sana oralig'i bo'yicha qidiramiz. Noto'g'ri
+   * bog'lab qo'ymaslik uchun TO'RTTA himoya:
+   *   1) faqat XonPay'ning o'zi "pul bankdan keldi" degan yozuvlar;
+   *   2) faqat 3 kundan eski (yangi to'lovning puli yo'lda bo'lishi normal);
+   *   3) tranzaksiya boshqa hech kimga bog'lanmagan bo'lishi shart;
+   *   4) moslik IKKI TOMONLAMA yagona bo'lishi shart — bitta to'lovga bitta
+   *      tranzaksiya va aksincha. Ikkilanish bo'lsa umuman tegilmaydi.
+   *
+   * Natija match_method='zaxira' bilan belgilanadi, ya'ni keyin ajratib
+   * ko'rish yoki bitta so'rov bilan bekor qilish mumkin.
+   */
+  async zaxiraMoslashtirish(kunOraliq = 20): Promise<{ ok: true; bogllandi: number }> {
+    const n = await this.prisma.$executeRawUnsafe(
+      `
+      WITH juft AS (
+        SELECT a.external_id AS xp_id, t.id AS tx_id
+          FROM xonpay_transactions a
+          JOIN transactions t
+            ON t.contract_number = a.contract
+           AND t.amount = a.amount
+           AND t.txn_date BETWEEN a.date_paid - $1::int AND a.date_paid + $1::int
+         WHERE a.is_matched = false
+           AND a.is_duplicate = false
+           AND a.is_received_from_bank = true
+           AND a.date_paid < CURRENT_DATE - 3
+           AND a.contract IS NOT NULL
+           AND NOT EXISTS (
+                 SELECT 1 FROM xonpay_transactions x WHERE x.matched_tx_id = t.id)
+      ),
+      yagona AS (
+        SELECT xp_id, tx_id FROM juft
+         WHERE xp_id IN (SELECT xp_id FROM juft GROUP BY xp_id HAVING count(*) = 1)
+           AND tx_id IN (SELECT tx_id FROM juft GROUP BY tx_id HAVING count(*) = 1)
+      )
+      UPDATE xonpay_transactions a
+         SET matched_tx_id       = t.id,
+             matched_external_id = t.external_id,
+             matched_amount      = a.amount,
+             matched_date        = t.txn_date::date,
+             is_matched          = true,
+             matched_at          = now(),
+             match_method        = 'zaxira',
+             last_checked_at     = now()
+        FROM yagona y
+        JOIN transactions t ON t.id = y.tx_id
+       WHERE a.external_id = y.xp_id
+      `,
+      kunOraliq,
+    );
+    this.log.log(`xonpay zaxiraMoslashtirish: ${n} ta to'lov bog'landi`);
+    return { ok: true, bogllandi: n };
+  }
+
   /** Bita externalId uchun majburiy recheck (API) */
   async recheckOne(externalId: string): Promise<{ ok: true; matched: boolean }> {
     const ok = await this.tryMatchOne(externalId);
@@ -919,6 +979,12 @@ export class XonpayService implements OnModuleInit {
       // dublikat deb belgilaymiz, aks holda ular "topilmagan" hisobini shishiradi.
       await this.markDuplicates().catch((e: any) =>
         this.log.warn(`markDuplicates xato: ${e?.message}`),
+      );
+
+      // Izohi bo'sh bo'lgani uchun UUID bilan topilmaganlarni shartnoma+summa
+      // bo'yicha bog'laymiz (qat'iy himoyalar bilan — metodga qarang).
+      await this.zaxiraMoslashtirish().catch((e: any) =>
+        this.log.warn(`zaxiraMoslashtirish xato: ${e?.message}`),
       );
     } finally {
       this.matchRunning = false;
