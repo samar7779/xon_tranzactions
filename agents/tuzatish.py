@@ -259,8 +259,8 @@ def preview_html(previews: List[Tuple[Qator, Dict[str, Any]]], tasdiq: str, izoh
         if qolgan:
             q.append("  O'zgarmaydi: " + _e(", ".join(qolgan)))
     q += ["", "Tasdiqladi: <b>%s</b>" % _e(tasdiq), "Izoh: %s" % _e(izoh),
-          "Keyin OplatyKv sync bir marta ishlaydi. Tasdiq %d daqiqa amal qiladi: tugmani bosing yoki"
-          " \"tasdiqlayman\" / \"yo'q\" deb yozing." % max(1, C.APPROVAL_TTL_S // 60)]
+          "Keyin OplatyKv sync bir marta ishlaydi.", "",
+          _e(C.TASDIQ_YOZING.format(daq=max(1, C.APPROVAL_TTL_S // 60)))]
     return "\n".join(q)
 
 
@@ -382,8 +382,7 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
     }
     await asyncio.to_thread(db.kv_set_json, C.kv_key(C.KV_TZ_APPR, token=token), payload)
     matn = preview_html(previews, tasdiq, izoh)
-    keyboard = [[(C.KNOPKA_TZ_HA, C.CB_TZ_OK + token), (C.KNOPKA_YOQ, C.CB_TZ_NO + token)]]
-    mid = await _say(outbox, matn, html_mode=True, keyboard=keyboard, reply_to=reply_to,
+    mid = await _say(outbox, matn, html_mode=True, reply_to=reply_to,
                      hist=re.sub(r"<[^>]+>", "", html.unescape(matn)))
     if mid is None:
         await asyncio.to_thread(db.kv_del, C.kv_key(C.KV_TZ_APPR, token=token))

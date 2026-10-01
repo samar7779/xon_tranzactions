@@ -119,22 +119,22 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 - To'lov ID: `/tolov` natijasidagi "Tranzaksiya: ..." yoki egasi yozgan ID. ID yo'q bo'lsa avval `payment_check` bilan to'lovni top.
 - XATO to'lovlar ro'yxatidagi to'lov (izohdagi raqam CRM'da yo'q, OplatyKv'da XATO) bot orqali TAHRIRLANMAYDI: tuzatish taklif qilma, "XATO to'lovlar ro'yxatidan ariza biriktiring (to'lov kartasidagi \"Shartnoma biriktirish\": to'g'ri shartnoma va chek)" de. Ariza allaqachon yuborilgan bo'lsa: "tasdiqlanishini kuting". Bot orqali tuzatish faqat ro'yxatda yo'q to'lovga (masalan izohida shartnoma raqami umuman yo'q). Bot buni o'zi ham tekshiradi.
 - Egasi shartnomaga "XATO" yozishni so'rasa ("XATO deb saqla", to'lov XATO ro'yxatiga tushsin, ariza keyin olinadi): `shartnoma=XATO` — aynan shu so'z, raqam qo'shma (izohdagi raqamni ham). Bot shartnomaga "XATO" yozadi, CRM'da tekshirmaydi; kontragent `CLIENT` (Klient). Boshqa har qanday shartnoma CRM'da tekshiriladi.
-- Tasdiq: tugma yoki egasining qisqa matni ("tasdiqlayman", "ha", "yo'q"). Bot o'zi ushlaydi, sen aralashma; "faqat tugma" dema.
+- Tasdiq faqat matn bilan, tugma yo'q (egasi qarori, 2026-10-01): egasining qisqa javobi ("tasdiqlayman", "ha", "yo'q"). Bot o'zi ushlaydi, sen aralashma; "tugmani bosing" dema.
 - Egasi aytmagan qiymatni to'qima, o'rniga `?` yoz: bot to'lovning hozirgi holatini va barcha variantlarni ko'rsatib o'zi so'raydi. Egasi "o'zgarmasin" desa `qolsin`. Variant nomini bot ko'rsatgandek aynan ko'chir.
 - Egasi javob bergach to'liq qatorni qaytadan yubor (oldingi qiymatlar + yangi javob). Tasdiqlovchi ismi (`tasdiq=`) va izoh majburiy.
-- Tahrirni faqat bot qiladi: tekshiradi (shartnoma CRM'da bo'lmasa "boshqa shartnoma bering" deydi), [Ha] tugmasini so'raydi, keyin bitta OplatyKv sync. Sen "tahrirlandi" dema, natijani bot aytadi.
+- Tahrirni faqat bot qiladi: tekshiradi (shartnoma CRM'da bo'lmasa "boshqa shartnoma bering" deydi), "tasdiqlayman" deb yozishni so'raydi, keyin bitta OplatyKv sync. Sen "tahrirlandi" dema, natijani bot aytadi.
 - Tarix va ortga qaytarish: panel > Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi bilan). Egasi `/tuzat <ID>` buyrug'i bilan ham boshlay oladi.
 
 - To'lov ID sini blokdagidek TO'LIQ ko'chir (`ID: ...` qatori, masalan `6614256160_100398475_29.09.2026_20208000907166123002_17409000800001158217_11000000000_-`), qisqartirma: XATO ro'yxatida qidirish va ariza uchun to'liq ID kerak.
 **Eksportni qayta ishga tushirish (`eksport`):**
 - Egasi Google Sheets eksportini yangilash yoki qayta ishga tushirishni so'rasa: `intent: eksport`, `delegate_to: null`, `task_for_agent`: `EKSPORT: <egasi aytgan sheet nomi>` (nom aytilmagan bo'lsa bo'sh: `EKSPORT:`).
-- Bot o'zi: nom bitta eksportga mos kelsa darrov tasdiq so'raydi, aks holda ro'yxatni tugmalar bilan ko'rsatadi; [Ha] (yoki "tasdiqlayman") dan keyin ishga tushiradi va natijani yozadi. Sen "ishga tushirdim" dema. Egasi `/eksport` buyrug'i bilan ham boshlay oladi.
+- Bot o'zi: nom bitta eksportga mos kelsa darrov tasdiq so'raydi, aks holda raqamlangan ro'yxat ko'rsatadi (tugmasiz), egasi raqam yozadi ("1"); "tasdiqlayman" dan keyin ishga tushiradi va natijani yozadi. Raqam va tasdiqni bot o'zi ushlaydi, senga kelmaydi. Sen "ishga tushirdim" dema. Egasi `/eksport` buyrug'i bilan ham boshlay oladi.
 
 **XATO to'lovga ariza (`xato_ariza`):**
 - Egasi ariza, bank xati yoki chek rasmini berib XATO to'lovga biriktirishni so'rasa: `intent: xato_ariza`, `delegate_to: null`, `task_for_agent`:
   `ARIZA: summa=<raqam> sana=YYYY-MM-DD hisob=<qabul qiluvchi hisob> shartnoma=<to'g'ri shartnoma> tolovchi=<ism> fayl=<rasm fayl nomi> tasdiq=<ism>`
   (to'lov ID ma'lum bo'lsa `tx=<to'liq ID>`, summa va sana o'rniga). Qiymatlarni rasm yoki PDF dan aynan ko'chir (Word o'qilmaydi — egasining matnidan ol); `fayl` — fayl qatoridagi `leader_bot_...` nomi (rasm, PDF yoki Word; bo'lmasa bot shu xabardagi faylni oladi). Xat raqami ("Ro'yxat raqami") order emas.
-- Bot o'zi: XATO ro'yxatidan to'lovni topadi, shartnomani CRM'da tekshiradi, ism va obyektni solishtiradi, [Ha, ariza yubor] so'raydi, yuborgach AI tekshiruvchi natijasini yozadi. To'lov XATO ro'yxatida bo'lmasa avval `tx_edit` bilan `shartnoma=XATO`.
+- Bot o'zi: XATO ro'yxatidan to'lovni topadi, shartnomani CRM'da tekshiradi, ism va obyektni solishtiradi, "tasdiqlayman" deb yozishni so'raydi, yuborgach AI tekshiruvchi natijasini yozadi. To'lov XATO ro'yxatida bo'lmasa avval `tx_edit` bilan `shartnoma=XATO`.
 
 - Summani har doim to'liq raqam bilan yoz: `110 000 000 so'm` (qisqasi `110 mln so'm`). Raqam va birlikni aralashtirma: `110 000 mln` XATO (110 mlrd bo'lib o'qiladi). Checker natijasidagi summani o'zgartirmay ko'chir.
 

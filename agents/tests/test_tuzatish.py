@@ -63,6 +63,7 @@ class _Base(unittest.IsolatedAsyncioTestCase):
             (TZ.db, "kv_del", lambda k: self.kv.pop(k, None)),
             (TZ.db, "kv_claim", lambda k, v="1": self.kv.setdefault(k, v) == v and self.kv[k] is v),
             (TZ.db, "kv_del_prefix", lambda pre: len([self.kv.pop(k) for k in list(self.kv) if k.startswith(pre)])),
+            (TZ.db, "kv_keys", lambda pre: [k for k in self.kv if k.startswith(pre)]),
             (TZ.history, "add_history", lambda role, text, **kw: self.hist.append(text)),
         ):
             pp = mock.patch.object(tgt, name, val)
@@ -87,6 +88,17 @@ class _Base(unittest.IsolatedAsyncioTestCase):
 
     def texts(self) -> List[str]:
         return [s["text"] for s in self.out.sent if s["kind"] == "text"]
+
+    def _token(self, tpl: str) -> str:
+        """Oxirgi kutilayotgan tasdiq tokeni (kv dan; tugma yo'q — egasi qarori 2026-10-01)."""
+        pre = tpl.split("{", 1)[0]
+        keys = [k for k in self.kv if k.startswith(pre)]
+        return keys[-1][len(pre):] if keys else ""
+
+    def _sorov_xabari(self, belgi: str) -> Dict[str, Any]:
+        s = [x for x in self.out.sent if x["kind"] == "text" and belgi in (x.get("text") or "")][-1]
+        assert s.get("keyboard") is None, "inline tugma bo'lmasligi kerak"
+        return s
 
 
 class ParseTest(unittest.TestCase):
@@ -140,13 +152,11 @@ class OqimTest(_Base):
                                  "crm": {"contract": "206FZO25A2", "found": True, "customerName": "Ismoilova", "objectName": "FZO"}}
         await TZ.handle("TUZATISH: tx=%s kontragent=qolsin kategoriya=qolsin shartnoma=206FZ025A2 tasdiq=Samar "
                         "izoh=chek bo'yicha" % TX, self.out)
-        s = [x for x in self.out.sent if x.get("keyboard")][-1]
-        (ha, ok_cb), (yoq, no_cb) = s["keyboard"][0]
-        self.assertEqual((ha, yoq), (C.KNOPKA_TZ_HA, C.KNOPKA_YOQ))
-        token = ok_cb[len(C.CB_TZ_OK):]
-        self.assertEqual(no_cb, C.CB_TZ_NO + token)
+        s = self._sorov_xabari("To'lovni tahrirlash")
+        token = self._token(C.KV_TZ_APPR)
         for frag in ("Shartnoma: yo'q -&gt; 206FZO25A2", "CRM: Ismoilova, FZO", "O'zgarmaydi: Kontragent, Kategoriya",
-                     "Tasdiqladi: <b>Samar</b>", "Izoh: chek bo'yicha", "OplatyKv sync bir marta"):
+                     "Tasdiqladi: <b>Samar</b>", "Izoh: chek bo'yicha", "OplatyKv sync bir marta",
+                     'Tasdiqlash uchun "tasdiqlayman" deb yozing'):
             self.assertIn(frag, s["text"])
         return token
 
@@ -221,10 +231,10 @@ class OqimTest(_Base):
                                                  "changes": [{"field": "kategoriya", "from": "Взносы за квартиры", "to": "За счетчик"}], "crm": None}
         await TZ.handle("TUZATISH: tx=AAAA1111 kontragent=qolsin kategoriya=За счетчик shartnoma=qolsin tasdiq=Samar izoh=sch\n"
                         "TUZATISH: tx=BBBB2222 kontragent=qolsin kategoriya=За счетчик shartnoma=qolsin", self.out)
-        [s] = [x for x in self.out.sent if x.get("keyboard")]
+        s = self._sorov_xabari("To'lovni tahrirlash")
         self.assertIn("1. ", s["text"])
         self.assertIn("2. ", s["text"])
-        token = s["keyboard"][0][0][1][len(C.CB_TZ_OK):]
+        token = self._token(C.KV_TZ_APPR)
         self.assertEqual([i["tx"] for i in self.kv[C.kv_key(C.KV_TZ_APPR, token=token)]["items"]], ["AAAA1111", "BBBB2222"])
 
 

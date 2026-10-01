@@ -46,8 +46,8 @@ Admin > Export sahifasi. (1) Google Sheets: `oplata_kv` yoki `transactions` qato
 
 ## Bot orqali qayta ishga tushirish (TR Support)
 - Egasi botga "eksportni qayta yurgiz" yoki `/eksport [sheet nomi]` deydi. Leader: `intent: eksport`, `EKSPORT: <nom>`.
-- Bot (`agents/eksport.py`): `GET /api/agent-bridge/exports` — nom bitta eksportga mos kelsa darrov tasdiq so'rovi, aks holda ro'yxat (oxirgi ish vaqti, holati, qatorlar, cron) va har eksport uchun tugma (`ek_t:<token>:<i>`).
-- Tasdiq: [Ha, ishga tushir] yoki "tasdiqlayman" -> `POST /api/agent-bridge/exports/<id>/run` (panel "Bajarish" bilan bir xil `runAndLog`, `triggeredBy=manual:agent-bridge`, ExportCronLog'ga yoziladi; bir eksport bir vaqtda bir marta, 409 "hozir ishlayapti"; 3/daq). Natija: yozilgan/olingan qatorlar va vaqt yoki xato (bosqich bilan).
+- Bot (`agents/eksport.py`): `GET /api/agent-bridge/exports` — nom bitta eksportga mos kelsa darrov tasdiq so'rovi, aks holda raqamlangan ro'yxat (oxirgi ish vaqti, holati, qatorlar, cron), tugmasiz. Egasi raqam yozadi ("1", "2."): `eksport.matn_tanlov` (`C.TANLOV_RE`), ro'yxat xabariga reply bo'lsa o'sha ro'yxat, aks holda oxirgi kutilayotgani (10 daqiqa). Noto'g'ri raqam: "Bunday raqam yo'q: 1 dan N gacha yozing."
+- Tasdiq: egasi "tasdiqlayman" deb yozadi (tugma yo'q) -> `POST /api/agent-bridge/exports/<id>/run` (panel "Bajarish" bilan bir xil `runAndLog`, `triggeredBy=manual:agent-bridge`, ExportCronLog'ga yoziladi; bir eksport bir vaqtda bir marta, 409 "hozir ishlayapti"; 3/daq). Natija: yozilgan/olingan qatorlar va vaqt yoki xato (bosqich bilan).
 - Run yo'li botda faqat shu modul orqali ochiq (`tuzatish._koprik(..., ruxsat_run=True)`), payment_check uni chaqira olmaydi.
 
 ## Bog'liqliklar — "X ni o'zgartirsang, Y ta'sirlanadi"

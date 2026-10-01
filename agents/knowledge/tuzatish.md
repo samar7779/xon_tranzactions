@@ -12,8 +12,8 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
    `TUZATISH: tx=<ID> kontragent=<..|qolsin> kategoriya=<..|qolsin|yo'q> shartnoma=<..|qolsin|tozalash> tasdiq=<ism> izoh=<matn>`.
 2. Yetishmagan qiymat (`?` yoki yo'q): bot (`agents/tuzatish.py`, LLM'siz) to'lovning hozirgi holatini va BARCHA variantlarni ko'rsatib so'raydi: kontragent, kategoriya, shartnoma, kim tasdiqlaydi, izoh. `qolsin` — ustun o'z holicha qoladi (3 tadan 1-2 tasini o'zgartirish mumkin).
 3. Hammasi ma'lum: bot backend tekshiruvi (`GET /api/agent-bridge/tx-edit/preview`, faqat o'qish). Xato bo'lsa tugmasiz aytadi.
-4. To'g'ri bo'lsa: oldin → keyin ko'rinishi, CRM ma'lumoti (mijoz, obyekt), tasdiqlovchi, izoh va [Ha, tahrirla] [Yo'q]. Tasdiq 10 daqiqa amal qiladi, bir marta bosiladi.
-5. [Ha]: `POST /api/agent-bridge/tx-edit/apply` → har to'lov panelning o'z yo'li bilan (`CategorizationService.setManual`, `setContract`: tarix `transaction_category_history`, OplatyKv propagation), keyin HAMMASIDAN keyin BITTA OplatyKv sync (`syncNowRespectingSettings`, panel "Sync" tugmasi bilan bir xil). Natija egasiga.
+4. To'g'ri bo'lsa: oldin → keyin ko'rinishi, CRM ma'lumoti (mijoz, obyekt), tasdiqlovchi, izoh va oxirida: "Tasdiqlash uchun \"tasdiqlayman\" deb yozing, bekor qilish uchun \"yo'q\"" (`C.TASDIQ_YOZING`). Inline tugma YO'Q. Tasdiq 10 daqiqa amal qiladi, bir marta ishlaydi.
+5. "tasdiqlayman": `POST /api/agent-bridge/tx-edit/apply` → har to'lov panelning o'z yo'li bilan (`CategorizationService.setManual`, `setContract`: tarix `transaction_category_history`, OplatyKv propagation), keyin HAMMASIDAN keyin BITTA OplatyKv sync (`syncNowRespectingSettings`, panel "Sync" tugmasi bilan bir xil). Natija egasiga.
 
 ## Qoidalar (backend `tr-support.service.ts` tekshiradi)
 - **XATO to'lovlar ro'yxatidagi to'lov tahrirlanmaydi** (egasi qoidasi, 2026-09-30). Ro'yxat = xato-list sahifasi bilan AYNAN bir xil: `OplataKvService.findXatoRowForTx` (`buildXatoFilter`: `source_tx_id` bor, shartnoma CRM'da found emas, `xato_hidden` emas) va sana `settings.agent.dateFrom` dan. Bunda bot savol bermaydi, "XATO to'lovlar ro'yxatidan ariza biriktiring: to'lov kartasidagi \"Shartnoma biriktirish\" (to'g'ri shartnoma va chek)" deydi. Kutilayotgan ariza (`xato_correction_requests.status=pending`) bo'lsa: "ariza allaqachon yuborilgan (kim, qachon, taklif) — tasdiqlanishini kuting". Bot orqali tuzatish faqat ro'yxatda yo'q to'lovga (masalan izohida shartnoma raqami umuman yo'q, OplatyKv'ga tushmagan).
@@ -27,14 +27,15 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
 ## XATO deb belgilash
 - `shartnoma=XATO`: shartnomasiz yoki noto'g'ri raqamli to'lovni XATO ro'yxatiga tushirish (keyin ariza olinadi). Shartnomaga AYNAN "XATO" yoziladi (egasi qarori: raqam qo'shilsa ham "XATO"), CRM tekshirilmaydi; panelning qo'lda shartnoma yo'li (`setContractManual`, `is_contract_manual=true`). Kontragent `CLIENT` bo'lishi shart (OplatyKv sync faqat CLIENT'ni oladi). Boshqa har qanday shartnoma CRM'da tekshiriladi. Sync'dan keyin OplatyKv qatori (`contract_no` = XATO) XATO ro'yxatida chiqadi.
 
-## Matn bilan tasdiq
-- Tugmadan tashqari egasining qisqa javobi: "tasdiqlayman", "ha", "bajaring" = [Ha]; "yo'q", "bekor" = [Yo'q] (`C.TASDIQ_HA_RE` / `TASDIQ_YOQ_RE`, 40 belgigacha). Tasdiq xabariga reply bo'lsa o'sha so'rov; reply bo'lmasa faqat bitta kutilayotgan so'rov bo'lsa. Bir nechta bo'lsa bot "qaysi biri — reply qilib yozing" deydi. Uzun matn hech qachon tasdiq emas (Leader'ga ketadi).
+## Matn bilan tasdiq (tugmasiz)
+- Egasi qarori (2026-10-01): TR Support oqimlarida (tahrir, ariza, eksport) tasdiq ham, variant tanlash ham inline tugmasiz, faqat matn. Eski xabarlardagi tugma callback'lari (`tz_ok:`, `ar_ok:`, `ek_ok:`, `ek_t:`) hali ishlaydi, yangi xabarda tugma chiqmaydi.
+- Egasining qisqa javobi: "tasdiqlayman", "ha", "bajaring" = ha; "yo'q", "bekor" = yo'q (`C.TASDIQ_HA_RE` / `TASDIQ_YOQ_RE`, 40 belgigacha). Tasdiq xabariga reply bo'lsa o'sha so'rov; reply bo'lmasa faqat bitta kutilayotgan so'rov bo'lsa. Bir nechta bo'lsa bot "qaysi biri — reply qilib yozing" deydi. Uzun matn hech qachon tasdiq emas (Leader'ga ketadi).
 
 ## XATO to'lovga ariza (ARIZA)
 - Egasi ariza/bank xati/chek rasmini beradi. Leader: `intent: xato_ariza`, `ARIZA: summa= sana= hisob= shartnoma= tolovchi= fayl= tasdiq=` (yoki `tx=`). Bot (`agents/ariza.py`):
   1. XATO ro'yxatidan to'lov: `GET /api/agent-bridge/xato-ariza/find` (xato-list bilan bir xil filtr `findXatoRows`, summa ±1, sana ±3 kun, qabul qiluvchi hisob). 0 ta: "XATO ro'yxatida yo'q — avval XATO deb belgilang"; bir nechta: ID lari bilan so'raydi; kutilayotgan ariza bo'lsa: "kuting".
   2. Shartnoma CRM'da (kanonik), topilmasa "boshqa shartnoma bering". To'lovchi ismi CRM mijozi bilan (familiya/ism 4 harf), obyekt kodi izohdagi shartnoma bilan solishtiriladi (farqli bo'lsa AI arizani xodimga yuborishi mumkin, ogohlantirish).
-  3. [Ha, ariza yubor] yoki "tasdiqlayman" → `POST xato-ariza/submit`: XATO sahifasidagi "Shartnoma biriktirish" bilan AYNAN bir xil `CorrectionService.createRequestWithFile` (ariza fayli = bot saqlagan rasm, `static/tg_uploads/leader_bot_<hex>.<ext>`, nomi qat'iy tekshiriladi). Yuboruvchi: `TR Support · <tasdiq>`.
+  3. "tasdiqlayman" → `POST xato-ariza/submit`: XATO sahifasidagi "Shartnoma biriktirish" bilan AYNAN bir xil `CorrectionService.createRequestWithFile` (ariza fayli = bot saqlagan rasm, `static/tg_uploads/leader_bot_<hex>.<ext>`, nomi qat'iy tekshiriladi). Yuboruvchi: `TR Support · <tasdiq>`.
   4. AI tekshiruvchi (`agent.aiName`, masalan Shomurad AI) darrov ko'radi; bot `xato-ariza/status` ni 4 daqiqagacha kutib natijani yozadi: tasdiqlandi / rad / xodim ko'rishi kerak. AI o'chiq bo'lsa: xodim tasdiqlaydi.
 
 ## Tarix va ortga qaytarish
@@ -46,14 +47,14 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
 ## Fayllar
 | Yo'l | Rol |
 |---|---|
-| `agents/tuzatish.py` | parse, variantlar so'rovi, preview, [Ha]/[Yo'q], apply |
-| `agents/leader_bot.py` | `/tuzat`, Leader javobidagi `TUZATISH:` qatori, `tz_ok:` / `tz_no:` tugmalar |
+| `agents/tuzatish.py` | parse, variantlar so'rovi, preview, matnli tasdiq (`matn_qaror`), apply |
+| `agents/leader_bot.py` | `/tuzat`, Leader javobidagi `TUZATISH:` qatori, `_matn_tasdiq` (raqam tanlash + tasdiq matni) |
 | `backend/src/tr-support/` | `TrSupportService` (options, preview, apply, list, rollback), panel controller |
 | `backend/src/agent-bridge/` | `tx-edit/options`, `tx-edit/preview` (GET), `tx-edit/apply` (POST, 3/daq) |
 | `backend/src/categorization/categorization.service.ts` | `setManual`, `setContract` (actorLabel), `restoreSnapshot` |
 | `frontend/components/tr-support-tab.tsx` | panel tabi: kod, ro'yxat, ortga qaytarish |
 
 ## Xavfli joylar
-- Tahrir faqat egasi [Ha] bosgach. Leader yoki sub-agent o'zi "tahrirlandi" demaydi.
+- Tahrir faqat egasi "tasdiqlayman" deb yozgach. Leader yoki sub-agent o'zi "tahrirlandi" demaydi.
 - Ortga qaytarish shartnomasiz holatga qaytarsa, OplatyKv qatori panelning "Shartnomani tozalash" kabi XATO ro'yxatiga o'tadi.
 - Sync 1-bosqichi sinxron (bir necha soniya), obyekt/mijoz va split fonda.

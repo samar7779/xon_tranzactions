@@ -783,6 +783,13 @@ async def on_text(msg: Message) -> None:
 async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
     """Qisqa "tasdiqlayman" / "yo'q" matni kutilayotgan TR Support tasdig'iga (tahrir yoki ariza) tugma kabi.
     Reply qilingan tasdiq xabari aniqlaydi; reply bo'lmasa faqat bitta kutilayotgan tasdiq bo'lsa. True = hal qilindi."""
+    reply_mid = getattr(replied, "message_id", None) if replied is not None else None
+    # eksport ro'yxatidan raqam bilan tanlash ("1") — variantlar ham tugmasiz
+    tanlov = getattr(_mod("eksport"), "matn_tanlov", None)
+    if callable(tanlov) and C.TANLOV_RE.match(text or ""):
+        if await tanlov(text, reply_mid, _outbox()):
+            await _hist(C.ROLE_OWNER, text)
+            return True
     fn = getattr(_mod("tuzatish"), "matn_qaror", None)
     qaror = fn(text) if callable(fn) else None
     if qaror is None:
@@ -798,7 +805,6 @@ async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
             log.exception("%s: kutilayotgan tasdiqlar o'qilmadi", name)
     if not kutilgan:
         return False
-    reply_mid = getattr(replied, "message_id", None) if replied is not None else None
     tanlov = [x for x in kutilgan if reply_mid and x[2].get("mid") == reply_mid]
     if not tanlov and len(kutilgan) == 1:
         tanlov = kutilgan
@@ -807,7 +813,7 @@ async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
         await _say(C.MSG_TASDIQ_QAYSI, escape=True, reply_to=getattr(msg, "message_id", None))
         return True
     mod, tok, p = tanlov[0]
-    toast = await mod.decide(tok, qaror, _outbox(), p.get("mid"))
+    toast = await mod.decide(tok, qaror, _outbox(), None)
     if qaror and toast in (C.MSG_TUZATISH_QABUL, C.MSG_ARIZA_QABUL, C.MSG_EKSPORT_QABUL):
         await _say(toast, escape=True, reply_to=getattr(msg, "message_id", None))
     elif qaror and toast not in (C.MSG_TUZATISH_BEKOR, C.MSG_ARIZA_BEKOR, C.MSG_EKSPORT_BEKOR, C.MSG_MUDDAT_OTGAN):

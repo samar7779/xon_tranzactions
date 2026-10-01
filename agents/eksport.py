@@ -107,17 +107,48 @@ async def _handle(nomi: str, outbox: Any, reply_to: Optional[int]) -> None:
         await _tasdiq_sorovi(mos[0], outbox, reply_to)
         return
     token = secrets.token_hex(8)
-    await asyncio.to_thread(db.kv_set_json, C.kv_key(C.KV_EK_ROY, token=token),
-                            {"token": token, "created_ts": config.now_utc().timestamp(),
-                             "ids": [str(it["id"]) for it in items[:20]]})
+    roy = {"token": token, "created_ts": config.now_utc().timestamp(), "ids": [str(it["id"]) for it in items[:20]]}
+    roy_key = C.kv_key(C.KV_EK_ROY, token=token)
+    await asyncio.to_thread(db.kv_set_json, roy_key, roy)
     bosh = ("\"%s\" ga mos eksport topilmadi. " % nomi if nomi and not mos else
             ("\"%s\" ga bir nechta eksport mos keldi. " % nomi if nomi else ""))
     q = [bosh + "Qaysi eksportni ishga tushiray?"]
     for i, it in enumerate(items[:20], 1):
         q.append("%d. %s — oxirgi: %s; %s" % (i, it.get("name") or it.get("id"), _oxirgi(it), _cron(it)))
-    keyboard = [[("%d. %s" % (i, str(it.get("name") or it.get("id"))[:30]), "%s%s:%d" % (C.CB_EK_TANLA, token, i - 1))]
-                for i, it in enumerate(items[:20], 1)]
-    await TZ._say(outbox, "\n".join(q), keyboard=keyboard, reply_to=reply_to)
+    q += ["", "Raqamini yozing (masalan: 1)."]
+    mid = await TZ._say(outbox, "\n".join(q), reply_to=reply_to)
+    if mid is not None:
+        roy["mid"] = mid
+        await asyncio.to_thread(db.kv_set_json, roy_key, roy)
+
+
+async def matn_tanlov(text: Any, reply_mid: Optional[int], outbox: Any) -> bool:
+    """Ro'yxatdan raqam bilan tanlash ("1", "2."). Kutilayotgan ro'yxat bo'lmasa yoki raqam emas — False."""
+    m = C.TANLOV_RE.match(str(text or ""))
+    if not m:
+        return False
+    royxatlar = []
+    for key in await asyncio.to_thread(db.kv_keys, C.KV_EK_ROY.split("{", 1)[0]):
+        r = await asyncio.to_thread(db.kv_get_json, key)
+        if isinstance(r, dict) and _TOKEN_RE.match(str(r.get("token") or "")) and not TZ._eskirgan(r):
+            royxatlar.append((key, r))
+    if not royxatlar:
+        return False
+    tanlov = [x for x in royxatlar if reply_mid and x[1].get("mid") == reply_mid]
+    key, roy = tanlov[0] if tanlov else max(royxatlar, key=lambda x: float(x[1].get("created_ts") or 0))
+    ids = roy.get("ids") or []
+    idx = int(m.group(1)) - 1
+    if not 0 <= idx < len(ids):
+        await TZ._say(outbox, "Bunday raqam yo'q: 1 dan %d gacha yozing." % len(ids))
+        return True
+    items = await _royxat(outbox)
+    it = next((x for x in (items or []) if str(x.get("id")) == str(ids[idx])), None)
+    if it is None:
+        await TZ._say(outbox, "Eksport topilmadi (sozlama o'zgargan bo'lishi mumkin). Qaytadan /eksport yozing.")
+        return True
+    await asyncio.to_thread(db.kv_del, key)
+    await _tasdiq_sorovi(it, outbox, None)
+    return True
 
 
 async def tanla(data: str, outbox: Any, message_id: Optional[int]) -> str:
@@ -160,11 +191,10 @@ async def _tasdiq_sorovi(it: Dict[str, Any], outbox: Any, reply_to: Optional[int
         "Sheet: <b>%s</b>%s" % (e(payload["nomi"]), (" / " + e(it.get("tabName"))) if it.get("tabName") else ""),
         "Manba: %s · rejim: %s" % (e(manba), e(rejim)),
         "Oxirgi ish: %s" % e(_oxirgi(it)), "Jadval: %s" % e(_cron(it)), "",
-        "Ishga tushirilsa sheet yangilanadi (bir necha daqiqa olishi mumkin). Tasdiq %d daqiqa amal qiladi: tugmani"
-        " bosing yoki \"tasdiqlayman\" / \"yo'q\" deb yozing." % max(1, C.APPROVAL_TTL_S // 60),
+        "Ishga tushirilsa sheet yangilanadi (bir necha daqiqa olishi mumkin).", "",
+        e(C.TASDIQ_YOZING.format(daq=max(1, C.APPROVAL_TTL_S // 60))),
     ])
-    keyboard = [[(C.KNOPKA_EK_HA, C.CB_EK_OK + token), (C.KNOPKA_YOQ, C.CB_EK_NO + token)]]
-    mid = await TZ._say(outbox, matn, html_mode=True, keyboard=keyboard, reply_to=reply_to,
+    mid = await TZ._say(outbox, matn, html_mode=True, reply_to=reply_to,
                         hist=re.sub(r"<[^>]+>", "", html.unescape(matn)))
     if mid is None:
         await asyncio.to_thread(db.kv_del, key)

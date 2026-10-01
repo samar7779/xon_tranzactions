@@ -1045,6 +1045,10 @@ TASDIQ_HA_RE = re.compile(r"(?i)^\s*(ha|xa|ha,? tahrirla|ha,? ariza yubor|tasdiq
                           r"tasdiqlaymiz|bajar|bajaring|bajarilsin|yubor|yuboring|roziman|ok|okey|davom et)[\s.!]*$")
 TASDIQ_YOQ_RE = re.compile(r"(?i)^\s*(yo'q|yoq|yo‘q|yoʻq|bekor|bekor qil|bekor qiling|kerak emas|rad|to'xta|toxta)[\s.!]*$")
 TASDIQ_MATN_MAX = 40
+# Egasi qarori (2026-10-01): tasdiq va variant tanlash INLINE TUGMASIZ — faqat matn.
+TASDIQ_YOZING = ("Tasdiqlash uchun \"tasdiqlayman\" deb yozing, bekor qilish uchun \"yo'q\". Tasdiq {daq} daqiqa"
+                 " amal qiladi.")
+TANLOV_RE = re.compile(r"^\s*(\d{1,2})\s*[.)]?\s*$")   # eksport ro'yxatidan raqam bilan tanlash
 MSG_TASDIQ_QAYSI = ("Bir nechta tasdiq kutilmoqda. Qaysi biri ekanini aytish uchun kerakli tasdiq xabariga reply qilib"
                     " yozing.")
 

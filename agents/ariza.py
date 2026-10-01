@@ -139,8 +139,8 @@ def preview_html(k: Dict[str, Any], crm: Dict[str, Any], a: Ariza, hisob_mos: Op
                  % (e(eski), e(yangi), e(ai)))
     tur = {"pdf": "PDF", "doc": "Word", "docx": "Word"}.get(str(fayl).rsplit(".", 1)[-1].lower(), "rasm")
     q += ["", "Ariza fayli: shu %s" % tur, "Yuboruvchi: %s" % e(yubordi),
-          "Yuborilgach %s o'zi tekshiradi, natijani shu yerga yozaman. Tasdiq %d daqiqa amal qiladi: tugmani bosing"
-          " yoki \"tasdiqlayman\" / \"yo'q\" deb yozing." % (e(ai), max(1, C.APPROVAL_TTL_S // 60))]
+          "Yuborilgach %s o'zi tekshiradi, natijani shu yerga yozaman." % e(ai), "",
+          e(C.TASDIQ_YOZING.format(daq=max(1, C.APPROVAL_TTL_S // 60)))]
     return "\n".join(q)
 
 
@@ -213,8 +213,7 @@ async def _handle(a: Ariza, outbox: Any, reply_to: Optional[int], rasmlar: List[
     key = C.kv_key(C.KV_AR_APPR, token=token)
     await asyncio.to_thread(db.kv_set_json, key, payload)
     matn = preview_html(k, crm, a, r.get("hisobMos"), ai, yubordi, fayl)
-    keyboard = [[(C.KNOPKA_AR_HA, C.CB_AR_OK + token), (C.KNOPKA_YOQ, C.CB_AR_NO + token)]]
-    mid = await say(outbox, matn, html_mode=True, keyboard=keyboard, reply_to=reply_to,
+    mid = await say(outbox, matn, html_mode=True, reply_to=reply_to,
                     hist=re.sub(r"<[^>]+>", "", html.unescape(matn)))
     if mid is None:
         await asyncio.to_thread(db.kv_del, key)

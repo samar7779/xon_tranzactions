@@ -72,19 +72,19 @@ class ArizaOqimTest(_Base):
         self.javob["find"] = dict({"ok": True, "candidates": [KAND], "hisobMos": True, "crm": CRM, "aiName": "Shomurad AI"}, **ustiga)
         await AR.handle("ARIZA: summa=7100000 sana=2026-09-29 hisob=20208000205720456001 shartnoma=467RMZ26HA "
                         "tolovchi=Suyunova Karomat Faxriddin qizi tasdiq=Samar", self.out, rasmlar=[str(self.dir / FAYL)])
-        s = [x for x in self.out.sent if x.get("keyboard")]
-        return s[-1]["keyboard"][0][0][1][len(C.CB_AR_OK):] if s else ""
+        return self._token(C.KV_AR_APPR)
 
     async def test_tasdiq_sorovi_va_ha_ai_natijasi(self):
         token = await self._sorov()
         [c] = [x for x in self.calls if x["path"] == C.ARIZA_KOPRIK_FIND]
         self.assertEqual(c["q"], {"summa": ["7100000"], "sana": ["2026-09-29"], "hisob": ["20208000205720456001"],
                                   "shartnoma": ["467RMZ26HA"]})
-        t = [x for x in self.out.sent if x.get("keyboard")][-1]["text"]
+        t = self._sorov_xabari("XATO to'lovga ariza")["text"]
         for frag in ("XATO to'lovga ariza", "To'lov: 29.09.2026 · 7 100 000 so'm", "<code>%s</code>" % TXF,
                      "Hozir: shartnoma 467RZM26HA (XATO)",
                      "Yangi shartnoma: <b>467RMZ26HA</b>", "CRM mijozi bilan mos", "boshqa obyektda (RZM, yangisi RMZ)",
-                     "Shomurad AI arizani xodimga yuborishi mumkin", "TR Support · Samar", "\"tasdiqlayman\""):
+                     "Shomurad AI arizani xodimga yuborishi mumkin", "TR Support · Samar",
+                     'Tasdiqlash uchun "tasdiqlayman" deb yozing'):
             self.assertIn(frag, t)
         self.javob["submit"] = {"ok": True, "id": "req1", "alreadyPending": False, "contract": "467RMZ26HA",
                                 "aiEnabled": True, "aiName": "Shomurad AI"}
@@ -113,6 +113,7 @@ class ArizaOqimTest(_Base):
         await self._sorov(candidates=[dict(KAND, pending={"by": "Dilnoza", "at": "2026-09-30T08:00:00Z", "contract": "467RMZ26HA"})])
         self.assertIn("ariza allaqachon yuborilgan (Dilnoza, 2026-09-30", self.texts()[-1])
         self.assertFalse(any(x.get("keyboard") for x in self.out.sent))
+        self.assertEqual(self._token(C.KV_AR_APPR), "")                # tasdiq so'rovi yaratilmagan
         (self.dir / FAYL).unlink()
         await AR.handle("ARIZA: summa=7100000 sana=2026-09-29 shartnoma=467RMZ26HA", self.out, rasmlar=[])
         self.assertIn("Ariza faylini yuboring (rasm, PDF yoki Word)", self.texts()[-1])
@@ -123,9 +124,9 @@ class ArizaOqimTest(_Base):
             (self.dir / f).write_bytes(b"%PDF")
             self.javob["find"] = {"ok": True, "candidates": [KAND], "hisobMos": True, "crm": CRM, "aiName": "Shomurad AI"}
             await AR.handle("ARIZA: tx=%s shartnoma=467RMZ26HA" % TXF, self.out, rasmlar=[str(self.dir / f)])
-            s = [x for x in self.out.sent if x.get("keyboard")][-1]
+            s = self._sorov_xabari("XATO to'lovga ariza")
             self.assertIn("Ariza fayli: shu %s" % tur, s["text"])
-            tok = s["keyboard"][0][0][1][len(C.CB_AR_OK):]
+            tok = self._token(C.KV_AR_APPR)
             self.assertEqual(self.kv[C.kv_key(C.KV_AR_APPR, token=tok)]["fayl"], f)
 
     def test_fayl_qatori_va_bot_qabul(self):
@@ -191,7 +192,7 @@ class MatnTasdiqTest(_FlowBase):
     async def test_bitta_kutilayotgan_tasdiqlanadi(self):
         q = self._mods([("a" * 16, {"mid": 70})], [])
         await self.handle(_msg(901, "Tasdiqlayman"))
-        self.assertEqual(q, [("tz", "a" * 16, True, 70)])
+        self.assertEqual(q, [("tz", "a" * 16, True, None)])                # matnli tasdiq: tugma yo'q
         self.assertEqual(self.runs, [])                                   # Leader chaqirilmadi
         self.assertIn(C.MSG_TUZATISH_QABUL, self.outbox.sent[-1].text)
 
@@ -204,7 +205,7 @@ class MatnTasdiqTest(_FlowBase):
         m = _msg(903, "yo'q")
         m.reply_to_message = replied
         await self.handle(m)
-        self.assertEqual(q, [("ar", "b" * 16, False, 80)])
+        self.assertEqual(q, [("ar", "b" * 16, False, None)])
 
     async def test_kutilayotgan_yoq_yoki_uzun_matn_leaderga(self):
         from agents.tests.test_leader_reply import _leader_json
