@@ -173,6 +173,8 @@ export interface SverkaRow {
   diffMonthly: number; // ourMonthly - crmMonthly
   /** Jami mos, lekin TAQSIMOT farq qiladi — split xato bo'lgan holat */
   splitMismatch: boolean;
+  /** Bizdagi qator(lar) boshlang'ich/oylikka taqsimlanmagan — split xatosi EMAS */
+  unsplit: boolean;
   /** CRM'da qaytarim (manfiy) yozuv bor — shartnoma bekor / qayta rasmiylashtirilgan */
   crmReversed: boolean;
   /** Qaytarim (manfiy CRM) summasi — manfiy son (0 = qaytarim yo'q) */
@@ -892,9 +894,19 @@ export class CrmSverkaService implements OnModuleInit {
         : ourList.length === 0 ? 'crm-only'
         : Math.abs(diff) < 0.01 ? 'ok'
         : 'mismatch';
-      // Jami to'g'ri, lekin boshlang'ich/oylik taqsimoti farq qiladi —
-      // aynan shu holat split xatosini ko'rsatadi (1220ORZ23FP misoli).
-      const splitMismatch = status === 'ok' && Math.abs(diffInitial) >= 1;
+      // Bizda qator umuman taqsimlanmagan bo'lishi mumkin (GENERAL / счётчик /
+      // hali bo'linmagan): u holda ourInitial + ourMonthly < ourTotal. Bunday
+      // shartnomani "taqsimot XATOSI" deb sanash noto'g'ri — bu boshqa holat,
+      // shuning uchun alohida belgilaymiz.
+      const unsplit =
+        Math.abs(cents(ourTotal) - cents(ourInitial) - cents(ourMonthly)) >= 1;
+
+      // Jami to'g'ri, lekin boshlang'ich/oylik taqsimoti farq qiladi.
+      // Ilgari faqat diffInitial tekshirilardi — faqat oylikda xato bo'lsa
+      // KPI uni sanamay qolardi. Endi ikkala kesim ham hisobga olinadi.
+      const splitMismatch =
+        status === 'ok' && !unsplit &&
+        (Math.abs(diffInitial) >= 1 || Math.abs(diffMonthly) >= 1);
 
       rows.push({
         contractNo: cn,
@@ -912,6 +924,7 @@ export class CrmSverkaService implements OnModuleInit {
         diffInitial,
         diffMonthly,
         splitMismatch,
+        unsplit,
         crmReversed: cents(crmReversalSum) < 0,
         crmReversalSum,
         status,
@@ -941,15 +954,27 @@ export class CrmSverkaService implements OnModuleInit {
       ourOnly: 0,
       crmSum: 0,
       ourSum: 0,
-      diffSum: 0, // farqlarning mutlaq yig'indisi
+      // ⚠️ IKKI XIL FARQ — ularni aralashtirmaslik kerak:
+      //   netDiff  = ourSum − crmSum. Ikki jami o'rtasidagi HAQIQIY farq.
+      //              Qarama-qarshi farqlar bir-birini yo'qotadi. Ekrandagi
+      //              "CRM jami" va "ОплатыКв jami" ayirmasi aynan shu.
+      //   diffSum  = Σ|har bir shartnomadagi farq|. Nechta pul "joyida emas"
+      //              ekanini ko'rsatadi, lekin ikki jami ayirmasiga TENG EMAS.
+      // Ilgari ekranda faqat diffSum ko'rsatilib, ostida "Bizda − CRM'da" deb
+      // yozilardi — shuning uchun raqamlar bir-biriga mos kelmasdi.
+      netDiff: 0,
+      diffSum: 0,
       // ── Boshlang'ich / oylik kesimi ──
       splitMismatch: 0,      // jami mos, lekin taqsimot farq qiladi
+      unsplit: 0,            // bizda taqsimlanmagan qatori bor shartnomalar
       crmInitialSum: 0,
       crmMonthlySum: 0,
       ourInitialSum: 0,
       ourMonthlySum: 0,
-      diffInitialSum: 0,     // farqlarning mutlaq yig'indisi (boshlang'ich)
-      diffMonthlySum: 0,     // farqlarning mutlaq yig'indisi (oylik)
+      netDiffInitial: 0,     // ourInitialSum − crmInitialSum
+      netDiffMonthly: 0,     // ourMonthlySum − crmMonthlySum
+      diffInitialSum: 0,     // Σ|farq| (boshlang'ich)
+      diffMonthlySum: 0,     // Σ|farq| (oylik)
     };
     for (const r of rows) {
       if (r.status === 'ok') summary.ok++;
@@ -967,7 +992,13 @@ export class CrmSverkaService implements OnModuleInit {
       if (Math.abs(r.diffInitial) >= 1) summary.diffInitialSum += Math.abs(r.diffInitial);
       if (Math.abs(r.diffMonthly) >= 1) summary.diffMonthlySum += Math.abs(r.diffMonthly);
       if (r.splitMismatch) summary.splitMismatch++;
+      if (r.unsplit) summary.unsplit++;
     }
+
+    // Sof farqlar — ekrandagi ikki raqamning ayirmasi aynan shu bo'ladi
+    summary.netDiff = (cents(summary.ourSum) - cents(summary.crmSum)) / 100;
+    summary.netDiffInitial = (cents(summary.ourInitialSum) - cents(summary.crmInitialSum)) / 100;
+    summary.netDiffMonthly = (cents(summary.ourMonthlySum) - cents(summary.crmMonthlySum)) / 100;
 
     // ── Qator filtri (status + qidiruv + min farq) ──
     const rowStatusSet = f.rowStatuses?.length ? new Set(f.rowStatuses) : null;
@@ -1038,6 +1069,10 @@ export class CrmSverkaService implements OnModuleInit {
       meta: {
         builtAt: snapshot.builtAt.toISOString(),
         ageSeconds: Math.round((Date.now() - snapshot.builtAt.getTime()) / 1000),
+        // Ma'lumot jonli emas — snapshot. Cron 07:00/12:00/17:00 da yangilaydi,
+        // shuning uchun 6 soatdan oshgani eskirgan deb belgilanadi va ekranda
+        // ogohlantirish chiqadi (ilgari 3 kunlik snapshot ham yangi kabi ko'rinardi).
+        stale: Date.now() - snapshot.builtAt.getTime() > 6 * 3600_000,
         durationMs: snapshot.durationMs,
         crmCount: snapshot.crm.length,
         ourCount: snapshot.our.length,

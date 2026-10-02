@@ -58,6 +58,8 @@ interface ResultResponse {
   meta?: {
     builtAt: string;
     ageSeconds: number;
+    /** Snapshot 6 soatdan eski — ekranda ogohlantirish chiqadi */
+    stale?: boolean;
     durationMs: number;
     crmCount: number;
     ourCount: number;
@@ -67,10 +69,17 @@ interface ResultResponse {
   };
   summary?: {
     total: number; ok: number; mismatch: number; crmOnly: number; ourOnly: number;
-    crmSum: number; ourSum: number; diffSum: number;
+    crmSum: number; ourSum: number;
+    /** Sof farq: ourSum − crmSum (ekrandagi ikki raqamning ayirmasi) */
+    netDiff: number;
+    /** Σ|har bir shartnomadagi farq| — netDiff ga TENG EMAS */
+    diffSum: number;
     splitMismatch: number;
+    /** Bizda taqsimlanmagan qatori bor shartnomalar (split xatosi emas) */
+    unsplit: number;
     crmInitialSum: number; crmMonthlySum: number;
     ourInitialSum: number; ourMonthlySum: number;
+    netDiffInitial: number; netDiffMonthly: number;
     diffInitialSum: number; diffMonthlySum: number;
   };
   filtered?: { total: number; page: number; perPage: number; pageCount: number };
@@ -432,7 +441,13 @@ export default function CheckCrmPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <SumCard label={t('sumCrm')} value={summary.crmSum} icon={<Cloud className="h-3.5 w-3.5" />} tone="sky" sub={meta ? t('crmRecords', { n: meta.crmCount }) : undefined} />
                 <SumCard label={t('sumOur')} value={summary.ourSum} icon={<Database className="h-3.5 w-3.5" />} tone="violet" sub={meta ? t('ourRecords', { n: meta.ourCount }) : undefined} />
-                <SumCard label={t('sumDiff')} value={summary.diffSum} icon={<ArrowRightLeft className="h-3.5 w-3.5" />} tone={summary.diffSum > 0 ? 'amber' : 'emerald'} sub={t('diffHint')} />
+                <SumCard
+                  label="Sof farq (Bizda − CRM)"
+                  value={summary.netDiff ?? 0}
+                  icon={<ArrowRightLeft className="h-3.5 w-3.5" />}
+                  tone={Math.abs(summary.netDiff ?? 0) < 1 ? 'emerald' : 'amber'}
+                  sub={`Joyida emas: ${formatMoney(summary.diffSum).replace(' UZS', '')} — shartnomalar bo'yicha yig'indi`}
+                />
               </div>
             )}
 
@@ -441,21 +456,33 @@ export default function CheckCrmPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <CategoryCard
                   label={t('catInitial')}
-                  crm={summary.crmInitialSum} our={summary.ourInitialSum} diff={summary.diffInitialSum}
+                  crm={summary.crmInitialSum} our={summary.ourInitialSum}
+                  diff={summary.netDiffInitial ?? 0} absDiff={summary.diffInitialSum}
                   t={t}
                 />
                 <CategoryCard
                   label={t('catMonthly')}
-                  crm={summary.crmMonthlySum} our={summary.ourMonthlySum} diff={summary.diffMonthlySum}
+                  crm={summary.crmMonthlySum} our={summary.ourMonthlySum}
+                  diff={summary.netDiffMonthly ?? 0} absDiff={summary.diffMonthlySum}
                   t={t}
                 />
               </div>
             )}
 
-            {meta?.partial && (
+            {meta?.partial && running && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-50 dark:bg-sky-950/30 ring-1 ring-sky-200 dark:ring-sky-900 text-[11.5px] text-sky-800 dark:text-sky-300">
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                 {t('partialLive', { pages: meta.pages, n: meta.crmCount.toLocaleString('ru-RU') })}
+              </div>
+            )}
+
+            {meta?.stale && !running && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-900 text-[11.5px] text-amber-900 dark:text-amber-300">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  <b>Ma&apos;lumot eskirgan.</b> Bu jonli emas — oxirgi marta {ageLabel(meta.ageSeconds, t)} olingan.
+                  Aniq holat uchun <b>&laquo;CRM&apos;dan yangilash&raquo;</b> tugmasini bosing.
+                </span>
               </div>
             )}
 
@@ -1045,11 +1072,13 @@ function SumCard({
 
 /** Boshlang'ich / oylik kesimi: CRM ↔ bizda ↔ farq (bitta kartada) */
 function CategoryCard({
-  label, crm, our, diff, t,
+  label, crm, our, diff, absDiff, t,
 }: {
-  label: string; crm: number; our: number; diff: number; t: any;
+  // diff    — SOF farq (our − crm). Yonidagi ikki raqamning ayirmasi aynan shu.
+  // absDiff — shartnomalar bo'yicha |farq| yig'indisi (qancha pul joyida emas).
+  label: string; crm: number; our: number; diff: number; absDiff?: number; t: any;
 }) {
-  const bad = Math.abs(diff) >= 1;
+  const bad = Math.abs(diff) >= 1 || Math.abs(absDiff ?? 0) >= 1;
   return (
     <div className={cn(
       'rounded-2xl ring-1 px-4 py-3',
@@ -1065,7 +1094,9 @@ function CategoryCard({
             ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
             : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300',
         )}>
-          {bad ? `${t('colDiff')}: ${formatMoney(diff).replace(' UZS', '')}` : t('statusOk')}
+          {bad
+            ? `Sof: ${diff > 0 ? '+' : ''}${formatMoney(diff).replace(' UZS', '')}`
+            : t('statusOk')}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -1078,6 +1109,11 @@ function CategoryCard({
           <span className="font-bold tabular-nums">{formatMoney(our).replace(' UZS', '')}</span>
         </div>
       </div>
+      {!!absDiff && Math.abs(absDiff) >= 1 && (
+        <div className="mt-1.5 text-[10.5px] text-slate-500 dark:text-slate-400">
+          Joyida emas: {formatMoney(absDiff).replace(' UZS', '')}
+        </div>
+      )}
     </div>
   );
 }
