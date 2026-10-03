@@ -211,16 +211,29 @@ describe('TrSupportService', () => {
       crmCache.lookup.mockImplementation(async (c: string) => CRM[c] || { contractNumber: c, found: false });
     });
 
-    it('harfFarqiMos: faqat oxirgi 2 pozitsiyadagi harflar; raqam/obyekt/yil va uzunlik o\'zgarmas', () => {
-      expect(harfFarqiMos('217AFS24YK', '217AFS24YL')).toBe(true);    // 1 harf
+    it('harfFarqiMos: faqat oxirgi harflar (almashgan, ortiqcha, tushgan, <=2); raqam/obyekt/yil o\'zgarmas', () => {
+      expect(harfFarqiMos('217AFS24YK', '217AFS24YL')).toBe(true);    // 1 harf almashgan
       expect(harfFarqiMos('656AFS25AB', '656AFS25ZU')).toBe(true);    // 2 harf
+      expect(harfFarqiMos('656AFS25UZ', '656AFS25ZU')).toBe(true);    // o'rni almashgan
+      expect(harfFarqiMos('217AFS24YIL', '217AFS24YL')).toBe(true);   // ortiqcha harf (03.10 holati)
+      expect(harfFarqiMos('217AFS24YLAB', '217AFS24YL')).toBe(true);  // 2 ortiqcha harf
+      expect(harfFarqiMos('217AFS24Y', '217AFS24YL')).toBe(true);     // tushib qolgan harf
+      expect(harfFarqiMos('217AFS24YKOP', '217AFS24YL')).toBe(false); // 3 farq
+      expect(harfFarqiMos('217AFS24', '217AFS24YL')).toBe(false);     // ikkala harf ham yo'q
       expect(harfFarqiMos('217AFS24YL', '217AFS24YL')).toBe(false);   // bir xil
       expect(harfFarqiMos('217AFS24Y1', '217AFS24YL')).toBe(false);   // raqam <-> harf emas
       expect(harfFarqiMos('217AFS24YK', '217AFS25YK')).toBe(false);   // yil
       expect(harfFarqiMos('217AFS24YK', '217AFT24YK')).toBe(false);   // obyekt
       expect(harfFarqiMos('217AFS24YK', '218AFS24YL')).toBe(false);   // raqam
-      expect(harfFarqiMos('217AFS24Y', '217AFS24YL')).toBe(false);    // uzunlik
       expect(harfFarqiMos('XATO', 'XATU')).toBe(false);
+    });
+
+    it('ortiqcha harf: XATO 217AFS24YIL -> 217AFS24YL (03.10 dagi 2 to\'lov)', async () => {
+      tx.contractNumber = '217AFS24YIL';
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv9', contractNo: '217AFS24YIL', date: new Date() });
+      const p = await svc.preview('ctx1', { shartnoma: '217AFS24YL' });
+      expect(p.valid).toBe(true);
+      expect(p.harf).toEqual({ from: '217AFS24YIL', to: '217AFS24YL' });
     });
 
     it('XATO ro\'yxatida, oxirgi harf farqi, CRM\'da yagona → valid; apply qo\'lda (setContractManual) + sync', async () => {

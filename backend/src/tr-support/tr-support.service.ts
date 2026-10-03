@@ -94,18 +94,32 @@ const XATO_RE = /^xato(?:\s*[:=\s]\s*(.*))?$/i;
 export const XATO_SHARTNOMA = 'XATO';
 export const normContract = (s: string) => s.replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
 
-/**
- * Ikki raqam faqat oxirgi 1-2 HARFI bilan farq qiladimi: uzunlik bir xil, oxirgi 2 belgidan oldingi qism AYNAN
- * teng (raqam + obyekt kodi + yil o'zgarmaydi), farq qilgan har pozitsiyada ikkala belgi ham harf.
- */
-export function harfFarqiMos(a: string, b: string): boolean {
-  if (!a || !b || a === b || a.length !== b.length || a.length < 6) return false;
-  const n = a.length - 2;
-  if (a.slice(0, n) !== b.slice(0, n) || !/^\d{1,6}[A-Z]{2,4}/.test(a.slice(0, n))) return false;
-  for (let i = n; i < a.length; i++) {
-    if (a[i] !== b[i] && !(/[A-Z]/.test(a[i]) && /[A-Z]/.test(b[i]))) return false;
+/** Levenshtein masofasi (qisqa satrlar uchun). */
+function tahrirMasofa(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
   }
-  return true;
+  return d[a.length][b.length];
+}
+
+/**
+ * Noto'g'ri raqam to'g'risidan faqat OXIRGI 1-2 HARFI bilan farq qiladimi: to'g'ri raqamning oxirgi 2 belgisidan
+ * oldingi qismi (raqam + obyekt kodi + yil) noto'g'rida AYNAN shunday turadi; qolgan dum ikkalasida ham faqat harf
+ * va farq ko'pi bilan 2 harf — almashgan, ortiqcha yoki tushib qolgan (217AFS24YK, 217AFS24YIL, 217AFS24Y -> 217AFS24YL).
+ */
+export function harfFarqiMos(wrong: string, right: string): boolean {
+  if (!wrong || !right || wrong === right || right.length < 6) return false;
+  const n = right.length - 2;
+  const base = right.slice(0, n);
+  if (!wrong.startsWith(base) || !/^\d{1,6}[A-Z]{2,4}/.test(base)) return false;
+  const a = wrong.slice(n);
+  const b = right.slice(n);
+  if (!/^[A-Z]{1,4}$/.test(a) || !/^[A-Z]{2}$/.test(b)) return false;
+  return tahrirMasofa(a, b) <= 2;
 }
 
 @Injectable()
