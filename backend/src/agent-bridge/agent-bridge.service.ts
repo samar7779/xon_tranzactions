@@ -133,6 +133,7 @@ export class AgentBridgeService implements OnModuleInit {
     return {
       ok: true, valid: p.valid, errors: p.errors.map(cut), tx: this.pickTx(p.tx), changes: this.pickChanges(p.changes),
       xato: this.pickXato(p.xato),
+      harf: p.harf ? { from: p.harf.from, to: p.harf.to } : null,
       crm: p.crm ? { contract: p.crm.contract, found: p.crm.found, customerName: p.crm.customerName, objectName: p.crm.objectName } : null,
     };
   }

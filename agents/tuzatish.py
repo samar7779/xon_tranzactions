@@ -9,6 +9,9 @@ Oqim (LLM'siz, deterministik; Leader faqat egasi matnini `TUZATISH:` qatoriga ay
 3. Hammasi to'g'ri -> oldin/keyin ko'rinishi + [Ha, tahrirla] [Yo'q]. Tasdiq APPROVAL_TTL_S amal qiladi.
 4. [Ha] -> POST tx-edit/apply (panelning setManual/setContract yo'llari, tarix tr_support_edits) va BITTA
    OplatyKv sync. Natija egasiga; ortga qaytarish panelda (TR Support tabi).
+Harf farqi qoidasi (egasi, 2026-10-03): aniq shartnoma raqami berilgan qator avval tekshiriladi; XATO ro'yxatidagi
+to'lovda to'g'ri shartnoma faqat oxirgi 1-2 harfi bilan farq qilsa (backend: CRM'da bor va yagona) — so'rovsiz,
+arizasiz va tasdiqsiz darrov ko'chiriladi.
 Ko'prik: faqat loopback, kalit header'da (payment_check bilan bir xil manzil va kalit).
 """
 from __future__ import annotations
@@ -99,6 +102,22 @@ def _qolsin(v: Optional[str]) -> bool:
 def _param(v: Optional[str]) -> str:
     """Ko'prikka: qolsin -> '' (backend: bo'sh = o'zgarmaydi)."""
     return "" if v is None or _qolsin(v) else v
+
+
+_SHARTNOMA_EMAS = {"tozalash", "yo'q", "yoq", "-", "bo'sh", "bosh", "clear", "none"}
+
+
+def _aniq_shartnoma(v: Optional[str]) -> bool:
+    """Aniq shartnoma raqami berilganmi (harf qoidasini tekshirish uchun): qolsin/tozalash/XATO emas."""
+    t = (v or "").strip()
+    if not t or _qolsin(t) or t.lower() in _SHARTNOMA_EMAS or t.lower().startswith("xato"):
+        return False
+    return bool(re.search(r"\d", t)) and bool(re.search(r"[A-Za-z]", t))
+
+
+def _preview_params(q: Qator) -> Dict[str, str]:
+    return {"tx": q.tx, "kontragent": _param(q.kontragent), "kategoriya": _param(q.kategoriya),
+            "shartnoma": _param(q.shartnoma)}
 
 
 # ---------------------------------------------------------------------------
@@ -264,9 +283,9 @@ def preview_html(previews: List[Tuple[Qator, Dict[str, Any]]], tasdiq: str, izoh
     return "\n".join(q)
 
 
-def natija_matni(r: Dict[str, Any]) -> str:
+def natija_matni(r: Dict[str, Any], sarlavha: Optional[str] = None) -> str:
     holat = {"applied": "bajarildi", "failed": "qisman (xato)", "skipped": "bajarilmadi"}
-    q = ["To'lov tahriri natijasi:"]
+    q = [sarlavha or "To'lov tahriri natijasi:"]
     for i, x in enumerate(r.get("results") or [], 1):
         q.append("%d. %s — %s" % (i, x.get("tx"), holat.get(x.get("status"), x.get("status"))))
         for ch in x.get("changes") or []:
@@ -322,6 +341,35 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
     for q in qatorlar:
         q.tasdiq = q.tasdiq if q.tasdiq is not None else umumiy_tasdiq
         q.izoh = q.izoh if q.izoh is not None else umumiy_izoh
+    # 0) aniq shartnoma berilgan qator: avval backend tekshiruvi (harf farqi qoidasi — so'rovsiz va tasdiqsiz)
+    tayyor: Dict[str, Dict[str, Any]] = {}
+    harf: List[Tuple[Qator, Dict[str, Any]]] = []
+    rad: List[str] = []
+    qolgan: List[Qator] = []
+    for q in qatorlar:
+        if not _aniq_shartnoma(q.shartnoma):
+            qolgan.append(q)
+            continue
+        try:
+            p = await asyncio.to_thread(_koprik, C.TUZATISH_KOPRIK_PREVIEW, params=_preview_params(q))
+        except KoprikXato as exc:
+            await _say(outbox, "Tekshiruv bajarilmadi: %s." % exc.sabab, reply_to=reply_to)
+            return
+        if p.get("valid") and p.get("harf"):
+            harf.append((q, p))
+        elif (p.get("xato") or {}).get("inList"):
+            rad.append("%s\n%s" % (_tx_sarlavha(p.get("tx"), q.tx), "\n".join(str(e) for e in (p.get("errors") or []))))
+        else:
+            tayyor[q.tx] = p
+            qolgan.append(q)
+    if harf:
+        await _harf_bajar(harf, outbox, reply_to)
+    if rad:
+        await _say(outbox, "Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida):\n\n" + "\n\n".join(rad),
+                   reply_to=reply_to)
+    if not qolgan:
+        return
+    qatorlar = qolgan
     # 1) yetishmayotgan ma'lumot -> variantlar bilan so'rash (birinchi to'liqmas to'lov uchun)
     tasdiqlar = {q.tasdiq for q in qatorlar if q.tasdiq}
     for q in qatorlar:
@@ -353,10 +401,10 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
     xatolar: List[str] = []
     xato_royxat: List[str] = []
     for q in qatorlar:
+        p = tayyor.get(q.tx)
         try:
-            p = await asyncio.to_thread(_koprik, C.TUZATISH_KOPRIK_PREVIEW, params={
-                "tx": q.tx, "kontragent": _param(q.kontragent), "kategoriya": _param(q.kategoriya),
-                "shartnoma": _param(q.shartnoma)})
+            if p is None:
+                p = await asyncio.to_thread(_koprik, C.TUZATISH_KOPRIK_PREVIEW, params=_preview_params(q))
         except KoprikXato as exc:
             await _say(outbox, "Tekshiruv bajarilmadi: %s." % exc.sabab, reply_to=reply_to)
             return
@@ -389,6 +437,26 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
     else:
         payload["mid"] = mid
         await asyncio.to_thread(db.kv_set_json, C.kv_key(C.KV_TZ_APPR, token=token), payload)
+
+
+async def _harf_bajar(harf: List[Tuple[Qator, Dict[str, Any]]], outbox: Any, reply_to: Optional[int]) -> None:
+    """Harf farqi qoidasi: egasidan tasdiq so'ralmaydi (egasi qarori). Backend apply'da qoidani qayta tekshiradi."""
+    tasdiq = next((q.tasdiq for q, _p in harf if q.tasdiq), None) or C.HARF_TASDIQ
+    juft = ["%s -> %s" % (p["harf"].get("from"), p["harf"].get("to")) for _q, p in harf]
+    izoh = next((q.izoh for q, _p in harf if q.izoh), None)
+    izoh = ((izoh + "; ") if izoh else "") + C.HARF_IZOH + ": " + ", ".join(juft)
+    matn = [C.HARF_BOSHI]
+    for i, (q, p) in enumerate(harf, 1):
+        crm = p.get("crm") or {}
+        kim = ", ".join(x for x in (crm.get("customerName"), crm.get("objectName")) if x)
+        matn.append("%d. %s: %s%s" % (i, _tx_sarlavha(p.get("tx"), q.tx), juft[i - 1], (" (CRM: %s)" % kim) if kim else ""))
+    await _say(outbox, "\n".join(matn), reply_to=reply_to)
+    payload = {"tasdiq": tasdiq, "izoh": izoh[:1000],
+               "items": [{"tx": q.tx, "kontragent": "", "kategoriya": "", "shartnoma": str(p["harf"].get("to") or "")}
+                         for q, p in harf]}
+    task = asyncio.create_task(_bajar(payload, outbox, C.HARF_NATIJA))
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
 
 
 def _eskirgan(payload: Dict[str, Any]) -> bool:
@@ -427,7 +495,7 @@ async def decide(token: str, approve: bool, outbox: Any, message_id: Optional[in
     return C.MSG_TUZATISH_QABUL
 
 
-async def _bajar(payload: Dict[str, Any], outbox: Any) -> None:
+async def _bajar(payload: Dict[str, Any], outbox: Any, sarlavha: Optional[str] = None) -> None:
     body = {"items": payload.get("items") or [], "approvedBy": payload.get("tasdiq") or "",
             "comment": payload.get("izoh") or None}
     try:
@@ -439,7 +507,7 @@ async def _bajar(payload: Dict[str, Any], outbox: Any) -> None:
         log.exception("tuzatish apply yiqildi")
         await _say(outbox, "Tahrir bajarilmadi: ichki xato. Holatni panelda (TR Support) tekshiring.")
         return
-    await _say(outbox, natija_matni(r))
+    await _say(outbox, natija_matni(r, sarlavha))
 
 
 # ---------------------------------------------------------------------------

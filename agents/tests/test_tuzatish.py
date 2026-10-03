@@ -121,8 +121,12 @@ class ParseTest(unittest.TestCase):
 class OqimTest(_Base):
     async def test_yetishmasa_variantlar_bilan_soraydi(self):
         self.javob["options"] = OPTIONS
+        self.javob["preview"] = {"ok": True, "valid": True, "errors": [], "tx": TX_VIEW, "harf": None,
+                                 "xato": {"inList": False}, "changes": [{"field": "shartnoma", "from": None, "to": "206FZO25A2"}]}
         self.assertTrue(await TZ.handle("TUZATISH: tx=%s shartnoma=206FZO25A2" % TX, self.out))
-        [c] = self.calls
+        # aniq shartnoma: avval tekshiruv (harf qoidasi uchun), keyin yetishmagan ma'lumot so'raladi
+        self.assertEqual([x["path"] for x in self.calls], [C.TUZATISH_KOPRIK_PREVIEW, C.TUZATISH_KOPRIK_OPTIONS])
+        c = self.calls[1]
         self.assertEqual((c["path"], c["q"], c["method"]), (C.TUZATISH_KOPRIK_OPTIONS, {"tx": [TX]}, "GET"))
         self.assertEqual({k.lower(): v for k, v in c["headers"].items()}[C.TOLOV_KOPRIK_HEADER], KALIT)
         [t] = self.texts()
@@ -199,7 +203,7 @@ class OqimTest(_Base):
         xabar = ("Bu to'lov XATO to'lovlar ro'yxatida (shartnoma 217VHA23EU). Tahrir qilinmaydi: XATO to'lovlar"
                  " ro'yxatidan ariza biriktiring")
         self.javob["options"] = dict(OPTIONS, xato={"inList": True, "contractNo": "217VHA23EU", "pending": False, "xabar": xabar})
-        await TZ.handle("TUZATISH: tx=%s shartnoma=217VHA26EU" % TX, self.out)
+        await TZ.handle("TUZATISH: tx=%s shartnoma=?" % TX, self.out)
         [t] = self.texts()
         self.assertIn(xabar, t)
         self.assertNotIn("Kim tasdiqlaydi", t)                   # variantlar so'ralmaydi
@@ -236,6 +240,80 @@ class OqimTest(_Base):
         self.assertIn("2. ", s["text"])
         token = self._token(C.KV_TZ_APPR)
         self.assertEqual([i["tx"] for i in self.kv[C.kv_key(C.KV_TZ_APPR, token=token)]["items"]], ["AAAA1111", "BBBB2222"])
+
+
+class HarfQoidaTest(_Base):
+    """Harf farqi qoidasi (egasi, 2026-10-03): XATO to'lov, oxirgi 1-2 harf -> arizasiz va TASDIQSIZ."""
+
+    def _preview(self, body: Any, q: Dict[str, List[str]]) -> Dict[str, Any]:
+        tx, sh = q["tx"][0], q["shartnoma"][0]
+        tv = dict(TX_VIEW, externalId=tx, shartnoma=self.eski.get(tx))
+        if tx in self.eski and sh[:-2] == self.eski[tx][:-2]:
+            return {"ok": True, "valid": True, "errors": [], "tx": tv, "harf": {"from": self.eski[tx], "to": sh},
+                    "xato": {"inList": True, "xabar": "XATO ro'yxatida"},
+                    "changes": [{"field": "shartnoma", "from": self.eski[tx], "to": sh}],
+                    "crm": {"contract": sh, "found": True, "customerName": "KARIMOV", "objectName": "AFS"}}
+        if tx in self.eski:
+            return {"ok": True, "valid": False, "tx": tv, "harf": None, "changes": [], "crm": None,
+                    "xato": {"inList": True, "xabar": "XATO ro'yxatida, ariza biriktiring"},
+                    "errors": ["XATO ro'yxatida, ariza biriktiring"]}
+        return {"ok": True, "valid": True, "errors": [], "tx": tv, "harf": None, "xato": {"inList": False},
+                "changes": [{"field": "shartnoma", "from": None, "to": sh}], "crm": None}
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.eski = {"6610873215_A": "217AFS24YK", "6610873139_B": "217AFS24YI", "6607927615_C": "656AFS25ZO"}
+        self.javob["preview"] = self._preview
+        self.javob["apply"] = lambda body, q: {"ok": True, "batchId": "b1", "results": [
+            {"tx": it["tx"], "id": "e%d" % i, "status": "applied", "errors": [],
+             "changes": [{"field": "shartnoma", "from": self.eski[it["tx"]], "to": it["shartnoma"]}]}
+            for i, it in enumerate(body["items"], 1)], "sync": {"ok": True, "added": 0, "updated": 3, "skipped": 0}}
+
+    async def test_uch_tolov_darrov_tasdiqsiz(self):
+        await TZ.handle("TUZATISH: tx=6610873215_A kontragent=qolsin kategoriya=qolsin shartnoma=217AFS24YL\n"
+                        "TUZATISH: tx=6610873139_B shartnoma=217AFS24YL\n"
+                        "TUZATISH: tx=6607927615_C shartnoma=656AFS25ZU tasdiq=? izoh=?", self.out)
+        await asyncio_gather()
+        self.assertEqual(self.kv, {})                                   # tasdiq so'rovi yo'q
+        self.assertFalse([c for c in self.calls if c["path"] == C.TUZATISH_KOPRIK_OPTIONS])   # savol yo'q
+        [apply] = [c for c in self.calls if c["path"] == C.TUZATISH_KOPRIK_APPLY]
+        self.assertEqual(apply["body"]["items"], [
+            {"tx": "6610873215_A", "kontragent": "", "kategoriya": "", "shartnoma": "217AFS24YL"},
+            {"tx": "6610873139_B", "kontragent": "", "kategoriya": "", "shartnoma": "217AFS24YL"},
+            {"tx": "6607927615_C", "kontragent": "", "kategoriya": "", "shartnoma": "656AFS25ZU"}])
+        self.assertEqual(apply["body"]["approvedBy"], C.HARF_TASDIQ)
+        self.assertEqual(apply["body"]["comment"], C.HARF_IZOH + ": 217AFS24YK -> 217AFS24YL, 217AFS24YI -> 217AFS24YL,"
+                                                                 " 656AFS25ZO -> 656AFS25ZU")
+        boshi, natija = self.texts()
+        self.assertTrue(boshi.startswith(C.HARF_BOSHI))
+        self.assertIn("1. 29.09.2026 10:00 · 8 132 000 so'm · ID 6610873215_A: 217AFS24YK -> 217AFS24YL (CRM: KARIMOV, AFS)",
+                      boshi)
+        self.assertTrue(natija.startswith(C.HARF_NATIJA))
+        self.assertEqual(natija.count("bajarildi"), 4)                  # 3 to'lov + sync
+        self.assertFalse(any(s.get("keyboard") for s in self.out.sent))
+
+    async def test_aralash_harf_darrov_qolgani_tasdiq_bilan_rad_alohida(self):
+        await TZ.handle("TUZATISH: tx=6610873215_A shartnoma=217AFS24YL tasdiq=Samar izoh=chek\n"
+                        "TUZATISH: tx=6607927615_C shartnoma=999XXX99\n"
+                        "TUZATISH: tx=NORMAL_123 kontragent=qolsin kategoriya=qolsin shartnoma=206FZO25A2", self.out)
+        await asyncio_gather()
+        [apply] = [c for c in self.calls if c["path"] == C.TUZATISH_KOPRIK_APPLY]
+        self.assertEqual([i["tx"] for i in apply["body"]["items"]], ["6610873215_A"])
+        self.assertEqual(apply["body"]["approvedBy"], "Samar")         # egasi ism bergan bo'lsa o'sha
+        self.assertEqual(apply["body"]["comment"], "chek; " + C.HARF_IZOH + ": 217AFS24YK -> 217AFS24YL")
+        t = "\n".join(self.texts())
+        self.assertIn("Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida)", t)
+        self.assertIn("XATO ro'yxatida, ariza biriktiring", t)
+        # oddiy to'lov: odatdagi oqim (tasdiq so'rovi), tekshiruv qayta chaqirilmaydi
+        token = self._token(C.KV_TZ_APPR)
+        self.assertEqual([i["tx"] for i in self.kv[C.kv_key(C.KV_TZ_APPR, token=token)]["items"]], ["NORMAL_123"])
+        self.assertEqual(len([c for c in self.calls if c["path"] == C.TUZATISH_KOPRIK_PREVIEW]), 3)
+
+    def test_aniq_shartnoma(self):
+        for v in ("217AFS24YL", " 656afs25zu "):
+            self.assertTrue(TZ._aniq_shartnoma(v), v)
+        for v in (None, "", "qolsin", "tozalash", "XATO", "xato:217AFS24YL", "?", "yo'q", "ABC", "1234"):
+            self.assertFalse(TZ._aniq_shartnoma(v), v)
 
 
 async def asyncio_gather() -> None:

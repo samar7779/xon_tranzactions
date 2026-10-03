@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Logger } from '@nestjs/common';
-import { TrSupportService } from './tr-support.service';
+import { TrSupportService, harfFarqiMos } from './tr-support.service';
 
 // Kategoriya daraxti (seed bilan bir xil kodlar)
 const CATS = [
@@ -39,6 +39,7 @@ describe('TrSupportService', () => {
       category: { findMany: jest.fn(async () => CATS) },
       setting: { findUnique: jest.fn(async () => ({ value: '2026-07-01' })) },
       xatoCorrectionRequest: { findFirst: jest.fn(async () => null) },
+      crmContract: { findMany: jest.fn(async () => []) },
       transaction: { findFirst: jest.fn(async ({ where }: any) => (where.OR.some((w: any) => w.id === tx.id || w.externalId === tx.externalId) ? txRow() : null)) },
       trSupportEdit: {
         create: jest.fn(async ({ data }: any) => { const r = { id: `e${rows.length + 1}`, ...data }; rows.push(r); return r; }),
@@ -196,6 +197,87 @@ describe('TrSupportService', () => {
       const o = await svc.options('ctx1');
       expect(o.xato).toMatchObject({ inList: false, xabar: null });
       expect((await svc.preview('ctx1', { shartnoma: '206FZO25A2' })).valid).toBe(true);
+    });
+  });
+
+  describe('harf farqi qoidasi (XATO to\'lov, oxirgi 1-2 harf) — arizasiz', () => {
+    const CRM: Record<string, any> = {
+      '217AFS24YL': { contractNumber: '217AFS24YL', found: true, customerName: 'KARIMOV', objectName: 'AFS' },
+      '656AFS25ZU': { contractNumber: '656AFS25ZU', found: true, customerName: 'TOSHEV', objectName: 'AFS' },
+    };
+    beforeEach(() => {
+      tx.contractNumber = '217AFS24YK';
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv9', contractNo: '217AFS24YK', date: new Date() });
+      crmCache.lookup.mockImplementation(async (c: string) => CRM[c] || { contractNumber: c, found: false });
+    });
+
+    it('harfFarqiMos: faqat oxirgi 2 pozitsiyadagi harflar; raqam/obyekt/yil va uzunlik o\'zgarmas', () => {
+      expect(harfFarqiMos('217AFS24YK', '217AFS24YL')).toBe(true);    // 1 harf
+      expect(harfFarqiMos('656AFS25AB', '656AFS25ZU')).toBe(true);    // 2 harf
+      expect(harfFarqiMos('217AFS24YL', '217AFS24YL')).toBe(false);   // bir xil
+      expect(harfFarqiMos('217AFS24Y1', '217AFS24YL')).toBe(false);   // raqam <-> harf emas
+      expect(harfFarqiMos('217AFS24YK', '217AFS25YK')).toBe(false);   // yil
+      expect(harfFarqiMos('217AFS24YK', '217AFT24YK')).toBe(false);   // obyekt
+      expect(harfFarqiMos('217AFS24YK', '218AFS24YL')).toBe(false);   // raqam
+      expect(harfFarqiMos('217AFS24Y', '217AFS24YL')).toBe(false);    // uzunlik
+      expect(harfFarqiMos('XATO', 'XATU')).toBe(false);
+    });
+
+    it('XATO ro\'yxatida, oxirgi harf farqi, CRM\'da yagona → valid; apply qo\'lda (setContractManual) + sync', async () => {
+      const p = await svc.preview(tx.externalId, { kontragent: 'qolsin', kategoriya: 'qolsin', shartnoma: '217afs24yl' });
+      expect(p.valid).toBe(true);
+      expect(p.harf).toEqual({ from: '217AFS24YK', to: '217AFS24YL' });
+      expect(p.changes).toEqual([{ field: 'shartnoma', from: '217AFS24YK', to: '217AFS24YL' }]);
+      expect(p.crm).toMatchObject({ contract: '217AFS24YL', found: true, customerName: 'KARIMOV' });
+      expect(p.plan).toMatchObject({ contract: '217AFS24YL', contractManual: true });
+      expect(prisma.crmContract.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { found: true, contractNumber: { startsWith: '217AFS24' } } }));
+      const r = await svc.apply([{ tx: tx.externalId, shartnoma: '217AFS24YL' }], { approvedBy: 'Egasi · harf qoidasi' });
+      expect(r.results[0].status).toBe('applied');
+      expect(cat.setContractManual).toHaveBeenCalledWith('ctx1', '217AFS24YL', null, 'TR Support · tasdiq: Egasi · harf qoidasi');
+      expect(cat.setContract).not.toHaveBeenCalled();
+      expect(oplataKv.syncNowRespectingSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('2 harf farqi; noto\'g\'ri raqam izohda bo\'lsa ham (shartnoma "XATO" qo\'yilgan)', async () => {
+      tx.contractNumber = 'XATO'; tx.isContractManual = true; tx.description = 'Oplata po dogovoru 656AFS25AB za kv';
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv9', contractNo: 'XATO', date: new Date() });
+      const p = await svc.preview('ctx1', { shartnoma: '656AFS25ZU' });
+      expect(p.valid).toBe(true);
+      expect(p.harf).toEqual({ from: '656AFS25AB', to: '656AFS25ZU' });
+      expect(p.changes).toEqual([{ field: 'shartnoma', from: 'XATO', to: '656AFS25ZU' }]);
+    });
+
+    it('qoidaga tushmasa — eski "ariza biriktiring", CRM so\'ralmaydi', async () => {
+      for (const s of ['217AFS25YL', '206FZO25A2', '217AFS24Y1', 'XATO', 'qolsin']) {
+        const p = await svc.preview('ctx1', { shartnoma: s });
+        expect(p.valid).toBe(false);
+        expect(p.harf).toBeNull();
+        expect(p.errors).toHaveLength(1);
+        expect(p.errors[0]).toContain("XATO to'lovlar ro'yxatidan ariza biriktiring");
+      }
+      expect(crmCache.lookup).not.toHaveBeenCalled();
+    });
+
+    it('CRM\'da yo\'q, aniq emas (boshqa mos shartnoma), ariza kutilmoqda, kontragent o\'zgarsa → rad', async () => {
+      let p = await svc.preview('ctx1', { shartnoma: '217AFS24YM' });
+      expect(p.valid).toBe(false);
+      expect(p.errors[1]).toContain("Shartnoma 217AFS24YM CRM'da topilmadi");
+
+      prisma.crmContract.findMany.mockResolvedValueOnce([{ contractNumber: '217AFS24YL' }, { contractNumber: '217AFS24YZ' }]);
+      p = await svc.preview('ctx1', { shartnoma: '217AFS24YL' });
+      expect(p.valid).toBe(false);
+      expect(p.errors[1]).toContain("To'g'ri shartnoma aniq emas: CRM'da 217AFS24YL, 217AFS24YZ ham mos");
+
+      p = await svc.preview('ctx1', { kontragent: 'Банк', kategoriya: 'Услуги банка', shartnoma: '217AFS24YL' });
+      expect(p.valid).toBe(false);
+
+      crmCache.lookup.mockClear();
+      prisma.xatoCorrectionRequest.findFirst.mockResolvedValue({ submittedByName: 'Dilnoza', submittedAt: new Date(), proposedContractNo: '217AFS24YL' });
+      p = await svc.preview('ctx1', { shartnoma: '217AFS24YL' });
+      expect(p.valid).toBe(false);
+      expect(p.errors[0]).toContain('tasdiqlanishini kuting');
+      expect(crmCache.lookup).not.toHaveBeenCalled();
     });
   });
 

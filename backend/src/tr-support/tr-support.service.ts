@@ -6,6 +6,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { CrmContractCacheService } from '../categorization/crm-contract-cache.service';
+import { extractContractCandidates } from '../categorization/contract-parser';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 
 /**
@@ -61,9 +62,18 @@ export interface TrXato {
 }
 export const XATO_DATEFROM_KEY = 'agent.dateFrom'; // xato-list sahifasi bilan bir xil sozlama
 
+/**
+ * Harf farqi qoidasi (egasi, 2026-10-03): XATO ro'yxatidagi to'lov shartnomasining FAQAT oxirgi 1-2 harfi
+ * farq qilsa va to'g'ri shartnoma CRM'da aniq (yagona) bo'lsa — arizasiz va tasdiqsiz ko'chiriladi.
+ */
+export type TrHarf =
+  | { ok: true; from: string; to: string; crm: NonNullable<TrPreview['crm']> }
+  | { ok: false; sabab: string };
+
 export interface TrPreview {
   valid: boolean;
   xato: TrXato | null;
+  harf: { from: string; to: string } | null;   // XATO to'lov harf farqi qoidasi bilan ko'chiriladi
   errors: string[];
   tx: TrTxView | null;
   changes: TrChange[];
@@ -71,6 +81,7 @@ export interface TrPreview {
   plan: {
     txId: string; catChange: boolean; categoryId: string | null; subcategoryId: string | null; contract?: string | null;
     contractXato?: boolean;         // shartnoma CRM'siz yoziladi (XATO ro'yxatiga tushishi uchun)
+    contractManual?: boolean;       // harf farqi: XATO ariza tasdig'i kabi qo'lda (setContractManual), izohdan qayta yozilmaydi
   } | null;
 }
 
@@ -82,6 +93,20 @@ const isYoq = (v: any) => YOQ.has(norm(v));
 const XATO_RE = /^xato(?:\s*[:=\s]\s*(.*))?$/i;
 export const XATO_SHARTNOMA = 'XATO';
 export const normContract = (s: string) => s.replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
+
+/**
+ * Ikki raqam faqat oxirgi 1-2 HARFI bilan farq qiladimi: uzunlik bir xil, oxirgi 2 belgidan oldingi qism AYNAN
+ * teng (raqam + obyekt kodi + yil o'zgarmaydi), farq qilgan har pozitsiyada ikkala belgi ham harf.
+ */
+export function harfFarqiMos(a: string, b: string): boolean {
+  if (!a || !b || a === b || a.length !== b.length || a.length < 6) return false;
+  const n = a.length - 2;
+  if (a.slice(0, n) !== b.slice(0, n) || !/^\d{1,6}[A-Z]{2,4}/.test(a.slice(0, n))) return false;
+  for (let i = n; i < a.length; i++) {
+    if (a[i] !== b[i] && !(/[A-Z]/.test(a[i]) && /[A-Z]/.test(b[i]))) return false;
+  }
+  return true;
+}
 
 @Injectable()
 export class TrSupportService {
@@ -189,7 +214,8 @@ export class TrSupportService {
         + ` (${p.submittedByName || "noma'lum"}${at ? ', ' + at.slice(0, 10) : ''}${p.proposedContractNo ? ', taklif: ' + p.proposedContractNo : ''}).`
         + ' Tahrir qilinmaydi: ariza tasdiqlanishini kuting.'
       : `Bu to'lov XATO to'lovlar ro'yxatida (shartnoma ${sh}). Tahrir qilinmaydi: XATO to'lovlar ro'yxatidan ariza`
-        + ` biriktiring — to'lov kartasidagi "Shartnoma biriktirish" (to'g'ri shartnoma va chek).`;
+        + ` biriktiring — to'lov kartasidagi "Shartnoma biriktirish" (to'g'ri shartnoma va chek).`
+        + ` Istisno: faqat oxirgi 1-2 harf farqi bo'lsa arizasiz ko'chiriladi.`;
     return {
       inList: true, contractNo: row.contractNo || null, pending: !!p, pendingBy: p?.submittedByName || null,
       pendingAt: at, pendingContract: p?.proposedContractNo || null, xabar,
@@ -198,18 +224,26 @@ export class TrSupportService {
 
   // ─── Tekshiruv (FAQAT O'QISH; CRM faqat o'qiladi) ─────────────────
   async preview(ref: string, choice: TrChoice, tree?: TrTop[]): Promise<TrPreview> {
-    const out: TrPreview = { valid: false, xato: null, errors: [], tx: null, changes: [], crm: null, plan: null };
+    const out: TrPreview = { valid: false, xato: null, harf: null, errors: [], tx: null, changes: [], crm: null, plan: null };
     const tx = await this.findTx(ref);
     if (!tx) {
       out.errors.push(`To'lov topilmadi: ${String(ref).slice(0, 80)}`);
       return out;
     }
     out.tx = this.viewOf(tx);
-    // XATO to'lovlar ro'yxatidagi to'lov — tahrir yo'q, ariza orqali (egasi qoidasi)
+    // XATO to'lovlar ro'yxatidagi to'lov — tahrir yo'q, ariza orqali (egasi qoidasi, 2026-09-30).
+    // Istisno — harf farqi qoidasi (2026-10-03): faqat oxirgi 1-2 harf farq qilsa, ariza kerak emas.
     out.xato = await this.xatoStatus(tx);
+    let harf: Extract<TrHarf, { ok: true }> | null = null;
     if (out.xato.inList) {
-      out.errors.push(out.xato.xabar as string);
-      return out;
+      const h = out.xato.pending ? null : await this.harfFarqi(tx, out.xato.contractNo, choice.shartnoma);
+      if (!h || !h.ok) {
+        out.errors.push(out.xato.xabar as string);
+        if (h && !h.ok) out.errors.push((h as Extract<TrHarf, { ok: false }>).sabab);
+        return out;
+      }
+      harf = h as Extract<TrHarf, { ok: true }>;
+      out.harf = { from: h.from, to: h.to };
     }
     if (tx.source === 'ALOQA_BANK') out.errors.push("Aloqa Bank import qatorini tahrirlab bo'lmaydi (faqat o'qish)");
     const tops = tree || await this.loadTree();
@@ -250,7 +284,10 @@ export class TrSupportService {
     let newContract: string | null | undefined;
     let contractXato = false;
     const xm = !isQolsin(choice.shartnoma) ? XATO_RE.exec(String(choice.shartnoma).trim()) : null;
-    if (xm) {
+    if (harf) {
+      newContract = harf.to === (tx.contractNumber || null) ? undefined : harf.to;
+      out.crm = harf.crm;
+    } else if (xm) {
       contractXato = true;
       if ((newTop?.code || '') !== 'CLIENT') {
         out.errors.push("XATO ro'yxatiga faqat \"Клиент / Физ.Л / Юр.Л\" kontragentli to'lov tushadi — kontragentni ham tanlang");
@@ -268,7 +305,7 @@ export class TrSupportService {
       const topCode = newTop?.code || '';
       if (!CONTRACT_TOPS.includes(topCode)) {
         out.errors.push("Shartnoma faqat \"Клиент / Физ.Л / Юр.Л\" yoki \"Переброска\" kontragentida qo'yiladi");
-      } else {
+      } else if (!harf) {
         const c: any = await this.crmCache.lookup(newContract, { forceRefresh: true });
         // O/0, I/1 varianti bilan topilsa — CRM'dagi KANONIK shakl yoziladi (aks holda to'lov yana XATO bo'ladi)
         if (c?.found && c.contractNumber) newContract = normContract(String(c.contractNumber));
@@ -289,6 +326,9 @@ export class TrSupportService {
     if (newContract !== undefined) {
       out.changes.push({ field: 'shartnoma', from: tx.contractNumber || null, to: newContract });
     }
+    if (harf && (topChanged || subChanged)) {
+      out.errors.push("XATO to'lovda harf farqi qoidasi bilan faqat shartnoma ko'chiriladi — kontragent va kategoriya qolsin");
+    }
     if (!out.errors.length && !out.changes.length) {
       out.errors.push("Hech narsa o'zgarmaydi: tanlangan qiymatlar hozirgisi bilan bir xil");
     }
@@ -297,8 +337,41 @@ export class TrSupportService {
       txId: tx.id, catChange: topChanged || subChanged, categoryId: newTopId, subcategoryId: newSubId,
       ...(newContract !== undefined ? { contract: newContract } : {}),
       ...(contractXato ? { contractXato: true } : {}),
+      ...(harf ? { contractManual: true } : {}),
     };
     return out;
+  }
+
+  /**
+   * Harf farqi qoidasi. null — qoida tegishli emas (raqam boshqacha yoki shartnoma berilmagan).
+   * Noto'g'ri raqam: OplatyKv XATO qatori, to'lov shartnomasi yoki izohdagi raqam. To'g'ri raqam CRM'da bo'lishi
+   * va keshdagi boshqa CRM shartnomasi shu qoidaga tushmasligi ("aniq") shart. CRM faqat o'qiladi.
+   */
+  private async harfFarqi(tx: any, xatoContract: string | null, shartnoma: any): Promise<TrHarf | null> {
+    if (isQolsin(shartnoma) || isYoq(shartnoma) || XATO_RE.test(String(shartnoma).trim())) return null;
+    const target = normContract(String(shartnoma));
+    const wrongs = [...new Set([xatoContract, tx.contractNumber, ...extractContractCandidates(tx.description)]
+      .filter((s): s is string => !!s).map(normContract).filter((s) => s && s !== XATO_SHARTNOMA))];
+    if (!wrongs.some((w) => harfFarqiMos(w, target))) return null;
+    const c: any = await this.crmCache.lookup(target, { forceRefresh: true });
+    if (!c?.found) return { ok: false, sabab: `Shartnoma ${target} CRM'da topilmadi — boshqa shartnoma bering` };
+    const to = normContract(String(c.contractNumber || target));
+    const from = wrongs.find((w) => harfFarqiMos(w, to));
+    if (!from) return null;
+    const prefix = to.slice(0, to.length - 2);
+    const boshqa = (await this.prisma.crmContract.findMany({
+      where: { found: true, contractNumber: { startsWith: prefix } }, select: { contractNumber: true }, take: 50,
+    })).map((r: any) => normContract(String(r.contractNumber))).filter((n: string) => n !== to && n !== from && harfFarqiMos(from, n));
+    if (boshqa.length) {
+      return {
+        ok: false,
+        sabab: `To'g'ri shartnoma aniq emas: CRM'da ${[to, ...new Set(boshqa)].join(', ')} ham mos — ariza orqali biriktiring`,
+      };
+    }
+    return {
+      ok: true, from, to,
+      crm: { contract: to, found: true, customerName: c?.customerName || null, objectName: c?.objectName || null },
+    };
   }
 
   // ─── Tahrir (egasi [Ha] bosgach) ─────────────────────────────────
@@ -328,7 +401,7 @@ export class TrSupportService {
           await this.cat.setManual(p.plan.txId, { categoryId: p.plan.categoryId, subcategoryId: p.plan.subcategoryId }, null, label);
         }
         if (p.plan.contract !== undefined) {
-          if (p.plan.contractXato) await this.cat.setContractManual(p.plan.txId, p.plan.contract, null, label);
+          if (p.plan.contractXato || p.plan.contractManual) await this.cat.setContractManual(p.plan.txId, p.plan.contract, null, label);
           else await this.cat.setContract(p.plan.txId, p.plan.contract, null, label);
         }
       } catch (e: any) {

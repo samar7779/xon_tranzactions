@@ -1026,6 +1026,13 @@ MSG_TUZATISH_FOYDALANISH = ("Foydalanish: /tuzat <to'lov ID>. Bot to'lovning hoz
                             " keyin Kontragent, Kategoriya, Shartnoma, kim tasdiqlaydi va izohni so'raydi.")
 MSG_TUZATISH_QABUL = "Qabul qilindi, tahrirlanmoqda..."
 MSG_TUZATISH_BEKOR = "Bekor qilindi. Hech narsa o'zgarmadi."
+# Harf farqi qoidasi (egasi qarori, 2026-10-03): XATO ro'yxatidagi to'lovda to'g'ri shartnoma faqat oxirgi 1-2 harfi
+# bilan farq qilsa va CRM'da aniq bo'lsa — ARIZASIZ va TASDIQSIZ ko'chiriladi (backend tekshiradi: tr-support harfFarqi).
+HARF_TASDIQ = "Egasi · harf qoidasi"
+HARF_IZOH = "Shartnoma oxirgi harf farqi (arizasiz, tasdiqsiz)"
+HARF_BOSHI = ("Harf farqi qoidasi: shartnomaning faqat oxirgi 1-2 harfi farq qiladi, to'g'ri shartnoma CRM'da bor."
+              " Arizasiz va tasdiqsiz ko'chiryapman:")
+HARF_NATIJA = "Harf farqi qoidasi bo'yicha natija:"
 MSG_TUZATISH_PANEL = "Tarix va ortga qaytarish: panel > Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi bilan)."
 
 # XATO to'lovga ariza (ariza.py; Leader intent xato_ariza): XATO sahifasidagi "Shartnoma biriktirish" bilan bir xil
