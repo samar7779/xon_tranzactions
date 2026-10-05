@@ -42,6 +42,11 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
 - Backend `tr-support.service.ts::xatoUlash` -> preview `ulash: {from, to, obyekt}`, `valid=true`, `plan.contractManual` (ariza tasdig'i bilan bir xil `setContractManual`); harf qoidasi CRM'da "aniq emas" (bir nechta mos) desa ham egasi aniq aytgan shartnoma shu yo'l bilan (tasdiq bilan) ulanadi.
 - Bot (`tuzatish.py`): `ulash` qatori odatdagi oqim — kontragent/kategoriya `qolsin`, tasdiqlovchi va izoh so'raladi, preview'da "XATO ro'yxatidan ulanadi: ariza o'rniga tasdiq bilan (obyekt X bir xil)", "tasdiqlayman" dan keyin apply. Log: `tr_support_edits` (tx_external_id = ex_id, approved_by, comment, oldin/keyin) + audit. Ortga qaytarish ishlaydi.
 
+## XATO to'lovda faqat kontragent/kategoriya (2026-10-05)
+- Shartnoma o'zgarmasa (`qolsin` yoki `XATO`) va ariza kutilmasa: preview `xatoQoladi=true`, kontragent/kategoriya mas'ul tasdig'i bilan o'zgaradi, to'lov XATO ro'yxatida qoladi. Kontragent CLIENT bo'lib qolishi shart (aks holda rad: "panel orqali"). Shartnoma "XATO" ga yozilsa ham ro'yxatda qoladi.
+- Aralash ro'yxat: bot rad etilgan qatorlarni alohida aytadi ("Qolgan N ta ... davom etaman" / "tasdiq so'rovi quyida"), qolganlariga bitta tasdiq so'rovi. Avval bittasi rad bo'lsa butun ro'yxat to'xtardi (05.10 da 3 ta ulash yo'qolgan).
+- Natija: apply har to'lovga `crm` (mijoz, obyekt — preview'dagi CRM) va shartnoma o'zgarganda `okv` (`syncContractChangeToOplataKv`: OplatyKv qatoridagi shartnoma, mijoz, obyekt) qaytaradi; bot "CRM: ..." va "OplatyKv qatori yangilandi: shartnoma ..., mijoz ..., obyekt ..." deb yozadi.
+
 ## Yopishgan "от" (izoh parseri, 2026-10-05)
 - `contract-parser.ts::extractContractCandidates`: asosiy raqamdan keyin darrov yopishgan "ОТ/от/OT" kesilgan nomzod (`stripGluedOt`, ortidan sana yopishsa ham): `2118MSO252POT` -> `2118MSO252P`. Kategoriyalash nomzodlarni tartib bilan CRM'da sinaydi: to'liq raqam topilmasa kesilgani; ikkalasi ham yo'q — asosiy (XATO, avvalgidek). Bot nusxasi `payment_check._ot_kes` (`_izoh_mos`).
 - Eski XATO to'lovlar: Admin > Sync loglar > "Qayta tekshirish" (`POST /oplata-kv/reverify-contracts`: XATO qatorlarni izohdan qayta kategoriyalaydi).

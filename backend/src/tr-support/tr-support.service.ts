@@ -77,6 +77,8 @@ export interface TrPreview {
   // XATO to'lov shartnomaga mas'ul TASDIG'I bilan ulanadi (2026-10-05): CRM'da aniq, obyekt bir xil.
   // obyekt — solishtirilgan obyekt kodi; null = XATO raqamda/izohda obyekt kodi yo'q (solishtirilmadi)
   ulash: { from: string; to: string; obyekt: string | null } | null;
+  // XATO to'lovda shartnoma o'zgarmaydi, faqat kontragent/kategoriya — mas'ul tasdig'i bilan, XATO ro'yxatida qoladi
+  xatoQoladi: boolean;
   errors: string[];
   tx: TrTxView | null;
   changes: TrChange[];
@@ -269,7 +271,8 @@ export class TrSupportService {
   // ─── Tekshiruv (FAQAT O'QISH; CRM faqat o'qiladi) ─────────────────
   async preview(ref: string, choice: TrChoice, tree?: TrTop[]): Promise<TrPreview> {
     const out: TrPreview = {
-      valid: false, xato: null, harf: null, ulash: null, errors: [], tx: null, changes: [], crm: null, plan: null,
+      valid: false, xato: null, harf: null, ulash: null, xatoQoladi: false, errors: [], tx: null, changes: [], crm: null,
+      plan: null,
     };
     const { tx, kop } = await this.findTxRef(ref);
     if (!tx) {
@@ -292,15 +295,21 @@ export class TrSupportService {
         out.harf = { from: harf.from, to: harf.to };
       } else {
         const u = out.xato.pending ? null : await this.xatoUlash(tx, out.xato.contractNo, choice.shartnoma);
-        if (!u || !u.ok) {
+        // Shartnoma o'zgarmaydi (qolsin yoki "XATO"): kontragent/kategoriya tasdiq bilan o'zgaradi, XATO'da qoladi (05.10)
+        const shQoladi = isQolsin(choice.shartnoma) || XATO_RE.test(String(choice.shartnoma ?? '').trim());
+        if (!u && !out.xato.pending && shQoladi) {
+          out.xatoQoladi = true;
+        } else if (!u || !u.ok) {
           out.errors.push(out.xato.xabar as string);
           const sabab = (u && !u.ok ? (u as Extract<TrHarf, { ok: false }>).sabab : null)
             || (h && !h.ok ? (h as Extract<TrHarf, { ok: false }>).sabab : null);
           if (sabab) out.errors.push(sabab);
           return out;
         }
-        ulash = u as Extract<TrHarf, { ok: true }>;
-        out.ulash = { from: ulash.from, to: ulash.to, obyekt: ulash.obyekt ?? null };
+        if (u && u.ok) {
+          ulash = u as Extract<TrHarf, { ok: true }>;
+          out.ulash = { from: ulash.from, to: ulash.to, obyekt: ulash.obyekt ?? null };
+        }
       }
     }
     const fix = harf || ulash;
@@ -384,6 +393,10 @@ export class TrSupportService {
     }
     if (newContract !== undefined) {
       out.changes.push({ field: 'shartnoma', from: tx.contractNumber || null, to: newContract });
+    }
+    if (out.xatoQoladi && (newTop?.code || '') !== 'CLIENT') {
+      out.errors.push("XATO ro'yxatidagi to'lov \"Клиент / Физ.Л / Юр.Л\" kontragentida qoladi — boshqa kontragentga"
+        + " o'tkazish panel orqali");
     }
     if (fix && (topChanged || subChanged)) {
       out.errors.push("XATO to'lovda faqat shartnoma ulanadi — kontragent va kategoriya qolsin");
@@ -479,7 +492,9 @@ export class TrSupportService {
     const tree = await this.loadTree();
     const results: Array<{
       tx: string; id?: string; status: 'applied' | 'failed' | 'skipped'; errors?: string[]; changes: TrChange[];
-      oplataKv?: boolean | null;    // kategoriya o'zgarganda OplatyKv qatori (Тип) ham yangilandimi
+      oplataKv?: boolean | null;    // OplatyKv qatori ham yangilandimi (kategoriya: Тип; shartnoma: qator)
+      okv?: { contractNo: string | null; client: string | null; object: string | null } | null;   // shartnomadan keyin
+      crm?: { customerName: string | null; objectName: string | null } | null;
     }> = [];
 
     for (const it of items) {
@@ -493,6 +508,7 @@ export class TrSupportService {
       let status: 'applied' | 'failed' = 'applied';
       let error: string | null = null;
       let oplataKv: boolean | null = null;
+      let okv: { contractNo: string | null; client: string | null; object: string | null } | null = null;
       try {
         if (p.plan.catChange) {
           const s: any = await this.cat.setManual(
@@ -500,8 +516,14 @@ export class TrSupportService {
           oplataKv = typeof s?.oplataKvUpdated === 'boolean' ? s.oplataKvUpdated : null;
         }
         if (p.plan.contract !== undefined) {
-          if (p.plan.contractXato || p.plan.contractManual) await this.cat.setContractManual(p.plan.txId, p.plan.contract, null, label);
-          else await this.cat.setContract(p.plan.txId, p.plan.contract, null, label);
+          const s: any = p.plan.contractXato || p.plan.contractManual
+            ? await this.cat.setContractManual(p.plan.txId, p.plan.contract, null, label)
+            : await this.cat.setContract(p.plan.txId, p.plan.contract, null, label);
+          const o = s?.oplataKvSync;
+          if (o && typeof o.updated === 'boolean') {
+            oplataKv = o.updated || oplataKv === true;
+            if (o.updated) okv = { contractNo: o.contractNo ?? null, client: o.client ?? null, object: o.object ?? null };
+          }
         }
       } catch (e: any) {
         status = 'failed';
@@ -519,7 +541,10 @@ export class TrSupportService {
           status, error,
         },
       });
-      results.push({ tx: it.tx, id: row.id, status, ...(error ? { errors: [error] } : {}), changes: p.changes, oplataKv });
+      results.push({
+        tx: it.tx, id: row.id, status, ...(error ? { errors: [error] } : {}), changes: p.changes, oplataKv, okv,
+        crm: p.crm ? { customerName: p.crm.customerName, objectName: p.crm.objectName } : null,
+      });
     }
 
     // Hammasidan keyin BITTA OplatyKv sync (panel "Sync" tugmasi bilan bir xil)

@@ -85,8 +85,8 @@ describe('AgentBridgeService', () => {
       expect(trs.apply).toHaveBeenCalledWith([{ tx: 'T', kontragent: null, kategoriya: null, shartnoma: 'X1' }],
         { approvedBy: 'Samar', comment: null, requestedBy: 'Telegram egasi (TR Support bot)' });
       expect(r).toEqual({ ok: true, batchId: 'b1', results: [
-        { tx: 'T', id: 'e1', status: 'applied', errors: [], changes: [{ field: 'shartnoma', from: null, to: 'X1' }], oplataKv: null },
-        { tx: 'U', id: 'e2', status: 'applied', errors: [], changes: [{ field: 'kategoriya', from: 'A', to: 'B' }], oplataKv: true },
+        { tx: 'T', id: 'e1', status: 'applied', errors: [], changes: [{ field: 'shartnoma', from: null, to: 'X1' }], oplataKv: null, okv: null, crm: null },
+        { tx: 'U', id: 'e2', status: 'applied', errors: [], changes: [{ field: 'kategoriya', from: 'A', to: 'B' }], oplataKv: true, okv: null, crm: null },
       ], sync: { ok: true, added: 1, updated: 0, skipped: 0 } });
     });
     it("options: kontragent -> kategoriyalar (id'larsiz)", async () => {

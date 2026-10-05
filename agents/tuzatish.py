@@ -283,6 +283,8 @@ def preview_html(previews: List[Tuple[Qator, Dict[str, Any]]], tasdiq: str, izoh
         crm = p.get("crm")
         if crm and crm.get("found"):
             q.append("  CRM: %s" % _e(", ".join(x for x in (crm.get("customerName"), crm.get("objectName")) if x) or "bor"))
+        if p.get("xatoQoladi"):
+            q.append("  XATO ro'yxatida qoladi: shartnoma o'zgarmaydi, faqat kontragent/kategoriya.")
         u = p.get("ulash")
         if u:
             q.append("  XATO ro'yxatidan ulanadi: ariza o'rniga tasdiq bilan (%s)." % _e(
@@ -306,7 +308,15 @@ def natija_matni(r: Dict[str, Any], sarlavha: Optional[str] = None) -> str:
             q.append("   " + _ozgarish_matni(ch))
         for err in x.get("errors") or []:
             q.append("   sabab: " + str(err)[:300])
-        if x.get("oplataKv") is True:
+        crm = x.get("crm") or {}
+        if crm.get("customerName") or crm.get("objectName"):
+            q.append("   CRM: %s" % ", ".join(v for v in (crm.get("customerName"), crm.get("objectName")) if v))
+        okv = x.get("okv") or {}
+        if okv:
+            q.append("   OplatyKv qatori yangilandi: shartnoma %s%s%s." % (
+                okv.get("contractNo") or "-", (", mijoz " + okv["client"]) if okv.get("client") else "",
+                (", obyekt " + okv["object"]) if okv.get("object") else ""))
+        elif x.get("oplataKv") is True:
             q.append("   OplatyKv qatori ham yangilandi (Tip va split).")
         elif x.get("oplataKv") is False:
             q.append("   OplatyKv'da bog'langan qator yo'q: umumiy sync qo'shadi.")
@@ -391,7 +401,8 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
     if harf:
         await _harf_bajar(harf, outbox, reply_to)
     if rad:
-        await _say(outbox, "Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida):\n\n" + "\n\n".join(rad),
+        davom = ("\n\nQolgan %d ta to'lov bo'yicha davom etaman." % len(qolgan)) if qolgan else ""
+        await _say(outbox, "Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida):\n\n" + "\n\n".join(rad) + davom,
                    reply_to=reply_to)
     if not qolgan:
         return
@@ -409,11 +420,14 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
                 await _say(outbox, "To'lov topilmadi: %s. ID ni tekshiring." % q.tx, reply_to=reply_to)
                 return
             xato = opt.get("xato") or {}
-            if xato.get("inList") and q.tx not in ulash:    # XATO, shartnoma aniq emas: savol yo'q, ariza yo'li
+            if xato.get("inList") and xato.get("pending"):     # ariza kutilmoqda: savol yo'q, kutish
                 await _say(outbox, "%s\n%s" % (_tx_sarlavha(opt.get("tx"), q.tx), xato.get("xabar") or ""),
                            reply_to=reply_to)
                 return
-            await _say(outbox, savol_matni(q, opt), reply_to=reply_to)
+            savol = savol_matni(q, opt)
+            if xato.get("inList") and q.tx not in ulash:
+                savol = C.TUZATISH_XATO_SAVOL.format(sh=xato.get("contractNo") or "XATO") + "\n" + savol
+            await _say(outbox, savol, reply_to=reply_to)
             return
     if len(tasdiqlar) > 1:
         await _say(outbox, "Bir tasdiqda bitta tasdiqlovchi bo'ladi. Kim tasdiqlaydi: %s?" % ", ".join(sorted(tasdiqlar)),
@@ -444,8 +458,13 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
         qism = (["Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida):\n\n" + "\n\n".join(xato_royxat)]
                 if xato_royxat else [])
         qism += ["Tahrirlab bo'lmaydi, to'g'rilang:\n\n" + "\n\n".join(xatolar)] if xatolar else []
+        yaroqli = [(q, p) for q, p in previews if p.get("valid")]
+        if yaroqli:                                     # bittasi rad bo'lsa qolganlari tashlab yuborilmaydi (05.10)
+            qism.append("Qolgan %d ta to'lov uchun tasdiq so'rovi quyida." % len(yaroqli))
         await _say(outbox, "\n\n".join(qism), reply_to=reply_to)
-        return
+        if not yaroqli:
+            return
+        previews = yaroqli
 
     # 3) tasdiq so'rovi
     token = secrets.token_hex(8)

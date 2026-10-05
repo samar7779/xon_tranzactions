@@ -204,14 +204,21 @@ class OqimTest(_Base):
         self.assertEqual(await TZ.decide("zz", True, self.out, None), C.MSG_MUDDAT_OTGAN)
 
     async def test_xato_royxatida_savol_yoq_ariza(self):
-        xabar = ("Bu to'lov XATO to'lovlar ro'yxatida (shartnoma 217VHA23EU). Tahrir qilinmaydi: XATO to'lovlar"
-                 " ro'yxatidan ariza biriktiring")
-        self.javob["options"] = dict(OPTIONS, xato={"inList": True, "contractNo": "217VHA23EU", "pending": False, "xabar": xabar})
+        xabar = ("Bu to'lov XATO to'lovlar ro'yxatida (shartnoma 217VHA23EU) va unga ariza allaqachon yuborilgan."
+                 " Tahrir qilinmaydi: ariza tasdiqlanishini kuting.")
+        # ariza kutilmoqda: savol yo'q
+        self.javob["options"] = dict(OPTIONS, xato={"inList": True, "contractNo": "217VHA23EU", "pending": True, "xabar": xabar})
         await TZ.handle("TUZATISH: tx=%s shartnoma=?" % TX, self.out)
         [t] = self.texts()
         self.assertIn(xabar, t)
         self.assertNotIn("Kim tasdiqlaydi", t)                   # variantlar so'ralmaydi
         self.assertFalse([c for c in self.calls if c["path"] != C.TUZATISH_KOPRIK_OPTIONS])
+        # ariza yo'q (05.10): XATO to'lovga ham savol — ulash yoki faqat kontragent/kategoriya, tasdiq bilan
+        self.javob["options"] = dict(OPTIONS, xato={"inList": True, "contractNo": "217VHA23EU", "pending": False, "xabar": "x"})
+        await TZ.handle("TUZATISH: tx=%s shartnoma=?" % TX, self.out)
+        t = self.texts()[-1]
+        self.assertTrue(t.startswith(C.TUZATISH_XATO_SAVOL.format(sh="217VHA23EU")))
+        self.assertIn("Kim tasdiqlaydi", t)
         # to'liq qator bilan ham: preview xato.inList -> tugmasiz, "Bot orqali tahrirlanmaydi"
         self.javob["preview"] = {"ok": True, "valid": False, "tx": TX_VIEW, "changes": [], "crm": None, "errors": [xabar],
                                  "xato": {"inList": True, "xabar": xabar}}
@@ -273,6 +280,56 @@ class QisqaRaqamTest(_Base):
         t = self.texts()[-1]
         self.assertIn("Kategoriya: Взносы за квартиры -> За счетчик", t)
         self.assertIn("OplatyKv qatori ham yangilandi", t)
+
+
+class AralashRoyxatTest(_Base):
+    """05.10: 4 ta to'lovdan bittasi rad bo'lsa qolgan 3 tasi tashlab yuborilmaydi; natijada CRM va OplatyKv."""
+
+    def _preview(self, body: Any, q: Dict[str, List[str]]) -> Dict[str, Any]:
+        tx = q["tx"][0]
+        tv = dict(TX_VIEW, externalId=tx)
+        if tx == "RAD_4444":
+            return {"ok": True, "valid": False, "tx": tv, "changes": [], "crm": None, "harf": None, "ulash": None,
+                    "xato": {"inList": True, "xabar": "XATO ro'yxatida, ariza"}, "errors": ["XATO ro'yxatida, ariza"]}
+        return {"ok": True, "valid": True, "errors": [], "tx": tv, "harf": None, "xato": {"inList": True},
+                "ulash": {"from": "255YLZ26A", "to": "255YLZ26A4", "obyekt": "YLZ"},
+                "changes": [{"field": "shartnoma", "from": "255YLZ26A", "to": "255YLZ26A4"}],
+                "crm": {"contract": "255YLZ26A4", "found": True, "customerName": "XALMUXAMEDOVA NOIBA", "objectName": "YLZ"}}
+
+    async def test_bittasi_rad_qolganlari_tasdiqqa(self):
+        self.javob["preview"] = self._preview
+        await TZ.handle("TUZATISH: tx=OK_111111 shartnoma=255YLZ26A4 tasdiq=Salokhiddin izoh=4 tushgan\n"
+                        "TUZATISH: tx=OK_222222 shartnoma=255YLZ26A4\n"
+                        "TUZATISH: tx=RAD_4444 kontragent=qolsin kategoriya=Взносы за квартиры shartnoma=qolsin", self.out)
+        rad, sorov = self.texts()[-2:]
+        self.assertIn("Bot orqali tahrirlanmaydi (XATO to'lovlar ro'yxatida)", rad)
+        self.assertIn("Qolgan 2 ta to'lov uchun tasdiq so'rovi quyida.", rad)
+        self.assertIn("To'lovni tahrirlash", sorov)
+        token = self._token(C.KV_TZ_APPR)
+        self.assertEqual([i["tx"] for i in self.kv[C.kv_key(C.KV_TZ_APPR, token=token)]["items"]], ["OK_111111", "OK_222222"])
+        self.javob["apply"] = {"ok": True, "batchId": "b1", "results": [
+            {"tx": "OK_111111", "id": "e1", "status": "applied", "errors": [], "oplataKv": True,
+             "okv": {"contractNo": "255YLZ26A4", "client": "XALMUXAMEDOVA N", "object": "YLZ"},
+             "crm": {"customerName": "XALMUXAMEDOVA NOIBA", "objectName": "YLZ"},
+             "changes": [{"field": "shartnoma", "from": "255YLZ26A", "to": "255YLZ26A4"}]}],
+            "sync": {"ok": True, "added": 0, "updated": 1, "skipped": 0}}
+        await TZ.decide(token, True, self.out, None)
+        await asyncio_gather()
+        t = self.texts()[-1]
+        self.assertIn("   CRM: XALMUXAMEDOVA NOIBA, YLZ", t)
+        self.assertIn("   OplatyKv qatori yangilandi: shartnoma 255YLZ26A4, mijoz XALMUXAMEDOVA N, obyekt YLZ.", t)
+
+    async def test_hammasi_rad_tasdiq_yoq(self):
+        self.javob["preview"] = self._preview
+        await TZ.handle("TUZATISH: tx=RAD_4444 kontragent=qolsin kategoriya=qolsin shartnoma=226ZUR99XX tasdiq=S izoh=x",
+                        self.out)
+        self.assertNotIn("Qolgan", self.texts()[-1])
+        self.assertEqual(self.kv, {})
+        # aniq shartnomali qator 0-qadamda rad bo'lsa ham qolganlari davom etadi
+        await TZ.handle("TUZATISH: tx=RAD_4444 shartnoma=226ZUR99XX tasdiq=S izoh=x\n"
+                        "TUZATISH: tx=OK_111111 shartnoma=255YLZ26A4", self.out)
+        self.assertIn("Qolgan 1 ta to'lov bo'yicha davom etaman.", self.texts()[-2])
+        self.assertIn("To'lovni tahrirlash", self.texts()[-1])
 
 
 class XatoUlashTest(_Base):

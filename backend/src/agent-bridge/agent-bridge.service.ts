@@ -146,6 +146,7 @@ export class AgentBridgeService implements OnModuleInit {
       xato: this.pickXato(p.xato),
       harf: p.harf ? { from: p.harf.from, to: p.harf.to } : null,
       ulash: p.ulash ? { from: p.ulash.from, to: p.ulash.to, obyekt: p.ulash.obyekt ?? null } : null,
+      xatoQoladi: !!p.xatoQoladi,
       crm: p.crm ? { contract: p.crm.contract, found: p.crm.found, customerName: p.crm.customerName, objectName: p.crm.objectName } : null,
     };
   }
@@ -160,6 +161,8 @@ export class AgentBridgeService implements OnModuleInit {
       results: r.results.map((x) => ({
         tx: x.tx, id: x.id || null, status: x.status, errors: (x.errors || []).map(cut), changes: this.pickChanges(x.changes),
         oplataKv: typeof x.oplataKv === 'boolean' ? x.oplataKv : null,
+        okv: x.okv ? { contractNo: strOrNull(x.okv.contractNo), client: strOrNull(x.okv.client), object: strOrNull(x.okv.object) } : null,
+        crm: x.crm ? { customerName: strOrNull(x.crm.customerName), objectName: strOrNull(x.crm.objectName) } : null,
       })),
       sync: r.sync ? {
         ok: !!r.sync.ok, added: r.sync.added, updated: r.sync.updated, skipped: r.sync.skipped,

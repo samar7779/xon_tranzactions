@@ -306,11 +306,11 @@ describe('TrSupportService', () => {
         expect(p.errors[1]).toContain(`Shartnoma ${s} CRM'da topilmadi`);
       }
       crmCache.lookup.mockClear();
-      for (const s of ['XATO', 'qolsin']) {
-        const p = await svc.preview('ctx1', { shartnoma: s });
-        expect(p.valid).toBe(false);
-        expect(p.errors).toHaveLength(1);
-      }
+      let p = await svc.preview('ctx1', { shartnoma: 'qolsin' });
+      expect(p).toMatchObject({ valid: false, xatoQoladi: true });
+      expect(p.errors).toEqual(["Hech narsa o'zgarmaydi: tanlangan qiymatlar hozirgisi bilan bir xil"]);
+      p = await svc.preview('ctx1', { shartnoma: 'XATO' });                  // XATO deb belgilash: ro'yxatda qoladi
+      expect(p).toMatchObject({ valid: true, xatoQoladi: true, plan: { contract: 'XATO', contractXato: true } });
       expect(crmCache.lookup).not.toHaveBeenCalled();
     });
 
@@ -381,6 +381,52 @@ describe('TrSupportService', () => {
       const p = await svc.preview('ctx1', { shartnoma: '2118MSO252P' });
       expect(p.valid).toBe(true);
       expect(p.ulash).toEqual({ from: 'XATO', to: '2118MSO252P', obyekt: null });
+    });
+  });
+
+  describe('XATO to\'lovda faqat kontragent/kategoriya (05.10, tasdiq bilan; XATO\'da qoladi)', () => {
+    beforeEach(() => {
+      tx.contractNumber = 'XATO'; tx.isContractManual = true; tx.subcategoryId = 's_avto';
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv4', contractNo: 'XATO', date: new Date() });
+    });
+
+    it('kategoriya -> Взносы за квартиры: valid, xatoQoladi, shartnoma o\'zgarmaydi, CRM so\'ralmaydi', async () => {
+      const p = await svc.preview('ctx1', { kontragent: 'Клиент / Физ.Л / Юр.Л', kategoriya: 'vznosy za kvartiry', shartnoma: 'qolsin' });
+      expect(p).toMatchObject({ valid: true, xatoQoladi: true, harf: null, ulash: null });
+      expect(p.changes).toEqual([{ field: 'kategoriya', from: 'Взносы за автостоянку', to: 'Взносы за квартиры' }]);
+      expect(p.plan).not.toHaveProperty('contract');
+      expect(crmCache.lookup).not.toHaveBeenCalled();
+      const r = await svc.apply([{ tx: 'ctx1', kategoriya: 'Взносы за квартиры', shartnoma: 'XATO' }], { approvedBy: 'Salokhiddin' });
+      expect(r.results[0]).toMatchObject({ status: 'applied', oplataKv: true, okv: null });
+      expect(cat.setManual).toHaveBeenCalledWith('ctx1', { categoryId: 'c_client', subcategoryId: 's_kv' }, null, 'TR Support · tasdiq: Salokhiddin');
+      expect(cat.setContractManual).not.toHaveBeenCalled();
+    });
+
+    it('boshqa kontragentga — rad; ariza kutilayotgan bo\'lsa — rad', async () => {
+      let p = await svc.preview('ctx1', { kontragent: 'Банк', kategoriya: 'Услуги банка' });
+      expect(p.valid).toBe(false);
+      expect(p.errors[0]).toContain("XATO ro'yxatidagi to'lov \"Клиент / Физ.Л / Юр.Л\" kontragentida qoladi");
+      prisma.xatoCorrectionRequest.findFirst.mockResolvedValue({ submittedByName: 'D', submittedAt: new Date(), proposedContractNo: null });
+      p = await svc.preview('ctx1', { kategoriya: 'Взносы за квартиры' });
+      expect(p).toMatchObject({ valid: false, xatoQoladi: false });
+      expect(p.errors[0]).toContain('tasdiqlanishini kuting');
+    });
+
+    it('shartnoma ulanganda natijada OplatyKv qatori (shartnoma, mijoz, obyekt) va CRM', async () => {
+      tx.contractNumber = '2118MSO252POT'; tx.isContractManual = false; tx.description = 'dog 2118MSO252Pот';
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv4', contractNo: '2118MSO252POT', date: new Date() });
+      crmCache.lookup.mockImplementation(async (c: string) => (c === '2118MSO252P'
+        ? { contractNumber: c, found: true, customerName: 'XODJIMURATOV', objectName: 'MUHABBAT SHAHRI' } : { contractNumber: c, found: false }));
+      cat.setContractManual.mockImplementationOnce(async (_id: string, c: string) => {
+        tx.contractNumber = c; tx.isContractManual = true;
+        return { ok: true, contractNumber: c, oplataKvSync: { updated: true, contractNo: c, client: 'XODJIMURATOV S', object: 'MUHABBAT SHAHRI' } };
+      });
+      const r = await svc.apply([{ tx: 'ctx1', shartnoma: '2118MSO252P' }], { approvedBy: 'Salokhiddin' });
+      expect(r.results[0]).toMatchObject({
+        status: 'applied', oplataKv: true,
+        okv: { contractNo: '2118MSO252P', client: 'XODJIMURATOV S', object: 'MUHABBAT SHAHRI' },
+        crm: { customerName: 'XODJIMURATOV', objectName: 'MUHABBAT SHAHRI' },
+      });
     });
   });
 

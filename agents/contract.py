@@ -1035,6 +1035,10 @@ HARF_IZOH = "Shartnoma oxirgi harf farqi (arizasiz, tasdiqsiz)"
 HARF_BOSHI = ("Harf farqi qoidasi: shartnomaning faqat oxirgi 1-2 harfi farq qiladi, to'g'ri shartnoma CRM'da bor."
               " Arizasiz va tasdiqsiz ko'chiryapman:")
 HARF_NATIJA = "Harf farqi qoidasi bo'yicha natija:"
+# XATO ro'yxatidagi to'lov uchun savol oldidan (05.10): ulash yoki faqat kontragent/kategoriya — ikkalasi tasdiq bilan
+TUZATISH_XATO_SAVOL = ("Bu to'lov XATO ro'yxatida (shartnoma {sh}). To'g'ri shartnoma CRM'da aniq bo'lsa (obyekt bir"
+                       " xil) tasdiq bilan ulanadi; shartnoma qolsa, kontragent/kategoriya tasdiq bilan o'zgaradi"
+                       " (Klient bo'lib, XATO'da qoladi).")
 MSG_TUZATISH_PANEL = "Tarix va ortga qaytarish: panel > Tranzaksiyalar > Klient · XATO > TR Support (kirish kodi bilan)."
 
 # XATO to'lovga ariza (ariza.py; Leader intent xato_ariza): XATO sahifasidagi "Shartnoma biriktirish" bilan bir xil

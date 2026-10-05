@@ -177,13 +177,16 @@ export interface BridgeTxPreview {
   xato: BridgeTxXato | null;
   harf: { from: string; to: string } | null;   // XATO to'lov, oxirgi 1-2 harf farqi: arizasiz va tasdiqsiz
   ulash: { from: string; to: string; obyekt: string | null } | null;   // XATO to'lov -> shartnoma, mas'ul tasdig'i bilan
+  xatoQoladi: boolean;   // XATO to'lov: faqat kontragent/kategoriya, tasdiq bilan, XATO ro'yxatida qoladi
   crm: { contract: string; found: boolean; customerName: string | null; objectName: string | null } | null;
 }
 export interface BridgeTxApply {
   ok: true; batchId: string;
   results: Array<{
     tx: string; id: string | null; status: 'applied' | 'failed' | 'skipped'; errors: string[]; changes: BridgeTxChange[];
-    oplataKv: boolean | null;   // kategoriya o'zgarganda OplatyKv qatori ham yangilandimi (null = tegilmadi)
+    oplataKv: boolean | null;   // OplatyKv qatori ham yangilandimi (null = tegilmadi)
+    okv: { contractNo: string | null; client: string | null; object: string | null } | null;
+    crm: { customerName: string | null; objectName: string | null } | null;
   }>;
   sync: { ok: boolean; added?: number; updated?: number; skipped?: number; error?: string } | null;
 }
