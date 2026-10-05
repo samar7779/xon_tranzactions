@@ -180,7 +180,10 @@ export interface BridgeTxPreview {
 }
 export interface BridgeTxApply {
   ok: true; batchId: string;
-  results: Array<{ tx: string; id: string | null; status: 'applied' | 'failed' | 'skipped'; errors: string[]; changes: BridgeTxChange[] }>;
+  results: Array<{
+    tx: string; id: string | null; status: 'applied' | 'failed' | 'skipped'; errors: string[]; changes: BridgeTxChange[];
+    oplataKv: boolean | null;   // kategoriya o'zgarganda OplatyKv qatori ham yangilandimi (null = tegilmadi)
+  }>;
   sync: { ok: boolean; added?: number; updated?: number; skipped?: number; error?: string } | null;
 }
 

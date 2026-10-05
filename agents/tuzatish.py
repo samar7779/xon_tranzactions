@@ -86,7 +86,8 @@ def parse(text: Any) -> List[Qator]:
             kalit = km.group(1).lower()
             v = _qiymat(body[km.end():oxir])
             if kalit == "tx":
-                q.tx = (v or "").split(" ")[0].strip("\"'")
+                # CRM'dagi bank hujjat raqami "6617414180/30.09.2026" -> "6617414180_30.09.2026" (backend general_id+sana)
+                q.tx = (v or "").split(" ")[0].strip("\"'").replace("/", "_")
             elif getattr(q, kalit) is None:
                 setattr(q, kalit, v)
         out.append(q)
@@ -113,6 +114,12 @@ def _aniq_shartnoma(v: Optional[str]) -> bool:
     if not t or _qolsin(t) or t.lower() in _SHARTNOMA_EMAS or t.lower().startswith("xato"):
         return False
     return bool(re.search(r"\d", t)) and bool(re.search(r"[A-Za-z]", t))
+
+
+def _aniq_id(p: Dict[str, Any], ref: str) -> str:
+    """Tekshiruvda topilgan to'lovning to'liq ID si: apply aynan ko'rsatilgan to'lovga boradi (qisqa raqam emas)."""
+    tx = p.get("tx") or {}
+    return str(tx.get("externalId") or tx.get("id") or ref)
 
 
 def _preview_params(q: Qator) -> Dict[str, str]:
@@ -292,6 +299,10 @@ def natija_matni(r: Dict[str, Any], sarlavha: Optional[str] = None) -> str:
             q.append("   " + _ozgarish_matni(ch))
         for err in x.get("errors") or []:
             q.append("   sabab: " + str(err)[:300])
+        if x.get("oplataKv") is True:
+            q.append("   OplatyKv qatori ham yangilandi (Tip va split).")
+        elif x.get("oplataKv") is False:
+            q.append("   OplatyKv'da bog'langan qator yo'q: umumiy sync qo'shadi.")
     s = r.get("sync")
     if s is None:
         q.append("OplatyKv sync ishlamadi (tahrir bo'lmadi).")
@@ -425,8 +436,8 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
     token = secrets.token_hex(8)
     payload = {
         "token": token, "created_ts": config.now_utc().timestamp(), "tasdiq": tasdiq, "izoh": izoh,
-        "items": [{"tx": q.tx, "kontragent": _param(q.kontragent), "kategoriya": _param(q.kategoriya),
-                   "shartnoma": _param(q.shartnoma)} for q in qatorlar],
+        "items": [{"tx": _aniq_id(p, q.tx), "kontragent": _param(q.kontragent), "kategoriya": _param(q.kategoriya),
+                   "shartnoma": _param(q.shartnoma)} for q, p in previews],
     }
     await asyncio.to_thread(db.kv_set_json, C.kv_key(C.KV_TZ_APPR, token=token), payload)
     matn = preview_html(previews, tasdiq, izoh)
@@ -452,8 +463,8 @@ async def _harf_bajar(harf: List[Tuple[Qator, Dict[str, Any]]], outbox: Any, rep
         matn.append("%d. %s: %s%s" % (i, _tx_sarlavha(p.get("tx"), q.tx), juft[i - 1], (" (CRM: %s)" % kim) if kim else ""))
     await _say(outbox, "\n".join(matn), reply_to=reply_to)
     payload = {"tasdiq": tasdiq, "izoh": izoh[:1000],
-               "items": [{"tx": q.tx, "kontragent": "", "kategoriya": "", "shartnoma": str(p["harf"].get("to") or "")}
-                         for q, p in harf]}
+               "items": [{"tx": _aniq_id(p, q.tx), "kontragent": "", "kategoriya": "",
+                          "shartnoma": str(p["harf"].get("to") or "")} for q, p in harf]}
     task = asyncio.create_task(_bajar(payload, outbox, C.HARF_NATIJA))
     _BG_TASKS.add(task)
     task.add_done_callback(_BG_TASKS.discard)

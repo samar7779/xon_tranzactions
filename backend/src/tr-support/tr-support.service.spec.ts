@@ -6,6 +6,7 @@ const CATS = [
   { id: 'c_client', code: 'CLIENT', name: 'Клиент / Физ.Л / Юр.Л', parentId: null },
   { id: 's_kv', code: 'CLIENT_VZNOS_KV', name: 'Взносы за квартиры', parentId: 'c_client' },
   { id: 's_avto', code: 'CLIENT_VZNOS_AVTO', name: 'Взносы за автостоянку', parentId: 'c_client' },
+  { id: 's_sch', code: 'CLIENT_SCHETCHIK', name: 'За счетчик', parentId: 'c_client' },
   { id: 'c_bank', code: 'BANK', name: 'Банк', parentId: null },
   { id: 's_usl', code: 'BANK_USLUGI', name: 'Услуги банка', parentId: 'c_bank' },
   { id: 'c_salary', code: 'SALARY', name: 'Зарплата', parentId: null },
@@ -40,7 +41,11 @@ describe('TrSupportService', () => {
       setting: { findUnique: jest.fn(async () => ({ value: '2026-07-01' })) },
       xatoCorrectionRequest: { findFirst: jest.fn(async () => null) },
       crmContract: { findMany: jest.fn(async () => []) },
-      transaction: { findFirst: jest.fn(async ({ where }: any) => (where.OR.some((w: any) => w.id === tx.id || w.externalId === tx.externalId) ? txRow() : null)) },
+      transaction: {
+        findFirst: jest.fn(async ({ where }: any) => (where.OR.some((w: any) => w.id === tx.id || w.externalId === tx.externalId) ? txRow() : null)),
+        findMany: jest.fn(async ({ where }: any) => (where.bankGeneralId === tx.bankGeneralId
+          && (!where.txnDate || (tx.txnDate >= where.txnDate.gte && tx.txnDate < where.txnDate.lt)) ? [txRow()] : [])),
+      },
       trSupportEdit: {
         create: jest.fn(async ({ data }: any) => { const r = { id: `e${rows.length + 1}`, ...data }; rows.push(r); return r; }),
         updateMany: jest.fn(async () => ({ count: 1 })),
@@ -49,7 +54,7 @@ describe('TrSupportService', () => {
       },
     };
     cat = {
-      setManual: jest.fn(async (_id: string, b: any) => { tx.categoryId = b.categoryId; tx.subcategoryId = b.subcategoryId; return { ok: true }; }),
+      setManual: jest.fn(async (_id: string, b: any) => { tx.categoryId = b.categoryId; tx.subcategoryId = b.subcategoryId; return { ok: true, oplataKvUpdated: true }; }),
       setContract: jest.fn(async (_id: string, c: string | null) => { tx.contractNumber = c; tx.isContractManual = false; return { ok: true }; }),
       setContractManual: jest.fn(async (_id: string, c: string | null) => { tx.contractNumber = c; tx.isContractManual = !!c; return { ok: true }; }),
       restoreSnapshot: jest.fn(async (_id: string, s: any) => {
@@ -107,6 +112,34 @@ describe('TrSupportService', () => {
       expect((await svc.preview('yoq_id_123', {})).errors[0]).toContain("To'lov topilmadi");
       tx.source = 'ALOQA_BANK';
       expect((await svc.preview('ctx1', { shartnoma: '206FZO25A2' })).valid).toBe(false);
+    });
+  });
+
+  describe('CRM bank hujjat raqami va lotincha kategoriya (05.10: 488ZUR235K, За счетчик)', () => {
+    beforeEach(() => { tx.bankGeneralId = '6617414180'; tx.txnDate = new Date('2026-09-30T06:05:43Z'); tx.contractNumber = '488ZUR235K'; });
+
+    it('6617414180 yoki 6617414180_30.09.2026 → to\'lov; "Za schetchik" → За счетчик; faqat sub-kategoriya', async () => {
+      for (const ref of ['6617414180', '6617414180_30.09.2026', '6617414180/30.09.2026']) {
+        const p = await svc.preview(ref, { kontragent: 'qolsin', kategoriya: 'Za schetchik', shartnoma: 'qolsin' });
+        expect(p.valid).toBe(true);
+        expect(p.tx).toMatchObject({ id: 'ctx1', externalId: tx.externalId });
+        expect(p.changes).toEqual([{ field: 'kategoriya', from: 'Взносы за квартиры', to: 'За счетчик' }]);
+        expect(p.plan).toMatchObject({ categoryId: 'c_client', subcategoryId: 's_sch' });
+        expect(p.plan).not.toHaveProperty('contract');
+      }
+      expect((await svc.preview('6617414180_01.10.2026', { kategoriya: 'Za schetchik' })).errors[0]).toContain("To'lov topilmadi");
+    });
+
+    it('bir nechta to\'lov → sanasini so\'raydi; apply OplatyKv yangilanganini qaytaradi', async () => {
+      prisma.transaction.findMany.mockResolvedValueOnce([txRow(), { ...txRow(), id: 'ctx2' }]);
+      const p = await svc.preview('6617414180', { kategoriya: 'Za schetchik' });
+      expect(p.errors[0]).toContain("Bu raqam bilan 2 ta to'lov bor");
+      expect(p.errors[0]).toContain('6617414180_30.09.2026');
+      const r = await svc.apply([{ tx: tx.externalId, kategoriya: 'За счетчик' }], { approvedBy: 'Samar' });
+      expect(r.results[0]).toMatchObject({ status: 'applied', oplataKv: true });
+      expect(cat.setManual).toHaveBeenCalledWith('ctx1', { categoryId: 'c_client', subcategoryId: 's_sch' }, null, 'TR Support · tasdiq: Samar');
+      expect(cat.setContract).not.toHaveBeenCalled();
+      expect(oplataKv.syncNowRespectingSettings).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -68,12 +68,17 @@ describe('AgentBridgeService', () => {
   // ── tx-edit ──
   describe('tx-edit', () => {
     it('apply: TrSupportService.apply ga egasi manbasi bilan; javob whitelist', async () => {
-      trs.apply.mockResolvedValue({ ok: true, batchId: 'b1', results: [{ tx: 'T', id: 'e1', status: 'applied', changes: [{ field: 'shartnoma', from: null, to: 'X1' }], secret: 'S' }], sync: { ok: true, added: 1, updated: 0, skipped: 0, at: 'x' } });
+      trs.apply.mockResolvedValue({ ok: true, batchId: 'b1', results: [
+        { tx: 'T', id: 'e1', status: 'applied', changes: [{ field: 'shartnoma', from: null, to: 'X1' }], secret: 'S' },
+        { tx: 'U', id: 'e2', status: 'applied', changes: [{ field: 'kategoriya', from: 'A', to: 'B' }], oplataKv: true },
+      ], sync: { ok: true, added: 1, updated: 0, skipped: 0, at: 'x' } });
       const r = await svc.txEditApply({ items: [{ tx: 'T', kontragent: null, kategoriya: null, shartnoma: 'X1' }], approvedBy: 'Samar', comment: null });
       expect(trs.apply).toHaveBeenCalledWith([{ tx: 'T', kontragent: null, kategoriya: null, shartnoma: 'X1' }],
         { approvedBy: 'Samar', comment: null, requestedBy: 'Telegram egasi (TR Support bot)' });
-      expect(r).toEqual({ ok: true, batchId: 'b1', results: [{ tx: 'T', id: 'e1', status: 'applied', errors: [], changes: [{ field: 'shartnoma', from: null, to: 'X1' }] }],
-        sync: { ok: true, added: 1, updated: 0, skipped: 0 } });
+      expect(r).toEqual({ ok: true, batchId: 'b1', results: [
+        { tx: 'T', id: 'e1', status: 'applied', errors: [], changes: [{ field: 'shartnoma', from: null, to: 'X1' }], oplataKv: null },
+        { tx: 'U', id: 'e2', status: 'applied', errors: [], changes: [{ field: 'kategoriya', from: 'A', to: 'B' }], oplataKv: true },
+      ], sync: { ok: true, added: 1, updated: 0, skipped: 0 } });
     });
     it("options: kontragent -> kategoriyalar (id'larsiz)", async () => {
       trs.options.mockResolvedValue({ ok: true, tx: null, tree: [{ id: 'SECRET_ID', code: 'CLIENT', name: 'K', children: [{ id: 'SECRET_2', code: 'C1', name: 'V' }] }] });

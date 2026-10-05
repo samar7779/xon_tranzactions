@@ -113,6 +113,10 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(TZ.parse("TUZATISH: tx=A1234567\nmatn\nTUZATISH: tx=B1234567")), 2)
         self.assertEqual(TZ.parse("oddiy matn"), [])
 
+    def test_crm_bank_hujjat_raqami(self):
+        [q] = TZ.parse("TUZATISH: tx=6617414180/30.09.2026 kontragent=qolsin kategoriya=Za schetchik shartnoma=qolsin")
+        self.assertEqual((q.tx, q.kategoriya), ("6617414180_30.09.2026", "Za schetchik"))
+
     def test_contract(self):
         self.assertIn(C.INTENT_TUZATISH, C.INTENTS)
         self.assertEqual(C.kv_key(C.KV_TZ_APPR, token="a" * 16), "tz_appr_" + "a" * 16)
@@ -240,6 +244,35 @@ class OqimTest(_Base):
         self.assertIn("2. ", s["text"])
         token = self._token(C.KV_TZ_APPR)
         self.assertEqual([i["tx"] for i in self.kv[C.kv_key(C.KV_TZ_APPR, token=token)]["items"]], ["AAAA1111", "BBBB2222"])
+
+
+class QisqaRaqamTest(_Base):
+    """05.10: CRM'dagi bank hujjat raqami bilan topish; apply to'liq ID ga; natijada OplatyKv qatori."""
+
+    async def test_qisqa_raqam_toliq_id_bilan_tasdiq_va_okv(self):
+        full = "6617414180_100412233_30.09.2026_20208000_29824000_370000000_-"
+        self.javob["preview"] = {"ok": True, "valid": True, "errors": [], "harf": None, "xato": {"inList": False},
+                                 "tx": dict(TX_VIEW, id="ctx9", externalId=full, amount=3700000, shartnoma="488ZUR235K"),
+                                 "changes": [{"field": "kategoriya", "from": "Взносы за квартиры", "to": "За счетчик"}],
+                                 "crm": None}
+        await TZ.handle("TUZATISH: tx=6617414180/30.09.2026 kontragent=qolsin kategoriya=Za schetchik shartnoma=qolsin"
+                        " tasdiq=Samar izoh=schetchik to'lovi", self.out)
+        self.assertEqual(self.calls[0]["q"]["tx"], ["6617414180_30.09.2026"])
+        s = self._sorov_xabari("To'lovni tahrirlash")
+        self.assertIn("ID " + full, s["text"])                         # egasi to'liq ID ni ko'radi
+        self.assertIn("Kategoriya: Взносы за квартиры -&gt; За счетчик", s["text"])
+        self.assertIn("O'zgarmaydi: Kontragent, Shartnoma", s["text"])
+        token = self._token(C.KV_TZ_APPR)
+        self.assertEqual(self.kv[C.kv_key(C.KV_TZ_APPR, token=token)]["items"][0]["tx"], full)   # apply aynan shu to'lovga
+        self.javob["apply"] = {"ok": True, "batchId": "b1", "results": [
+            {"tx": full, "id": "e1", "status": "applied", "errors": [], "oplataKv": True,
+             "changes": [{"field": "kategoriya", "from": "Взносы за квартиры", "to": "За счетчик"}]}],
+            "sync": {"ok": True, "added": 0, "updated": 1, "skipped": 0}}
+        await TZ.decide(token, True, self.out, None)
+        await asyncio_gather()
+        t = self.texts()[-1]
+        self.assertIn("Kategoriya: Взносы за квартиры -> За счетчик", t)
+        self.assertIn("OplatyKv qatori ham yangilandi", t)
 
 
 class HarfQoidaTest(_Base):

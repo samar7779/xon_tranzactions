@@ -86,6 +86,15 @@ export interface TrPreview {
 }
 
 const norm = (s: any) => String(s ?? '').replace(APOS, "'").toLowerCase().replace(/[\s./]+/g, ' ').trim();
+// Kirill -> lotin (egasi kategoriyani lotincha yozsa: "Za schetchik" = "За счетчик")
+const LAT: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'j', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm',
+  н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'x', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sh', ъ: '',
+  ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya', ў: 'o', қ: 'q', ғ: 'g', ҳ: 'h',
+};
+const latin = (s: any) => norm(s).replace(/[а-яёўқғҳ]/g, (ch) => LAT[ch] ?? ch).replace(/[^a-z0-9]+/g, '');
+// CRM'dagi bank hujjat raqami (general_id), ixtiyoriy sana bilan: "6617414180" yoki "6617414180_30.09.2026"
+const GID_REF_RE = /^(\d{8,20})(?:[_/](\d{2})\.(\d{2})\.(\d{4}))?$/;
 const isQolsin = (v: any) => v == null || QOLSIN.has(norm(v));
 const isYoq = (v: any) => YOQ.has(norm(v));
 // shartnoma=XATO — to'lovni XATO ro'yxatiga tushirish: shartnomaga AYNAN "XATO" yoziladi (CRM tekshiruvisiz).
@@ -159,22 +168,40 @@ export class TrSupportService {
 
   private findIn<T extends TrCat>(list: T[], v: string): T | undefined {
     const n = norm(v);
+    const l = latin(v);
     return list.find((c) => c.code.toUpperCase() === String(v).trim().toUpperCase())
-      || list.find((c) => norm(c.name) === n);
+      || list.find((c) => norm(c.name) === n)
+      || (l ? list.find((c) => latin(c.name) === l) : undefined);
+  }
+
+  private static readonly TX_SELECT = {
+    id: true, externalId: true, txnDate: true, amount: true, direction: true, source: true, description: true,
+    categoryId: true, subcategoryId: true, contractNumber: true, isContractManual: true,
+    category: { select: { code: true, name: true } },
+    subcategory: { select: { code: true, name: true } },
+  } as const;
+
+  /** To'lov: ichki id, to'liq bank ID (external_id) yoki CRM'dagi bank hujjat raqami (+ sana). kop>1 — noaniq. */
+  private async findTxRef(ref: string): Promise<{ tx: any | null; kop: number }> {
+    const r = String(ref || '').trim();
+    if (!r) return { tx: null, kop: 0 };
+    const tx = await this.prisma.transaction.findFirst({
+      where: { OR: [{ id: r }, { externalId: r }] }, select: TrSupportService.TX_SELECT,
+    });
+    if (tx) return { tx, kop: 1 };
+    const m = GID_REF_RE.exec(r);
+    if (!m) return { tx: null, kop: 0 };
+    const where: any = { bankGeneralId: m[1] };
+    if (m[2]) {
+      const kun = Date.UTC(Number(m[4]), Number(m[3]) - 1, Number(m[2]));
+      where.txnDate = { gte: new Date(kun - 6 * 3600000), lt: new Date(kun + 30 * 3600000) };   // Toshkent kuni (+ zaxira)
+    }
+    const rows = await this.prisma.transaction.findMany({ where, select: TrSupportService.TX_SELECT, take: 5 });
+    return { tx: rows.length === 1 ? rows[0] : null, kop: rows.length };
   }
 
   private async findTx(ref: string) {
-    const r = String(ref || '').trim();
-    if (!r) return null;
-    return this.prisma.transaction.findFirst({
-      where: { OR: [{ id: r }, { externalId: r }] },
-      select: {
-        id: true, externalId: true, txnDate: true, amount: true, direction: true, source: true, description: true,
-        categoryId: true, subcategoryId: true, contractNumber: true, isContractManual: true,
-        category: { select: { code: true, name: true } },
-        subcategory: { select: { code: true, name: true } },
-      },
-    });
+    return (await this.findTxRef(ref)).tx;
   }
 
   private stateOfTx(tx: any): TrState {
@@ -239,9 +266,12 @@ export class TrSupportService {
   // ─── Tekshiruv (FAQAT O'QISH; CRM faqat o'qiladi) ─────────────────
   async preview(ref: string, choice: TrChoice, tree?: TrTop[]): Promise<TrPreview> {
     const out: TrPreview = { valid: false, xato: null, harf: null, errors: [], tx: null, changes: [], crm: null, plan: null };
-    const tx = await this.findTx(ref);
+    const { tx, kop } = await this.findTxRef(ref);
     if (!tx) {
-      out.errors.push(`To'lov topilmadi: ${String(ref).slice(0, 80)}`);
+      out.errors.push(kop > 1
+        ? `Bu raqam bilan ${kop} ta to'lov bor: ${String(ref).slice(0, 80)} — sanasini qo'shing (masalan ${
+          String(ref).split(/[_/]/)[0]}_30.09.2026) yoki to'liq ID bering`
+        : `To'lov topilmadi: ${String(ref).slice(0, 80)}`);
       return out;
     }
     out.tx = this.viewOf(tx);
@@ -398,7 +428,10 @@ export class TrSupportService {
     const label = `TR Support · tasdiq: ${approvedBy}`.slice(0, 120);
     const batchId = `trs_${Date.now().toString(36)}_${randomBytes(4).toString('hex')}`;
     const tree = await this.loadTree();
-    const results: Array<{ tx: string; id?: string; status: 'applied' | 'failed' | 'skipped'; errors?: string[]; changes: TrChange[] }> = [];
+    const results: Array<{
+      tx: string; id?: string; status: 'applied' | 'failed' | 'skipped'; errors?: string[]; changes: TrChange[];
+      oplataKv?: boolean | null;    // kategoriya o'zgarganda OplatyKv qatori (Тип) ham yangilandimi
+    }> = [];
 
     for (const it of items) {
       const p = await this.preview(it.tx, it, tree);
@@ -410,9 +443,12 @@ export class TrSupportService {
       const before = this.stateOfTx(txRow);
       let status: 'applied' | 'failed' = 'applied';
       let error: string | null = null;
+      let oplataKv: boolean | null = null;
       try {
         if (p.plan.catChange) {
-          await this.cat.setManual(p.plan.txId, { categoryId: p.plan.categoryId, subcategoryId: p.plan.subcategoryId }, null, label);
+          const s: any = await this.cat.setManual(
+            p.plan.txId, { categoryId: p.plan.categoryId, subcategoryId: p.plan.subcategoryId }, null, label);
+          oplataKv = typeof s?.oplataKvUpdated === 'boolean' ? s.oplataKvUpdated : null;
         }
         if (p.plan.contract !== undefined) {
           if (p.plan.contractXato || p.plan.contractManual) await this.cat.setContractManual(p.plan.txId, p.plan.contract, null, label);
@@ -434,7 +470,7 @@ export class TrSupportService {
           status, error,
         },
       });
-      results.push({ tx: it.tx, id: row.id, status, ...(error ? { errors: [error] } : {}), changes: p.changes });
+      results.push({ tx: it.tx, id: row.id, status, ...(error ? { errors: [error] } : {}), changes: p.changes, oplataKv });
     }
 
     // Hammasidan keyin BITTA OplatyKv sync (panel "Sync" tugmasi bilan bir xil)

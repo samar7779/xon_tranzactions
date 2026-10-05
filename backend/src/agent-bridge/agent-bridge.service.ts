@@ -147,6 +147,7 @@ export class AgentBridgeService implements OnModuleInit {
       ok: true, batchId: r.batchId,
       results: r.results.map((x) => ({
         tx: x.tx, id: x.id || null, status: x.status, errors: (x.errors || []).map(cut), changes: this.pickChanges(x.changes),
+        oplataKv: typeof x.oplataKv === 'boolean' ? x.oplataKv : null,
       })),
       sync: r.sync ? {
         ok: !!r.sync.ok, added: r.sync.added, updated: r.sync.updated, skipped: r.sync.skipped,
