@@ -153,12 +153,10 @@ export class TaminotService {
           ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999+05:00`) } : {}),
         },
         ...(opts?.rematch ? {} : { erpPaymentId: null }),
-        // Ta'minot ERP'da FAQAT chiqim (yetkazib beruvchiga to'lov) yozuvlari bor.
-        // Ilgari yo'nalish filtrlanmasdi va kirimlar ham solishtirilardi — ular
-        // hech qachon mos kelmaydi, lekin "topilmadi" sonini o'n minglab qilib
-        // ko'rsatardi va tasodifiy raqam mosligi tufayli bema'ni "yaqin nomzod"
-        // chiqarardi (masalan Min Fin to'lovi ↔ elektr tarmoqlari hisobi).
-        direction: 'OUT',
+        // ⚠️ Yo'nalish bo'yicha FILTRLAMAYMIZ. "Ta'minotda faqat chiqim bor"
+        // degan taxmin bilan direction='OUT' qo'yib ko'rildi — mosliklar 123 dan
+        // 0 ga tushdi, ya'ni topilgan mosliklarning hammasi KIRIM tomonda ekan.
+        // Sababi aniqlanmaguncha filtr qo'shilmaydi (2026-10-05).
         NOT: { category: { code: 'CLIENT' } },
       },
       select: {
