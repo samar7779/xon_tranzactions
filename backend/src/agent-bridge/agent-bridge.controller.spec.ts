@@ -33,6 +33,8 @@ describe('AgentBridgeController (HTTP)', () => {
     arizaStatus: jest.fn(async () => ({ ok: true, id: 'r1', status: 'pending' })),
     hisob: jest.fn(async () => ({ ok: true, hisob: 'H' })),
     xatoRoyxat: jest.fn(async () => ({ ok: true, filename: 'x.xlsx', base64: '' })),
+    perebroskaTahlil: jest.fn(async () => ({ ok: true, extracted: {}, warnings: [] })),
+    perebroskaYarat: jest.fn(async () => ({ ok: true, groupId: 'g1', amount: 1, qatorlar: [] })),
   };
   const auditMock = { record: jest.fn() };
 
@@ -192,6 +194,26 @@ describe('AgentBridgeController (HTTP)', () => {
     expect(svcMock.xatoRoyxat).toHaveBeenLastCalledWith('VATAN');
     expect((await http().get('/api/agent-bridge/xato-royxat?filtr=' + 'x'.repeat(61)).set(H, KEY)).status).toBe(400);
     expect((await http().post('/api/agent-bridge/xato-royxat').set(H, KEY)).status).toBe(404);
+  });
+
+  it('perebroska: tahlil/yarat POST, audit nomi, kalitsiz 403, yaroqsiz 400', async () => {
+    const F = 'leader_bot_0123456789abcdef.pdf';
+    expect((await http().post('/api/agent-bridge/perebroska/tahlil').send({ fayl: F })).status).toBe(403);
+    expect((await http().post('/api/agent-bridge/perebroska/tahlil').set(H, KEY).send({ fayl: F })).status).toBe(200);
+    expect(svcMock.perebroskaTahlil).toHaveBeenCalledWith(F);
+    expect((await http().post('/api/agent-bridge/perebroska/tahlil').set(H, KEY).send({ fayl: '../x.pdf' })).status).toBe(400);
+    const body = {
+      fayl: F, fromContractNo: '24srh24ef', amount: 70944290, date: '2026-10-05',
+      destinations: [{ contractNo: '4105SRH26RL', amount: 70944290 }], agentState: 'verified', agentReason: 'ok',
+      agentData: { fromContractNo: '24SRH24EF' }, tasdiq: 'Salokhiddin', izoh: 'ariza',
+    };
+    expect((await http().post('/api/agent-bridge/perebroska/yarat').set(H, KEY).send(body)).status).toBe(200);
+    expect(svcMock.perebroskaYarat).toHaveBeenCalledWith({ ...body, fromContractNo: '24SRH24EF' });
+    expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'Agent: переброска yaratildi (TR Support)' }));
+    for (const bad of [{ ...body, tasdiq: '' }, { ...body, amount: -1 }, { ...body, destinations: [] }, { ...body, date: '05.10.2026' }]) {
+      expect((await http().post('/api/agent-bridge/perebroska/yarat').set(H, KEY).send(bad)).status).toBe(400);
+    }
+    expect(svcMock.perebroskaYarat).toHaveBeenCalledTimes(1);
   });
 
   it('POST run → 200 va audit (actor: agent-bridge) yoziladi', async () => {

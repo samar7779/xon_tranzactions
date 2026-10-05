@@ -40,8 +40,9 @@ INTENT_ARIZA = "xato_ariza"  # XATO to'lovga ariza: bot ARIZA qatorini o'zi baja
 INTENT_EKSPORT = "eksport"  # Google Sheets eksportini qayta ishga tushirish: bot EKSPORT qatorini bajaradi
 INTENT_HISOB = "hisob"  # hisob raqam ma'lumoti: bot HISOB qatorini bajaradi (faqat o'qish)
 INTENT_XATO_FAYL = "xato_fayl"  # XATO to'lovlar ro'yxati Excel fayl: bot XATO_FAYL qatorini bajaradi
+INTENT_PEREBROSKA = "perebroska"  # AI Perebroska: bot PEREBROSKA qatorini bajaradi (tahlil -> tasdiq -> yaratish)
 INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV, INTENT_TUZATISH,
-                            INTENT_ARIZA, INTENT_EKSPORT, INTENT_HISOB, INTENT_XATO_FAYL)
+                            INTENT_ARIZA, INTENT_EKSPORT, INTENT_HISOB, INTENT_XATO_FAYL, INTENT_PEREBROSKA)
 JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S | re.I)
 
 DELEG_HUMAN_REPLY = "Qabul qildim."
@@ -401,7 +402,7 @@ SEZGIR_PREFIKSLAR: Tuple[str, ...] = (
     "agents/reja.py", "agents/config.py", "agents/contract.py", "agents/db.py",
     "agents/db_migrations.py", "agents/history.py", "agents/memory_blocks.py", "agents/notify.py",
     "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py", "agents/tuzatish.py",
-    "agents/ariza.py", "agents/eksport.py", "agents/malumot.py",
+    "agents/ariza.py", "agents/eksport.py", "agents/malumot.py", "agents/perebroska.py",
     "agents/bin", "agents/deploy", "agents/requirements.txt", "agents/.gitignore", ".gitignore",
     "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth", "backend/src/agent-bridge",
     "backend/src/tr-support",
@@ -447,6 +448,9 @@ KV_TZ_APPR = "tz_appr_{token}"
 KV_TZ_RUN = "tz_run_{token}"
 KV_AR_APPR = "ar_appr_{token}"
 KV_AR_RUN = "ar_run_{token}"
+KV_PB_APPR = "pb_appr_{token}"     # AI Perebroska: yaratish tasdig'i (matn bilan)
+KV_PB_RUN = "pb_run_{token}"
+KV_PB_TAHLIL = "pb_tahlil_{token}"  # fayl bo'yicha AI tahlili keshi (token = fayl nomidagi hex)
 KV_EK_APPR = "ek_appr_{token}"
 KV_EK_RUN = "ek_run_{token}"
 KV_EK_ROY = "ek_roy_{token}"
@@ -1070,6 +1074,17 @@ MSG_TASDIQ_QAYSI = ("Bir nechta tasdiq kutilmoqda. Qaysi biri ekanini aytish uch
 EKSPORT_RE = re.compile(r"(?im)^\s*EKSPORT:[ \t]*(.*)$")
 # Ma'lumot (TR Support, faqat o'qish; egasi qarori 2026-10-05): hisob raqam ma'lumoti va XATO ro'yxati fayli
 HISOB_RE = re.compile(r"(?im)^\s*HISOB:[ \t]*(.*)$")
+# AI Perebroska (egasi qarori 2026-10-05): perebroska arizasi fayli -> panel agenti tahlili -> tasdiq -> yaratish
+PEREBROSKA_RE = re.compile(r"(?im)^\s*PEREBROSKA:[ \t]*(.*)$")
+PEREBROSKA_KOPRIK_TAHLIL = "/api/agent-bridge/perebroska/tahlil"
+PEREBROSKA_KOPRIK_YARAT = "/api/agent-bridge/perebroska/yarat"
+PEREBROSKA_TAHLIL_TIMEOUT_S = 180
+PEREBROSKA_YARAT_TIMEOUT_S = 120
+PEREBROSKA_TAHLIL_TTL_S = 1800
+MSG_PEREBROSKA_TAHLIL = "Ariza AI Perebroska agentiga berildi, tahlil qilinmoqda..."
+MSG_PEREBROSKA_KIM = "Kim tasdiqlaydi? Ismini yozing (masalan: tasdiq Salokhiddin) — keyin tasdiq so'rovi chiqadi."
+MSG_PEREBROSKA_QABUL = "Qabul qilindi, perebroska yaratilmoqda..."
+MSG_PEREBROSKA_BEKOR = "Bekor qilindi. Perebroska yaratilmadi."
 XATO_FAYL_RE = re.compile(r"(?im)^\s*XATO_FAYL:[ \t]*(.*)$")
 HISOB_KOPRIK = "/api/agent-bridge/hisob"
 XATO_FAYL_KOPRIK = "/api/agent-bridge/xato-royxat"

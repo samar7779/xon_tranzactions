@@ -5,7 +5,7 @@ import { AgentBridgeGuard } from './agent-bridge.guard';
 import { AgentBridgeService } from './agent-bridge.service';
 import {
   assertExportId, parseArizaFind, parseArizaId, parseArizaSubmit, parseChekFind, parseContracts, parseCrmLookup,
-  parseFiltr, parseHisob, parseTxApply, parseTxChoice, parseTxRef,
+  parseFiltr, parseHisob, parsePerebroskaFayl, parsePerebroskaYarat, parseTxApply, parseTxChoice, parseTxRef,
 } from './agent-bridge.validation';
 
 /**
@@ -22,6 +22,8 @@ import {
  *   GET  /api/agent-bridge/xato-ariza/status?id=                         — FAQAT O'QISH (AI natijasi)
  *   GET  /api/agent-bridge/hisob?raqam=<16-25 xona>                      — FAQAT O'QISH (hisob raqam ma'lumoti)
  *   GET  /api/agent-bridge/xato-royxat[?filtr=]                         — FAQAT O'QISH (XATO ro'yxati .xlsx, base64)
+ *   POST /api/agent-bridge/perebroska/tahlil                             — AI Переброска arizani o'qiydi (DB'ga yozmaydi)
+ *   POST /api/agent-bridge/perebroska/yarat                              — Переброска YARATADI (egasi tasdig'idan keyin)
  *   POST /api/agent-bridge/exports/:id/run                              — Google Sheets'ga YOZADI
  *        (bot faqat egasi Telegram'da [Ha] bosgandan keyin chaqiradi)
  *
@@ -50,6 +52,22 @@ export class AgentBridgeController {
   crmLookup(@Query('id') id: any, @Query('date') date?: any, @Query('amount') amount?: any) {
     const q = parseCrmLookup(id, date, amount);
     return this.svc.crmLookup(q.id, q.date, q.amount);
+  }
+
+  // AI Переброска: panel "AI Переброска" bilan bir xil tahlil (AI chaqiradi — POST, kam limit).
+  @Post('perebroska/tahlil')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  perebroskaTahlil(@Body() body: any) {
+    return this.svc.perebroskaTahlil(parsePerebroskaFayl(body));
+  }
+
+  // Переброска yaratish: panelda xodim "Yaratish" bosgandek (createPerereboska qoidalari bilan).
+  @Post('perebroska/yarat')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  perebroskaYarat(@Body() body: any) {
+    return this.svc.perebroskaYarat(parsePerebroskaYarat(body));
   }
 
   // Hisob raqam bo'yicha: egasi, MFO/bank, INN, korxona, bizning hisobmi, to'lovlar statistikasi.

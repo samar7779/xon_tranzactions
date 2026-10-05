@@ -8,6 +8,7 @@ import { CrmService } from '../crm/crm.service';
 import { TrSupportService } from '../tr-support/tr-support.service';
 import { TrArizaService } from '../tr-support/tr-ariza.service';
 import { TrMalumotService } from '../tr-support/tr-malumot.service';
+import { PerebroskaYarat, TrPerebroskaService } from '../tr-support/tr-perebroska.service';
 import { GoogleExportService } from '../google-export/google-export.service';
 import { AGENT_BRIDGE_KEY_ENV, isKeyConfigured } from './agent-bridge.guard';
 import { parseSheetIds } from './agent-bridge.validation';
@@ -54,7 +55,17 @@ export class AgentBridgeService implements OnModuleInit {
     private readonly trSupport: TrSupportService,
     private readonly trAriza: TrArizaService,
     private readonly trMalumot: TrMalumotService,
+    private readonly trPerebroska: TrPerebroskaService,
   ) {}
+
+  // ───────────────────────── AI Переброска ─────────────────────────
+  perebroskaTahlil(fayl: string) {
+    return this.trPerebroska.tahlil(fayl);
+  }
+
+  perebroskaYarat(b: PerebroskaYarat) {
+    return this.trPerebroska.yarat(b);
+  }
 
   // ───────────────────────── hisob / xato-royxat (faqat o'qish) ─────────────────────────
   hisob(raqam: string) {

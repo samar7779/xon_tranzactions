@@ -129,7 +129,8 @@ export class TrArizaService {
     return path.resolve(this.config.get<string>('AGENTS_UPLOADS_DIR') || '/var/www/xon_tranzactions/static/tg_uploads');
   }
 
-  private async readFile(name: string): Promise<{ buffer: Buffer; originalname: string; mimetype: string; size: number }> {
+  /** Bot saqlagan fayl (ariza va AI Переброска uchun umumiy). nomi — saqlanadigan fayl nomi prefiksi. */
+  async readFile(name: string, nomi = 'ariza_tr_support'): Promise<{ buffer: Buffer; originalname: string; mimetype: string; size: number }> {
     const m = ARIZA_FAYL_RE.exec(name || '');
     if (!m) throw new BadRequestException("Ariza fayli nomi noto'g'ri");
     const dir = this.uploadsDir();
@@ -141,7 +142,7 @@ export class TrArizaService {
     if (!st.isFile() || st.size <= 0 || st.size > ARIZA_FAYL_MAX) throw new BadRequestException("Ariza fayli bo'sh yoki juda katta");
     const buffer = await fsp.readFile(real);
     const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
-    return { buffer, originalname: `ariza_tr_support.${ext}`, mimetype: MIME[m[1]], size: buffer.length };
+    return { buffer, originalname: `${nomi}.${ext}`, mimetype: MIME[m[1]], size: buffer.length };
   }
 
   async submit(b: { oplataKvId: string; contractNo: string; fayl: string; yubordi: string }) {

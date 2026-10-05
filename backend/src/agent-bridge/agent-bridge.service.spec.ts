@@ -63,7 +63,7 @@ describe('AgentBridgeService', () => {
     };
     prisma = { exportCronLog: { findFirst: jest.fn(async () => null) } };
     trm = { hisob: jest.fn(async () => ({ ok: true, hisob: 'H' })), xatoFayl: jest.fn(async () => ({ ok: true, soni: 0 })) };
-    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any, trs as any, {} as any, trm as any);
+    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any, trs as any, {} as any, trm as any, {} as any);
   });
   afterEach(() => jest.restoreAllMocks());
 

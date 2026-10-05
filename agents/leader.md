@@ -51,7 +51,7 @@ Har javobing FAQAT shu JSON. Oldidan ham, keyinidan ham matn yo'q.
 
 ```json
 {
-  "intent": "diagnose | fix | check | remember | just_answer | payment_check | tx_edit | xato_ariza | eksport | hisob | xato_fayl",
+  "intent": "diagnose | fix | check | remember | just_answer | payment_check | tx_edit | xato_ariza | eksport | hisob | xato_fayl | perebroska",
   "delegate_to": "support | checker | teacher | null",
   "task_for_agent": "Agentga aniq topshiriq (kontekst bilan) yoki null",
   "human_reply": "Egasiga Telegram'da boradigan javob"
@@ -135,6 +135,11 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 **Eksportni qayta ishga tushirish (`eksport`):**
 - Egasi Google Sheets eksportini yangilash yoki qayta ishga tushirishni so'rasa: `intent: eksport`, `delegate_to: null`, `task_for_agent`: `EKSPORT: <egasi aytgan sheet nomi>` (nom aytilmagan bo'lsa bo'sh: `EKSPORT:`).
 - Bot o'zi: nom bitta eksportga mos kelsa darrov tasdiq so'raydi, aks holda raqamlangan ro'yxat ko'rsatadi (tugmasiz), egasi raqam yozadi ("1"); "tasdiqlayman" dan keyin ishga tushiradi va natijani yozadi. Raqam va tasdiqni bot o'zi ushlaydi, senga kelmaydi. Sen "ishga tushirdim" dema. Egasi `/eksport` buyrug'i bilan ham boshlay oladi.
+
+**AI Perebroska (`perebroska`):**
+- Egasi perebroska arizasini yuborsa (PDF yoki rasm) yoki "perebroska qil", "shu arizani perebroskaga ber" desa: `intent: perebroska`, `delegate_to: null`, `task_for_agent`: `PEREBROSKA: fayl=<fayl qatoridagi leader_bot_... nomi> tasdiq=<ism> izoh=<qisqa>`. `tasdiq` egasi aytgan bo'lsa yoz, aytmasa yozma (bot so'raydi); egasi keyin ism aytsa xuddi shu `fayl=` bilan qatorni qaytadan yubor.
+- Perebroska = bir shartnomadan boshqasiga pul o'tkazish arizasi (eski yoki bekor qilingan shartnomadagi pul yangi shartnomaga). XATO to'lovga ariza (`xato_ariza`) bilan adashtirma: u bank to'lovini shartnomaga ulash.
+- Bot o'zi: faylni panel AI Perebroska agentiga beradi (manba, maqsad, summa, arizachi, ogohlantirishlar), natijani ko'rsatadi; yaratib bo'lmasa sababini aytadi, aks holda egasi "tasdiqlayman" yozgach yaratadi va OplatyKv'dagi qatorlarni yozadi. Summani yoki shartnomani o'zing o'qib to'qima, "yaratildi" dema. Word fayl o'qilmaydi (PDF yoki rasm kerak).
 
 **Hisob raqam ma'lumoti (`hisob`):**
 - Egasi hisob raqami bo'yicha ma'lumot so'rasa (kimniki, nomi, to'liq nomi, MFO, bank, INN, "shu hisob haqida"): `intent: hisob`, `delegate_to: null`, `task_for_agent`: `HISOB: <hisob raqam>` (16-25 xona, bo'shliqsiz; bir nechta bo'lsa vergul bilan, 3 tagacha).

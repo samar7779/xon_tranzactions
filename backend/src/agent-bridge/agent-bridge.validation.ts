@@ -177,6 +177,63 @@ export function parseArizaSubmit(body: unknown): { oplataKvId: string; contractN
   return { oplataKvId, contractNo, fayl, yubordi };
 }
 
+// ── AI Переброска (TR Support): tahlil (AI o'qiydi) va yaratish (egasi tasdig'idan keyin) ──
+const PB_MSG = "perebroska: fayl leader_bot_<hex>.<pdf|rasm>, shartnoma A-Z/0-9, summa > 0, sana YYYY-MM-DD, tasdiq 2-120";
+const PB_SH_RE = /^[A-Z0-9/]{3,64}$/;
+function pbSh(v: unknown): string {
+  const s = typeof v === 'string' ? v.replace(/[\s№]/g, '').toUpperCase() : '';
+  if (!PB_SH_RE.test(s)) throw new BadRequestException(PB_MSG);
+  return s;
+}
+function pbSumma(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number.NaN;
+  if (!Number.isFinite(n) || n <= 0 || n > 1e13) throw new BadRequestException(PB_MSG);
+  return n;
+}
+export function parsePerebroskaFayl(body: unknown): string {
+  const b = (body && typeof body === 'object' ? body : null) as Record<string, unknown> | null;
+  const f = b && typeof b.fayl === 'string' ? b.fayl : '';
+  if (!ARIZA_FAYL_RE_V.test(f)) throw new BadRequestException(PB_MSG);
+  return f;
+}
+export function parsePerebroskaYarat(body: unknown): {
+  fayl: string; fromContractNo: string; amount: number; date: string;
+  destinations: Array<{ contractNo: string; amount: number }>;
+  agentState: string | null; agentReason: string | null; agentData: any; tasdiq: string; izoh: string | null;
+} {
+  const b = (body && typeof body === 'object' ? body : null) as Record<string, unknown> | null;
+  if (!b) throw new BadRequestException(PB_MSG);
+  const fayl = parsePerebroskaFayl(b);
+  const date = typeof b.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : '';
+  if (!date) throw new BadRequestException(PB_MSG);
+  if (!Array.isArray(b.destinations) || b.destinations.length < 1 || b.destinations.length > 20) {
+    throw new BadRequestException(PB_MSG);
+  }
+  const destinations = b.destinations.map((d) => {
+    const o = (d && typeof d === 'object' ? d : null) as Record<string, unknown> | null;
+    if (!o) throw new BadRequestException(PB_MSG);
+    return { contractNo: pbSh(o.contractNo), amount: pbSumma(o.amount) };
+  });
+  const agentState = b.agentState === 'verified' || b.agentState === 'needs_review' ? b.agentState : null;
+  const agentReason = typeof b.agentReason === 'string' ? b.agentReason.slice(0, 4000) : null;
+  let agentData: any = null;
+  if (b.agentData && typeof b.agentData === 'object') {
+    if (JSON.stringify(b.agentData).length > 50_000) throw new BadRequestException(PB_MSG);
+    agentData = b.agentData;
+  }
+  const tasdiq = typeof b.tasdiq === 'string' ? b.tasdiq.trim() : '';
+  if (tasdiq.length < 2 || tasdiq.length > 120 || CTRL_RE.test(tasdiq)) throw new BadRequestException(PB_MSG);
+  let izoh: string | null = null;
+  if (b.izoh !== undefined && b.izoh !== null && b.izoh !== '') {
+    if (typeof b.izoh !== 'string' || b.izoh.length > 1000) throw new BadRequestException(PB_MSG);
+    izoh = b.izoh.trim() || null;
+  }
+  return {
+    fayl, fromContractNo: pbSh(b.fromContractNo), amount: pbSumma(b.amount), date, destinations,
+    agentState, agentReason, agentData, tasdiq, izoh,
+  };
+}
+
 // ── hisob / xato-royxat (TR Support: faqat o'qish) ──
 const HISOB_MSG = 'hisob: 16-25 xonali hisob raqam (bo\'shliqlar mumkin)';
 export function parseHisob(raw: unknown): string {
