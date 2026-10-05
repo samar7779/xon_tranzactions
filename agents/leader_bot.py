@@ -63,6 +63,8 @@ _MIME_EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image
 _TOKEN_RE = re.compile(r"^[0-9a-f]{6,32}$")
 _TOLOV_CMD_RE = re.compile(r"^\s*/tolov(?:@\S+)?\s*", re.I)
 _TUZAT_CMD_RE = re.compile(r"^\s*/tuzat(?:@\S+)?\s*", re.I)  # /tuzat <to'lov ID> [kalit=qiymat ...]
+_HISOB_CMD_RE = re.compile(r"^\s*/hisob(?:@\S+)?\s*", re.I)   # /hisob <hisob raqam>
+_XATO_CMD_RE = re.compile(r"^\s*/xato(?:@\S+)?\s*", re.I)     # /xato [filtr] — XATO ro'yxati fayli
 _EKSPORT_CMD_RE = re.compile(r"^\s*/eksport(?:@\S+)?\s*", re.I)  # /eksport [sheet nomi]  # /tolov yoki /tolov@bot_nomi
 _JAVOB_TURLARI = frozenset({"sticker", "video", "animation", "document", "location", "contact",
                             "venue", "poll", "dice", "story"})
@@ -967,6 +969,14 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
     # 6b. To'lovni tuzatish (TR Support): TUZATISH qatori bo'lsa bot o'zi so'raydi / tekshiradi / [Ha] so'raydi.
     #     Leader'ning delegatsiyasi va human_reply o'rniga (tahrirni faqat bot, egasi tasdig'i bilan qiladi).
     tz_matn = "\n".join(str(x) for x in (data.get("task_for_agent"), data.get("human_reply")) if x)
+    if C.HISOB_RE.search(tz_matn) or C.XATO_FAYL_RE.search(tz_matn):
+        ml = _mod("malumot")
+        if ml is None:
+            await _say(_MSG_MODUL_YOQ_TPL.format(modul="malumot"), escape=True, reply_to=reply_to)
+            return
+        state["react"] = emoji
+        await ml.handle(tz_matn, _outbox(), reply_to=reply_to)
+        return
     if C.EKSPORT_RE.search(tz_matn):
         ek = _mod("eksport")
         if ek is None:
@@ -1455,6 +1465,31 @@ async def cmd_eksport(msg: Message) -> None:
     await ek.handle("EKSPORT: " + arg, _outbox(), reply_to=msg.message_id)
 
 
+async def _cmd_malumot(msg: Message, cmd_re: "re.Pattern[str]", nom: str, qator: str) -> None:
+    if not _is_owner_private(msg):
+        return
+    if _is_forwarded(msg):
+        await on_text(msg)
+        return
+    arg = cmd_re.sub("", _mask_secrets(getattr(msg, "text", None) or ""), count=1).strip()
+    await _hist(C.ROLE_OWNER, ("/%s %s" % (nom, C.short(arg, 60))).strip())
+    ml = _mod("malumot")
+    if ml is None:
+        await _say(_MSG_MODUL_YOQ_TPL.format(modul="malumot"), escape=True)
+        return
+    await ml.handle(qator + arg, _outbox(), reply_to=msg.message_id)
+
+
+async def cmd_hisob(msg: Message) -> None:
+    """/hisob <hisob raqam>: egasi, MFO/bank, INN, korxona, to'lovlar (faqat o'qish)."""
+    await _cmd_malumot(msg, _HISOB_CMD_RE, "hisob", "HISOB: ")
+
+
+async def cmd_xato(msg: Message) -> None:
+    """/xato [filtr]: XATO to'lovlar ro'yxati Excel fayl (xato-list bilan bir xil)."""
+    await _cmd_malumot(msg, _XATO_CMD_RE, "xato", "XATO_FAYL: ")
+
+
 async def cmd_reset(msg: Message) -> None:
     if not _is_owner_private(msg):
         return
@@ -1701,6 +1736,8 @@ def _register(dp: Dispatcher) -> None:
     dp.message.register(cmd_tolov, Command("tolov"), ~F.forward_origin)
     dp.message.register(cmd_tuzat, Command("tuzat"), ~F.forward_origin)
     dp.message.register(cmd_eksport, Command("eksport"), ~F.forward_origin)
+    dp.message.register(cmd_hisob, Command("hisob"), ~F.forward_origin)
+    dp.message.register(cmd_xato, Command("xato"), ~F.forward_origin)
     dp.message.register(cmd_reset, Command("reset"), ~F.forward_origin)
     dp.message.register(on_text)
     dp.callback_query.register(on_callback)

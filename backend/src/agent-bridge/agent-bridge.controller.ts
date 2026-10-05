@@ -5,7 +5,7 @@ import { AgentBridgeGuard } from './agent-bridge.guard';
 import { AgentBridgeService } from './agent-bridge.service';
 import {
   assertExportId, parseArizaFind, parseArizaId, parseArizaSubmit, parseChekFind, parseContracts, parseCrmLookup,
-  parseTxApply, parseTxChoice, parseTxRef,
+  parseFiltr, parseHisob, parseTxApply, parseTxChoice, parseTxRef,
 } from './agent-bridge.validation';
 
 /**
@@ -20,6 +20,8 @@ import {
  *   GET  /api/agent-bridge/xato-ariza/find?tx=|summa=&sana=[&hisob=&shartnoma=] — FAQAT O'QISH
  *   POST /api/agent-bridge/xato-ariza/submit                            — ARIZA yuboradi (egasi [Ha] bosgach)
  *   GET  /api/agent-bridge/xato-ariza/status?id=                         — FAQAT O'QISH (AI natijasi)
+ *   GET  /api/agent-bridge/hisob?raqam=<16-25 xona>                      — FAQAT O'QISH (hisob raqam ma'lumoti)
+ *   GET  /api/agent-bridge/xato-royxat[?filtr=]                         — FAQAT O'QISH (XATO ro'yxati .xlsx, base64)
  *   POST /api/agent-bridge/exports/:id/run                              — Google Sheets'ga YOZADI
  *        (bot faqat egasi Telegram'da [Ha] bosgandan keyin chaqiradi)
  *
@@ -48,6 +50,20 @@ export class AgentBridgeController {
   crmLookup(@Query('id') id: any, @Query('date') date?: any, @Query('amount') amount?: any) {
     const q = parseCrmLookup(id, date, amount);
     return this.svc.crmLookup(q.id, q.date, q.amount);
+  }
+
+  // Hisob raqam bo'yicha: egasi, MFO/bank, INN, korxona, bizning hisobmi, to'lovlar statistikasi.
+  @Get('hisob')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  hisob(@Query('raqam') raqam: any) {
+    return this.svc.hisob(parseHisob(raqam));
+  }
+
+  // XATO to'lovlar ro'yxati (xato-list bilan bir xil) — Excel fayl, bot Telegram'ga hujjat qilib yuboradi.
+  @Get('xato-royxat')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  xatoRoyxat(@Query('filtr') filtr?: any) {
+    return this.svc.xatoRoyxat(parseFiltr(filtr));
   }
 
   // Chek → tranzaksiya: panel «Chek order > Tekshirish» bilan bir xil matchOrder (saqlanmaydi).

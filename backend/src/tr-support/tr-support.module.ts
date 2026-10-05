@@ -3,6 +3,7 @@ import { CategorizationModule } from '../categorization/categorization.module';
 import { OplataKvModule } from '../oplata-kv/oplata-kv.module';
 import { CorrectionModule } from '../correction/correction.module';
 import { TrArizaService } from './tr-ariza.service';
+import { TrMalumotService } from './tr-malumot.service';
 import { TrSupportController } from './tr-support.controller';
 import { TrSupportService } from './tr-support.service';
 
@@ -10,7 +11,7 @@ import { TrSupportService } from './tr-support.service';
 @Module({
   imports: [CategorizationModule, OplataKvModule, CorrectionModule],
   controllers: [TrSupportController],
-  providers: [TrSupportService, TrArizaService],
-  exports: [TrSupportService, TrArizaService],
+  providers: [TrSupportService, TrArizaService, TrMalumotService],
+  exports: [TrSupportService, TrArizaService, TrMalumotService],
 })
 export class TrSupportModule {}

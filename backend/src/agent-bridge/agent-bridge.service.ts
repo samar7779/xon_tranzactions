@@ -7,6 +7,7 @@ import { ChekOrderService } from '../chek-order/chek-order.service';
 import { CrmService } from '../crm/crm.service';
 import { TrSupportService } from '../tr-support/tr-support.service';
 import { TrArizaService } from '../tr-support/tr-ariza.service';
+import { TrMalumotService } from '../tr-support/tr-malumot.service';
 import { GoogleExportService } from '../google-export/google-export.service';
 import { AGENT_BRIDGE_KEY_ENV, isKeyConfigured } from './agent-bridge.guard';
 import { parseSheetIds } from './agent-bridge.validation';
@@ -52,7 +53,17 @@ export class AgentBridgeService implements OnModuleInit {
     private readonly crm: CrmService,
     private readonly trSupport: TrSupportService,
     private readonly trAriza: TrArizaService,
+    private readonly trMalumot: TrMalumotService,
   ) {}
+
+  // ───────────────────────── hisob / xato-royxat (faqat o'qish) ─────────────────────────
+  hisob(raqam: string) {
+    return this.trMalumot.hisob(raqam);
+  }
+
+  xatoRoyxat(filtr: string | null) {
+    return this.trMalumot.xatoFayl(filtr);
+  }
 
   onModuleInit(): void {
     // Kalit qiymati/uzunligi log'ga yozilmaydi — faqat holat.

@@ -177,6 +177,22 @@ export function parseArizaSubmit(body: unknown): { oplataKvId: string; contractN
   return { oplataKvId, contractNo, fayl, yubordi };
 }
 
+// ── hisob / xato-royxat (TR Support: faqat o'qish) ──
+const HISOB_MSG = 'hisob: 16-25 xonali hisob raqam (bo\'shliqlar mumkin)';
+export function parseHisob(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw.replace(/\s+/g, '') : '';
+  if (!/^\d{16,25}$/.test(s)) throw new BadRequestException(HISOB_MSG);
+  return s;
+}
+
+export function parseFiltr(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string' || raw.length > 60 || CTRL_RE.test(raw)) {
+    throw new BadRequestException('filtr: 60 belgigacha matn');
+  }
+  return raw.trim() || null;
+}
+
 export function parseArizaId(raw: unknown): string {
   if (typeof raw !== 'string' || !CUID_RE.test(raw)) throw new BadRequestException(ARIZA_MSG);
   return raw;

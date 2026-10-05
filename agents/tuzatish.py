@@ -45,7 +45,8 @@ _TX_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+\-]{5,199}$")
 _NOMALUM = {"", "?", "??", "nomalum", "noma'lum"}
 _MAYDON_NOMI = {"kontragent": "Kontragent", "kategoriya": "Kategoriya", "shartnoma": "Shartnoma"}
 _YOLLAR = (C.TUZATISH_KOPRIK_OPTIONS, C.TUZATISH_KOPRIK_PREVIEW, C.TUZATISH_KOPRIK_APPLY,
-           C.ARIZA_KOPRIK_FIND, C.ARIZA_KOPRIK_SUBMIT, C.ARIZA_KOPRIK_STATUS, C.TOLOV_KOPRIK_EKSPORT_YOL)
+           C.ARIZA_KOPRIK_FIND, C.ARIZA_KOPRIK_SUBMIT, C.ARIZA_KOPRIK_STATUS, C.TOLOV_KOPRIK_EKSPORT_YOL,
+           C.HISOB_KOPRIK, C.XATO_FAYL_KOPRIK)
 _BG_TASKS: set = set()
 
 

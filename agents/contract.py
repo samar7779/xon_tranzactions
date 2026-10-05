@@ -38,8 +38,10 @@ INTENT_TOLOV = "payment_check"  # checker'ga: bot TOLOV bloki qo'shadi (18-bo'li
 INTENT_TUZATISH = "tx_edit"  # to'lov ustunlarini tahrirlash: bot TUZATISH qatorini o'zi bajaradi (19-bo'lim)
 INTENT_ARIZA = "xato_ariza"  # XATO to'lovga ariza: bot ARIZA qatorini o'zi bajaradi (19-bo'lim)
 INTENT_EKSPORT = "eksport"  # Google Sheets eksportini qayta ishga tushirish: bot EKSPORT qatorini bajaradi
+INTENT_HISOB = "hisob"  # hisob raqam ma'lumoti: bot HISOB qatorini bajaradi (faqat o'qish)
+INTENT_XATO_FAYL = "xato_fayl"  # XATO to'lovlar ro'yxati Excel fayl: bot XATO_FAYL qatorini bajaradi
 INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV, INTENT_TUZATISH,
-                            INTENT_ARIZA, INTENT_EKSPORT)
+                            INTENT_ARIZA, INTENT_EKSPORT, INTENT_HISOB, INTENT_XATO_FAYL)
 JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S | re.I)
 
 DELEG_HUMAN_REPLY = "Qabul qildim."
@@ -399,7 +401,7 @@ SEZGIR_PREFIKSLAR: Tuple[str, ...] = (
     "agents/reja.py", "agents/config.py", "agents/contract.py", "agents/db.py",
     "agents/db_migrations.py", "agents/history.py", "agents/memory_blocks.py", "agents/notify.py",
     "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py", "agents/tuzatish.py",
-    "agents/ariza.py", "agents/eksport.py",
+    "agents/ariza.py", "agents/eksport.py", "agents/malumot.py",
     "agents/bin", "agents/deploy", "agents/requirements.txt", "agents/.gitignore", ".gitignore",
     "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth", "backend/src/agent-bridge",
     "backend/src/tr-support",
@@ -1062,6 +1064,16 @@ MSG_TASDIQ_QAYSI = ("Bir nechta tasdiq kutilmoqda. Qaysi biri ekanini aytish uch
 # Google Sheets eksportini qayta ishga tushirish (eksport.py; /eksport; Leader intent eksport): ro'yxat -> tanlash ->
 # [Ha] -> agent-bridge POST exports/<id>/run (panel "Bajarish" bilan bir xil runAndLog).
 EKSPORT_RE = re.compile(r"(?im)^\s*EKSPORT:[ \t]*(.*)$")
+# Ma'lumot (TR Support, faqat o'qish; egasi qarori 2026-10-05): hisob raqam ma'lumoti va XATO ro'yxati fayli
+HISOB_RE = re.compile(r"(?im)^\s*HISOB:[ \t]*(.*)$")
+XATO_FAYL_RE = re.compile(r"(?im)^\s*XATO_FAYL:[ \t]*(.*)$")
+HISOB_KOPRIK = "/api/agent-bridge/hisob"
+XATO_FAYL_KOPRIK = "/api/agent-bridge/xato-royxat"
+HISOB_MAX = 3
+HISOB_TIMEOUT_S = 90
+XATO_FAYL_TIMEOUT_S = 120
+MSG_HISOB_FOYDALANISH = ("Foydalanish: /hisob <hisob raqam> (16-25 xona, bo'shliq bilan ham bo'ladi). Masalan:"
+                         " /hisob 20208000904900960001")
 EKSPORT_RUN_YOL_TPL = "/api/agent-bridge/exports/{id}/run"
 EKSPORT_RUN_RE = re.compile(r"^/api/agent-bridge/exports/[A-Za-z0-9_-]{1,80}/run$")
 EKSPORT_RUN_TIMEOUT_S = 600

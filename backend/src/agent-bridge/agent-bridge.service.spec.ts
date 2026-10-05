@@ -9,6 +9,7 @@ describe('AgentBridgeService', () => {
   let chek: { paymentCheck: jest.Mock; resAllMatch: jest.Mock; findForAgent: jest.Mock };
   let crm: { lookupForAgent: jest.Mock };
   let trs: { options: jest.Mock; preview: jest.Mock; apply: jest.Mock };
+  let trm: { hisob: jest.Mock; xatoFayl: jest.Mock };
   let gexp: { listSheetSources: jest.Mock; getRawConfig: jest.Mock; getConfig: jest.Mock; runAndLog: jest.Mock };
   let prisma: { exportCronLog: { findFirst: jest.Mock } };
   let svc: AgentBridgeService;
@@ -61,9 +62,17 @@ describe('AgentBridgeService', () => {
       runAndLog: jest.fn(),
     };
     prisma = { exportCronLog: { findFirst: jest.fn(async () => null) } };
-    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any, trs as any, {} as any);
+    trm = { hisob: jest.fn(async () => ({ ok: true, hisob: 'H' })), xatoFayl: jest.fn(async () => ({ ok: true, soni: 0 })) };
+    svc = new AgentBridgeService(chek as any, gexp as any, prisma as any, { get: () => undefined } as any, crm as any, trs as any, {} as any, trm as any);
   });
   afterEach(() => jest.restoreAllMocks());
+
+  it('hisob / xato-royxat: TrMalumotService ga o\'tkaziladi', async () => {
+    expect(await svc.hisob('20208000904900960001')).toEqual({ ok: true, hisob: 'H' });
+    expect(trm.hisob).toHaveBeenCalledWith('20208000904900960001');
+    await svc.xatoRoyxat('vatan');
+    expect(trm.xatoFayl).toHaveBeenCalledWith('vatan');
+  });
 
   // ── tx-edit ──
   describe('tx-edit', () => {

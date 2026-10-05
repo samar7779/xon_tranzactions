@@ -31,6 +31,8 @@ describe('AgentBridgeController (HTTP)', () => {
     arizaFind: jest.fn(async () => ({ ok: true, candidates: [], hisobMos: null, crm: null, aiName: 'AI' })),
     arizaSubmit: jest.fn(async () => ({ ok: true, id: 'r1', alreadyPending: false, contract: 'X1', aiEnabled: true, aiName: 'AI' })),
     arizaStatus: jest.fn(async () => ({ ok: true, id: 'r1', status: 'pending' })),
+    hisob: jest.fn(async () => ({ ok: true, hisob: 'H' })),
+    xatoRoyxat: jest.fn(async () => ({ ok: true, filename: 'x.xlsx', base64: '' })),
   };
   const auditMock = { record: jest.fn() };
 
@@ -175,6 +177,21 @@ describe('AgentBridgeController (HTTP)', () => {
     expect((await http().post('/api/agent-bridge/xato-ariza/submit').set(H, KEY).send({ ...body, fayl: '/etc/passwd' })).status).toBe(400);
     expect((await http().get('/api/agent-bridge/xato-ariza/status?id=ck3q9x0000abcd0000abcd').set(H, KEY)).status).toBe(200);
     expect(svcMock.arizaSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('hisob va xato-royxat: faqat GET, kalitsiz 403, yaroqsiz 400', async () => {
+    expect((await http().get('/api/agent-bridge/hisob?raqam=20208000904900960001')).status).toBe(403);
+    expect((await http().get('/api/agent-bridge/hisob?raqam=2020%208000%209049%200096%200001').set(H, KEY)).status).toBe(200);
+    expect(svcMock.hisob).toHaveBeenCalledWith('20208000904900960001');
+    for (const bad of ['123', 'abc20208000904900960001', '']) {
+      expect((await http().get('/api/agent-bridge/hisob?raqam=' + bad).set(H, KEY)).status).toBe(400);
+    }
+    expect((await http().get('/api/agent-bridge/xato-royxat').set(H, KEY)).status).toBe(200);
+    expect(svcMock.xatoRoyxat).toHaveBeenLastCalledWith(null);
+    expect((await http().get('/api/agent-bridge/xato-royxat?filtr=VATAN').set(H, KEY)).status).toBe(200);
+    expect(svcMock.xatoRoyxat).toHaveBeenLastCalledWith('VATAN');
+    expect((await http().get('/api/agent-bridge/xato-royxat?filtr=' + 'x'.repeat(61)).set(H, KEY)).status).toBe(400);
+    expect((await http().post('/api/agent-bridge/xato-royxat').set(H, KEY)).status).toBe(404);
   });
 
   it('POST run → 200 va audit (actor: agent-bridge) yoziladi', async () => {
