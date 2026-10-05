@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -24,10 +25,84 @@ export class TaminotService {
   private readonly log = new Logger(TaminotService.name);
   private pool: Pool | null = null;
 
+  /** Avtomat moslashtirish holati — ustma-ust ishga tushmasligi va status uchun. */
+  private cronIshlayapti = false;
+  private cronOxirgi: {
+    boshlandi: string; tugadi: string | null; korildi: number;
+    mos: number; noaniq: number; topilmadi: number; xato: string | null;
+  } | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  /**
+   * AVTOMAT MOSLASHTIRISH — kuniga 3 marta (Toshkent).
+   *
+   * Qo'ldagi tugma bilan AYNAN bir xil ishni bajaradi, boshqa hech narsa qilmaydi:
+   *   • `rematch: false` — faqat hali bog'lanmagan tranzaksiyalarga tegadi,
+   *     mavjud ma'lumot ustiga yozmaydi;
+   *   • ta'minot bazasiga faqat SELECT ketadi;
+   *   • natija faqat bizning `transactions.erp*` ustunlariga yoziladi.
+   *
+   * O'chirish: TAMINOT_MATCH_CRON_ENABLED=0
+   * Jadval o'zgartirish: TAMINOT_MATCH_CRON='0 0 8,14,20 * * *'
+   */
+  @Cron(process.env.TAMINOT_MATCH_CRON || '0 0 8,14,20 * * *', {
+    name: 'taminot-match',
+    timeZone: 'Asia/Tashkent',
+  })
+  async cronMoslashtirish(): Promise<void> {
+    if (process.env.TAMINOT_MATCH_CRON_ENABLED === '0') return;
+    if (this.cronIshlayapti) {
+      this.log.warn("ta'minot avto-moslashtirish: oldingisi hali tugamagan — o'tkazib yuborildi");
+      return;
+    }
+    if (!this.config.get<string>('TAMINOT_DATABASE_URL') && !process.env.TAMINOT_DATABASE_URL) {
+      return; // ulanish sozlanmagan — jim o'tamiz
+    }
+
+    this.cronIshlayapti = true;
+    const boshlandi = new Date();
+    // Oxirgi 45 kun — eski to'lovlar allaqachon bog'langan, qayta ko'rish shart emas.
+    const dateFrom = new Date(boshlandi.getTime() - 45 * 86_400_000)
+      .toISOString().slice(0, 10);
+    this.cronOxirgi = {
+      boshlandi: boshlandi.toISOString(), tugadi: null,
+      korildi: 0, mos: 0, noaniq: 0, topilmadi: 0, xato: null,
+    };
+    try {
+      const r = await this.matchTransactions({ dateFrom, dryRun: false, rematch: false });
+      this.cronOxirgi = {
+        ...this.cronOxirgi,
+        tugadi: new Date().toISOString(),
+        korildi: r.scanned ?? 0,
+        mos: r.matched ?? 0,
+        noaniq: r.ambiguous ?? 0,
+        topilmadi: r.notFound ?? 0,
+      };
+      this.log.log(
+        `ta'minot avto-moslashtirish: ko'rildi=${r.scanned} mos=${r.matched} topilmadi=${r.notFound}`,
+      );
+    } catch (e: any) {
+      this.cronOxirgi = { ...this.cronOxirgi!, tugadi: new Date().toISOString(), xato: e?.message || String(e) };
+      this.log.error(`ta'minot avto-moslashtirish xato: ${e?.message}`);
+    } finally {
+      this.cronIshlayapti = false;
+    }
+  }
+
+  /** Avtomat moslashtirish holati — panel ko'rsatishi uchun. */
+  cronHolati() {
+    return {
+      ok: true as const,
+      yoqilgan: process.env.TAMINOT_MATCH_CRON_ENABLED !== '0',
+      jadval: process.env.TAMINOT_MATCH_CRON || '0 0 8,14,20 * * *',
+      ishlayapti: this.cronIshlayapti,
+      oxirgi: this.cronOxirgi,
+    };
+  }
 
   /** Ta'minot bazasiga o'qish uchun ulanish (lazy, bitta pool). */
   private getPool(): Pool {

@@ -20,6 +20,24 @@ export class TaminotController {
     return this.svc.ping();
   }
 
+  @Get('cron')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
+  @ApiOperation({
+    summary: "Avtomat moslashtirish holati (jadval, oxirgi natija)",
+    description: "Kuniga 3 marta (08:00 / 14:00 / 20:00, Toshkent) o'z-o'zidan ishlaydi.",
+  })
+  cron() {
+    return this.svc.cronHolati();
+  }
+
+  @Post('cron/run')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({ summary: "Avtomat moslashtirishni qo'lda hoziroq ishga tushirish" })
+  async cronRun() {
+    await this.svc.cronMoslashtirish();
+    return this.svc.cronHolati();
+  }
+
   @Post('match')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({
