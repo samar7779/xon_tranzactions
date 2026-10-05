@@ -1028,8 +1028,27 @@ def _argument(arg: str) -> Optional[Kirish]:
     return _shartnomalar_kirish(re.split(r"[,;\s]+", arg), arg)
 
 
-def _matn_shartnomalar(matn: Any) -> List[str]:
-    """Erkin matndagi shartnoma raqamlari (contract-parser.ts nusxasi: bosh raqamlar ochko'z, /SH olinadi)."""
+_SHARTNOMA_TOLIQ_RE = re.compile(r"^\d{1,6}(" + "|".join(_OBJECT_CODES) + r")[A-Z0-9]{2,6}$")
+
+
+def _ot_kes(glued: str) -> Optional[str]:
+    """contract-parser.ts stripGluedOt nusxasi (egasi qoidasi, 2026-10-05): raqamga yopishgan "от/OT" kesiladi —
+    "2118MSO252POT" -> "2118MSO252P" (ortidan sana yopishsa ham). Kesilgani to'liq raqam bo'lmasa None."""
+    g = (glued or "").upper()
+    for i in range(len(g) - 2, 0, -1):
+        if g[i:i + 2] != "OT":
+            continue
+        rest = g[i + 2:]
+        if rest and not rest[0].isdigit():
+            continue
+        if _SHARTNOMA_TOLIQ_RE.match(g[:i]):
+            return g[:i]
+    return None
+
+
+def _matn_shartnomalar(matn: Any, otsiz: bool = False) -> List[str]:
+    """Erkin matndagi shartnoma raqamlari (contract-parser.ts nusxasi: bosh raqamlar ochko'z, /SH olinadi).
+    otsiz=True: yopishgan "от" kesilgan nomzod ham (izoh mosligi uchun; backend CRM'da topsa shu raqamga yozadi)."""
     toza = _s(matn).translate(_CYR_SHAKL).upper().replace("№", "").replace("N°", "")
     topilgan: List[str] = []
     for m in _SHARTNOMA_MATN_RE.finditer(toza):
@@ -1039,6 +1058,11 @@ def _matn_shartnomalar(matn: Any) -> List[str]:
             s += "/SH"
         if s not in topilgan:
             topilgan.append(s)
+        if otsiz and not s.endswith("/SH"):
+            davom = re.match(r"[A-Z0-9]*", toza[m.end():m.end() + 10])
+            k = _ot_kes(s + (davom.group(0) if davom else ""))
+            if k and k not in topilgan:
+                topilgan.append(k)
     return topilgan
 
 
@@ -1065,7 +1089,7 @@ def _izoh_mos(izoh: Any, skeletlar: Iterable[str]) -> bool:
     sk = {x for x in skeletlar if x}
     if not sk:
         return False
-    if any(skelet(x) in sk for x in _matn_shartnomalar(izoh)):
+    if any(skelet(x) in sk for x in _matn_shartnomalar(izoh, otsiz=True)):
         return True
     matn = _s(izoh).translate(_CYR_SHAKL).upper()
     return any(_skelet_naqsh(x).search(matn) for x in sk)

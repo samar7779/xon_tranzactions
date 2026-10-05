@@ -687,6 +687,16 @@ class JuftlaTest(unittest.TestCase):
         self.assertFalse(pc._izoh_mos("dog 112QQQ34AB", sk2))
         self.assertFalse(pc._izoh_mos("", sk))
 
+    def test_yopishgan_ot_kesiladi(self):
+        """05.10 egasi qoidasi (contract-parser.ts bilan bir xil): "2118MSO252Pот" izohi 2118MSO252P ga mos."""
+        sk = {pc.skelet(x) for x in pc.variantlar("2118MSO252P")}
+        for izoh in ("Оплата по договору №2118MSO252Pот 10.05.2026", "dog 2118MSO252POT", "2118MSO252Pot10.05.2026"):
+            self.assertTrue(pc._izoh_mos(izoh, sk), izoh)
+        self.assertFalse(pc._izoh_mos("dog 2118MSO252POTX", sk))
+        self.assertEqual(pc._ot_kes("2118MSO252POT"), "2118MSO252P")
+        self.assertIsNone(pc._ot_kes("217AFS24YL"))
+        self.assertEqual(pc._matn_shartnomalar("dog 2118MSO252POT"), ["2118MSO252POT"])   # odatiy: o'zgarmagan
+
 
 # ---------------------------------------------------------------------------
 # 4. jamilar

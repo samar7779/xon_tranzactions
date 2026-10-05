@@ -176,6 +176,7 @@ export interface BridgeTxPreview {
   ok: true; valid: boolean; errors: string[]; tx: BridgeTxView | null; changes: BridgeTxChange[];
   xato: BridgeTxXato | null;
   harf: { from: string; to: string } | null;   // XATO to'lov, oxirgi 1-2 harf farqi: arizasiz va tasdiqsiz
+  ulash: { from: string; to: string; obyekt: string | null } | null;   // XATO to'lov -> shartnoma, mas'ul tasdig'i bilan
   crm: { contract: string; found: boolean; customerName: string | null; objectName: string | null } | null;
 }
 export interface BridgeTxApply {

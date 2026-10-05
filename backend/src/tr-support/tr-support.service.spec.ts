@@ -210,7 +210,9 @@ describe('TrSupportService', () => {
       expect(p.errors[0]).toContain("XATO to'lovlar ro'yxatidan ariza biriktiring");
       expect(oplataKv.findXatoRowForTx).toHaveBeenCalledWith([tx.externalId, 'ctx1'], '2026-07-01');
       expect(prisma.setting.findUnique).toHaveBeenCalledWith({ where: { key: 'agent.dateFrom' } });
-      expect(crmCache.lookup).not.toHaveBeenCalled();
+      // 206FZO25A2 CRM'da bor, lekin obyekt boshqa (VHA -> FZO): ulanmaydi, ariza orqali
+      expect(p.ulash).toBeNull();
+      expect(p.errors[1]).toContain("Obyekt boshqa: to'lov VHA obyektiniki, 206FZO25A2 — FZO obyekti");
       const r = await svc.apply([{ tx: 'ctx1', shartnoma: '206FZO25A2' }], { approvedBy: 'Samar' });
       expect(r.results[0].status).toBe('skipped');
       expect(cat.setContract).not.toHaveBeenCalled();
@@ -294,13 +296,20 @@ describe('TrSupportService', () => {
       expect(p.changes).toEqual([{ field: 'shartnoma', from: 'XATO', to: '656AFS25ZU' }]);
     });
 
-    it('qoidaga tushmasa — eski "ariza biriktiring", CRM so\'ralmaydi', async () => {
-      for (const s of ['217AFS25YL', '206FZO25A2', '217AFS24Y1', 'XATO', 'qolsin']) {
+    it('harf emas va CRM\'da yo\'q → ariza (sabab bilan); XATO/qolsin → CRM so\'ralmaydi', async () => {
+      for (const s of ['217AFS25YL', '206FZO25A2', '217AFS24Y1']) {
         const p = await svc.preview('ctx1', { shartnoma: s });
         expect(p.valid).toBe(false);
         expect(p.harf).toBeNull();
-        expect(p.errors).toHaveLength(1);
+        expect(p.ulash).toBeNull();
         expect(p.errors[0]).toContain("XATO to'lovlar ro'yxatidan ariza biriktiring");
+        expect(p.errors[1]).toContain(`Shartnoma ${s} CRM'da topilmadi`);
+      }
+      crmCache.lookup.mockClear();
+      for (const s of ['XATO', 'qolsin']) {
+        const p = await svc.preview('ctx1', { shartnoma: s });
+        expect(p.valid).toBe(false);
+        expect(p.errors).toHaveLength(1);
       }
       expect(crmCache.lookup).not.toHaveBeenCalled();
     });
@@ -310,10 +319,12 @@ describe('TrSupportService', () => {
       expect(p.valid).toBe(false);
       expect(p.errors[1]).toContain("Shartnoma 217AFS24YM CRM'da topilmadi");
 
+      // harf bo'yicha aniq emas (CRM'da 2 ta mos) — avtomat ko'chirilmaydi, lekin egasi aniq aytgan: TASDIQ bilan ulanadi
       prisma.crmContract.findMany.mockResolvedValueOnce([{ contractNumber: '217AFS24YL' }, { contractNumber: '217AFS24YZ' }]);
       p = await svc.preview('ctx1', { shartnoma: '217AFS24YL' });
-      expect(p.valid).toBe(false);
-      expect(p.errors[1]).toContain("To'g'ri shartnoma aniq emas: CRM'da 217AFS24YL, 217AFS24YZ ham mos");
+      expect(p.valid).toBe(true);
+      expect(p.harf).toBeNull();
+      expect(p.ulash).toEqual({ from: '217AFS24YK', to: '217AFS24YL', obyekt: 'AFS' });
 
       p = await svc.preview('ctx1', { kontragent: 'Банк', kategoriya: 'Услуги банка', shartnoma: '217AFS24YL' });
       expect(p.valid).toBe(false);
@@ -324,6 +335,52 @@ describe('TrSupportService', () => {
       expect(p.valid).toBe(false);
       expect(p.errors[0]).toContain('tasdiqlanishini kuting');
       expect(crmCache.lookup).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('XATO to\'lovni tasdiq bilan ulash (2026-10-05) — 2118MSO252POT', () => {
+    const CRM2: Record<string, any> = {
+      '2118MSO252P': { contractNumber: '2118MSO252P', found: true, customerName: 'ALIYEV', objectName: 'MSO' },
+      '217AFS24YL': { contractNumber: '217AFS24YL', found: true, customerName: 'KARIMOV', objectName: 'AFS' },
+    };
+    beforeEach(() => {
+      tx.contractNumber = '2118MSO252POT'; tx.description = 'Оплата по договору №2118MSO252Pот 10.05.2026';
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv7', contractNo: '2118MSO252POT', date: new Date() });
+      crmCache.lookup.mockImplementation(async (c: string) => CRM2[c] || { contractNumber: c, found: false });
+    });
+
+    it('CRM\'da aniq, obyekt bir xil → valid, harf emas (tasdiq kerak); apply qo\'lda + log (ex_id, kim)', async () => {
+      const p = await svc.preview(tx.externalId, { kontragent: 'qolsin', kategoriya: 'qolsin', shartnoma: '2118MSO252P' });
+      expect(p.valid).toBe(true);
+      expect(p.harf).toBeNull();
+      expect(p.ulash).toEqual({ from: '2118MSO252POT', to: '2118MSO252P', obyekt: 'MSO' });
+      expect(p.changes).toEqual([{ field: 'shartnoma', from: '2118MSO252POT', to: '2118MSO252P' }]);
+      expect(p.crm).toMatchObject({ contract: '2118MSO252P', customerName: 'ALIYEV' });
+      expect(p.plan).toMatchObject({ contract: '2118MSO252P', contractManual: true });
+      const r = await svc.apply([{ tx: tx.externalId, shartnoma: '2118MSO252P' }], { approvedBy: 'Samar', comment: 'chek bor' });
+      expect(r.results[0].status).toBe('applied');
+      expect(cat.setContractManual).toHaveBeenCalledWith('ctx1', '2118MSO252P', null, 'TR Support · tasdiq: Samar');
+      expect(cat.setContract).not.toHaveBeenCalled();
+      expect(rows[0]).toMatchObject({ txExternalId: tx.externalId, approvedBy: 'Samar', comment: 'chek bor', changed: ['shartnoma'] });
+      expect(oplataKv.syncNowRespectingSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('obyekt boshqa → rad, ariza orqali', async () => {
+      const p = await svc.preview('ctx1', { shartnoma: '217AFS24YL' });
+      expect(p.valid).toBe(false);
+      expect(p.ulash).toBeNull();
+      expect(p.errors[1]).toContain("Obyekt boshqa: to'lov MSO obyektiniki, 217AFS24YL — AFS obyekti");
+      const r = await svc.apply([{ tx: 'ctx1', shartnoma: '217AFS24YL' }], { approvedBy: 'Samar' });
+      expect(r.results[0].status).toBe('skipped');
+      expect(cat.setContractManual).not.toHaveBeenCalled();
+    });
+
+    it('XATO raqamda ham, izohda ham obyekt kodi yo\'q → solishtirilmaydi (obyekt null), tasdiq bilan', async () => {
+      tx.contractNumber = 'XATO'; tx.description = 'kvartira uchun';
+      oplataKv.findXatoRowForTx.mockResolvedValue({ id: 'okv7', contractNo: 'XATO', date: new Date() });
+      const p = await svc.preview('ctx1', { shartnoma: '2118MSO252P' });
+      expect(p.valid).toBe(true);
+      expect(p.ulash).toEqual({ from: 'XATO', to: '2118MSO252P', obyekt: null });
     });
   });
 

@@ -42,6 +42,35 @@ const CONTRACT_RE_WITH_CONT = new RegExp(
   'i',
 );
 
+// To'liq shartnoma raqami (yopishgan "OT" kesilgandan keyin tekshirish uchun)
+const CONTRACT_FULL_RE = new RegExp(`^\\d{1,6}(${CODE_PATTERN})[A-Z0-9]{2,6}$`, 'i');
+// Obyekt kodi (O/0/О bilan) — raqam boshidagi raqamlardan keyin
+const OBJECT_AT_RE = new RegExp(`^\\d{1,6}(${CODE_PATTERN})`, 'i');
+
+/**
+ * Raqam oxiriga yopishgan "ОТ/от/OT" (izohdagi "от <sana>") qo'shimchasini kesadi. Egasi qoidasi (2026-10-05):
+ * "2118MSO252Pот" → "2118MSO252P"; ortidan sana yopishsa ham ("...POT10.05.2026"). Kesilgani to'liq raqam
+ * formatida bo'lmasa — null. Chaqiruvchi CRM'da AYNAN shunday shartnoma bo'lsagina oladi, aks holda XATO.
+ * @param glued — raqam + undan keyin yopishgan harf/raqamlar (bo'shliqsiz, UPPER, kirill lotinlangan)
+ */
+export function stripGluedOt(glued: string): string | null {
+  const g = String(glued || '').toUpperCase();
+  for (let i = g.length - 2; i > 0; i--) {
+    if (g.slice(i, i + 2) !== 'OT') continue;
+    const rest = g.slice(i + 2);
+    if (rest && !/^\d/.test(rest)) continue;
+    const s = g.slice(0, i);
+    if (CONTRACT_FULL_RE.test(s)) return s;
+  }
+  return null;
+}
+
+/** Shartnoma raqamidagi obyekt kodi (kanonik, lotin O): "2118MS0252P" → "MSO". Topilmasa null. */
+export function objectCodeOf(contract: string | null | undefined): string | null {
+  const m = OBJECT_AT_RE.exec(transliterate(String(contract || '')).replace(/\s+/g, ''));
+  return m ? m[1].toUpperCase().replace(/0/g, 'O') : null;
+}
+
 // Kirill harflarni Lotinga moslashtirish (matnda aralash kelganda)
 const CYR_TO_LAT: Record<string, string> = {
   'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O',
@@ -116,6 +145,12 @@ export function extractContractCandidates(description: string | null | undefined
   // Bu tail ni uzaytirgan variantlar — fallback uchun
   const matchEnd = m.index + m[0].length;
   const afterMatch = clean.slice(matchEnd, matchEnd + 10);  // keyingi 10 belgini ko'ramiz
+
+  // Variant: yopishgan "ОТ/от/OT" kesilgan (2118MSO252POT → 2118MSO252P). Asosiydan keyin darrov:
+  // to'liq raqam CRM'da topilmasa, shu sinaladi; ikkalasi ham topilmasa — asosiy (XATO, avvalgidek).
+  const glued = base + (afterMatch.match(/^[A-Z0-9]*/i)?.[0] || '').toUpperCase();
+  const otsiz = stripGluedOt(glued);
+  if (otsiz && !candidates.includes(otsiz)) candidates.push(otsiz);
 
   // Variant: tail + (optional spaces) + 1 alphanum
   const extOne = afterMatch.match(/^\s*([A-Z0-9])/i);

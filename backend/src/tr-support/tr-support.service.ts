@@ -6,7 +6,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { CrmContractCacheService } from '../categorization/crm-contract-cache.service';
-import { extractContractCandidates } from '../categorization/contract-parser';
+import { extractContractCandidates, objectCodeOf } from '../categorization/contract-parser';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 
 /**
@@ -67,13 +67,16 @@ export const XATO_DATEFROM_KEY = 'agent.dateFrom'; // xato-list sahifasi bilan b
  * farq qilsa va to'g'ri shartnoma CRM'da aniq (yagona) bo'lsa — arizasiz va tasdiqsiz ko'chiriladi.
  */
 export type TrHarf =
-  | { ok: true; from: string; to: string; crm: NonNullable<TrPreview['crm']> }
+  | { ok: true; from: string; to: string; crm: NonNullable<TrPreview['crm']>; obyekt?: string | null }
   | { ok: false; sabab: string };
 
 export interface TrPreview {
   valid: boolean;
   xato: TrXato | null;
-  harf: { from: string; to: string } | null;   // XATO to'lov harf farqi qoidasi bilan ko'chiriladi
+  harf: { from: string; to: string } | null;   // XATO to'lov harf farqi qoidasi bilan ko'chiriladi (tasdiqsiz)
+  // XATO to'lov shartnomaga mas'ul TASDIG'I bilan ulanadi (2026-10-05): CRM'da aniq, obyekt bir xil.
+  // obyekt — solishtirilgan obyekt kodi; null = XATO raqamda/izohda obyekt kodi yo'q (solishtirilmadi)
+  ulash: { from: string; to: string; obyekt: string | null } | null;
   errors: string[];
   tx: TrTxView | null;
   changes: TrChange[];
@@ -81,7 +84,7 @@ export interface TrPreview {
   plan: {
     txId: string; catChange: boolean; categoryId: string | null; subcategoryId: string | null; contract?: string | null;
     contractXato?: boolean;         // shartnoma CRM'siz yoziladi (XATO ro'yxatiga tushishi uchun)
-    contractManual?: boolean;       // harf farqi: XATO ariza tasdig'i kabi qo'lda (setContractManual), izohdan qayta yozilmaydi
+    contractManual?: boolean;       // XATO to'lov (harf/ulash): ariza tasdig'i kabi qo'lda (setContractManual), izohdan qayta yozilmaydi
   } | null;
 }
 
@@ -254,9 +257,9 @@ export class TrSupportService {
       ? `Bu to'lov XATO to'lovlar ro'yxatida (shartnoma ${sh}) va unga ariza allaqachon yuborilgan`
         + ` (${p.submittedByName || "noma'lum"}${at ? ', ' + at.slice(0, 10) : ''}${p.proposedContractNo ? ', taklif: ' + p.proposedContractNo : ''}).`
         + ' Tahrir qilinmaydi: ariza tasdiqlanishini kuting.'
-      : `Bu to'lov XATO to'lovlar ro'yxatida (shartnoma ${sh}). Tahrir qilinmaydi: XATO to'lovlar ro'yxatidan ariza`
-        + ` biriktiring — to'lov kartasidagi "Shartnoma biriktirish" (to'g'ri shartnoma va chek).`
-        + ` Istisno: faqat oxirgi 1-2 harf farqi bo'lsa arizasiz ko'chiriladi.`;
+      : `Bu to'lov XATO to'lovlar ro'yxatida (shartnoma ${sh}). To'g'ri shartnoma CRM'da aniq bo'lsa (obyekt bir xil)`
+        + ` — uni yozing: tasdiq bilan ulanadi (oxirgi 1-2 harf farqida tasdiqsiz). Aks holda XATO to'lovlar ro'yxatidan`
+        + ` ariza biriktiring ("Shartnoma biriktirish").`;
     return {
       inList: true, contractNo: row.contractNo || null, pending: !!p, pendingBy: p?.submittedByName || null,
       pendingAt: at, pendingContract: p?.proposedContractNo || null, xabar,
@@ -265,7 +268,9 @@ export class TrSupportService {
 
   // ─── Tekshiruv (FAQAT O'QISH; CRM faqat o'qiladi) ─────────────────
   async preview(ref: string, choice: TrChoice, tree?: TrTop[]): Promise<TrPreview> {
-    const out: TrPreview = { valid: false, xato: null, harf: null, errors: [], tx: null, changes: [], crm: null, plan: null };
+    const out: TrPreview = {
+      valid: false, xato: null, harf: null, ulash: null, errors: [], tx: null, changes: [], crm: null, plan: null,
+    };
     const { tx, kop } = await this.findTxRef(ref);
     if (!tx) {
       out.errors.push(kop > 1
@@ -275,20 +280,30 @@ export class TrSupportService {
       return out;
     }
     out.tx = this.viewOf(tx);
-    // XATO to'lovlar ro'yxatidagi to'lov — tahrir yo'q, ariza orqali (egasi qoidasi, 2026-09-30).
-    // Istisno — harf farqi qoidasi (2026-10-03): faqat oxirgi 1-2 harf farq qilsa, ariza kerak emas.
+    // XATO to'lovlar ro'yxatidagi to'lov (egasi qoidalari): oxirgi 1-2 harf farqi — tasdiqsiz (2026-10-03);
+    // aks holda shartnoma CRM'da aniq va obyekt bir xil bo'lsa — mas'ul tasdig'i bilan (2026-10-05); qolgani ariza.
     out.xato = await this.xatoStatus(tx);
     let harf: Extract<TrHarf, { ok: true }> | null = null;
+    let ulash: Extract<TrHarf, { ok: true }> | null = null;
     if (out.xato.inList) {
       const h = out.xato.pending ? null : await this.harfFarqi(tx, out.xato.contractNo, choice.shartnoma);
-      if (!h || !h.ok) {
-        out.errors.push(out.xato.xabar as string);
-        if (h && !h.ok) out.errors.push((h as Extract<TrHarf, { ok: false }>).sabab);
-        return out;
+      if (h && h.ok) {
+        harf = h as Extract<TrHarf, { ok: true }>;
+        out.harf = { from: harf.from, to: harf.to };
+      } else {
+        const u = out.xato.pending ? null : await this.xatoUlash(tx, out.xato.contractNo, choice.shartnoma);
+        if (!u || !u.ok) {
+          out.errors.push(out.xato.xabar as string);
+          const sabab = (u && !u.ok ? (u as Extract<TrHarf, { ok: false }>).sabab : null)
+            || (h && !h.ok ? (h as Extract<TrHarf, { ok: false }>).sabab : null);
+          if (sabab) out.errors.push(sabab);
+          return out;
+        }
+        ulash = u as Extract<TrHarf, { ok: true }>;
+        out.ulash = { from: ulash.from, to: ulash.to, obyekt: ulash.obyekt ?? null };
       }
-      harf = h as Extract<TrHarf, { ok: true }>;
-      out.harf = { from: h.from, to: h.to };
     }
+    const fix = harf || ulash;
     if (tx.source === 'ALOQA_BANK') out.errors.push("Aloqa Bank import qatorini tahrirlab bo'lmaydi (faqat o'qish)");
     const tops = tree || await this.loadTree();
     const curTop = tops.find((t) => t.id === tx.categoryId) || null;
@@ -328,9 +343,9 @@ export class TrSupportService {
     let newContract: string | null | undefined;
     let contractXato = false;
     const xm = !isQolsin(choice.shartnoma) ? XATO_RE.exec(String(choice.shartnoma).trim()) : null;
-    if (harf) {
-      newContract = harf.to === (tx.contractNumber || null) ? undefined : harf.to;
-      out.crm = harf.crm;
+    if (fix) {
+      newContract = fix.to === (tx.contractNumber || null) ? undefined : fix.to;
+      out.crm = fix.crm;
     } else if (xm) {
       contractXato = true;
       if ((newTop?.code || '') !== 'CLIENT') {
@@ -349,7 +364,7 @@ export class TrSupportService {
       const topCode = newTop?.code || '';
       if (!CONTRACT_TOPS.includes(topCode)) {
         out.errors.push("Shartnoma faqat \"Клиент / Физ.Л / Юр.Л\" yoki \"Переброска\" kontragentida qo'yiladi");
-      } else if (!harf) {
+      } else if (!fix) {
         const c: any = await this.crmCache.lookup(newContract, { forceRefresh: true });
         // O/0, I/1 varianti bilan topilsa — CRM'dagi KANONIK shakl yoziladi (aks holda to'lov yana XATO bo'ladi)
         if (c?.found && c.contractNumber) newContract = normContract(String(c.contractNumber));
@@ -370,8 +385,8 @@ export class TrSupportService {
     if (newContract !== undefined) {
       out.changes.push({ field: 'shartnoma', from: tx.contractNumber || null, to: newContract });
     }
-    if (harf && (topChanged || subChanged)) {
-      out.errors.push("XATO to'lovda harf farqi qoidasi bilan faqat shartnoma ko'chiriladi — kontragent va kategoriya qolsin");
+    if (fix && (topChanged || subChanged)) {
+      out.errors.push("XATO to'lovda faqat shartnoma ulanadi — kontragent va kategoriya qolsin");
     }
     if (!out.errors.length && !out.changes.length) {
       out.errors.push("Hech narsa o'zgarmaydi: tanlangan qiymatlar hozirgisi bilan bir xil");
@@ -381,7 +396,7 @@ export class TrSupportService {
       txId: tx.id, catChange: topChanged || subChanged, categoryId: newTopId, subcategoryId: newSubId,
       ...(newContract !== undefined ? { contract: newContract } : {}),
       ...(contractXato ? { contractXato: true } : {}),
-      ...(harf ? { contractManual: true } : {}),
+      ...(fix ? { contractManual: true } : {}),
     };
     return out;
   }
@@ -391,11 +406,45 @@ export class TrSupportService {
    * Noto'g'ri raqam: OplatyKv XATO qatori, to'lov shartnomasi yoki izohdagi raqam. To'g'ri raqam CRM'da bo'lishi
    * va keshdagi boshqa CRM shartnomasi shu qoidaga tushmasligi ("aniq") shart. CRM faqat o'qiladi.
    */
+  /** XATO to'lovning noto'g'ri raqam(lar)i: OplatyKv XATO qatori, to'lov shartnomasi, izohdagi nomzodlar. */
+  private xatoRaqamlar(tx: any, xatoContract: string | null): string[] {
+    return [...new Set([xatoContract, tx.contractNumber, ...extractContractCandidates(tx.description)]
+      .filter((s): s is string => !!s).map(normContract).filter((s) => s && s !== XATO_SHARTNOMA))];
+  }
+
+  /**
+   * XATO to'lovni shartnomaga ulash — mas'ul TASDIG'I bilan (egasi qoidasi, 2026-10-05). null — tegishli emas.
+   * "Aniq": shartnoma CRM'da found (kanonik shakl) va obyekt kodi XATO raqam/izohdagi bilan bir xil (pul boshqa
+   * obyektga o'tmaydi — AI tekshiruvchi qoidasi bilan bir xil). Obyekt kodi umuman yo'q bo'lsa solishtirilmaydi.
+   */
+  private async xatoUlash(tx: any, xatoContract: string | null, shartnoma: any): Promise<TrHarf | null> {
+    if (isQolsin(shartnoma) || isYoq(shartnoma) || XATO_RE.test(String(shartnoma).trim())) return null;
+    const target = normContract(String(shartnoma));
+    if (!/^[A-Z0-9/]{3,64}$/.test(target)) return { ok: false, sabab: `Shartnoma raqami noto'g'ri: "${shartnoma}"` };
+    const c: any = await this.crmCache.lookup(target, { forceRefresh: true });
+    if (!c?.found) return { ok: false, sabab: `Shartnoma ${target} CRM'da topilmadi — boshqa shartnoma bering` };
+    const to = normContract(String(c.contractNumber || target));
+    const wrongs = this.xatoRaqamlar(tx, xatoContract);
+    const kodlar = [...new Set(wrongs.map((w) => objectCodeOf(w)).filter((k): k is string => !!k))];
+    const yangi = objectCodeOf(to);
+    if (kodlar.length && (!yangi || !kodlar.includes(yangi))) {
+      return {
+        ok: false,
+        sabab: `Obyekt boshqa: to'lov ${kodlar.join('/')} obyektiniki, ${to} — ${yangi || "noma'lum"} obyekti.`
+          + ' Pul boshqa obyektga o\'tkazilmaydi — ariza orqali',
+      };
+    }
+    return {
+      ok: true, from: xatoContract || tx.contractNumber || wrongs[0] || '', to,
+      obyekt: kodlar.length ? yangi : null,
+      crm: { contract: to, found: true, customerName: c?.customerName || null, objectName: c?.objectName || null },
+    };
+  }
+
   private async harfFarqi(tx: any, xatoContract: string | null, shartnoma: any): Promise<TrHarf | null> {
     if (isQolsin(shartnoma) || isYoq(shartnoma) || XATO_RE.test(String(shartnoma).trim())) return null;
     const target = normContract(String(shartnoma));
-    const wrongs = [...new Set([xatoContract, tx.contractNumber, ...extractContractCandidates(tx.description)]
-      .filter((s): s is string => !!s).map(normContract).filter((s) => s && s !== XATO_SHARTNOMA))];
+    const wrongs = this.xatoRaqamlar(tx, xatoContract);
     if (!wrongs.some((w) => harfFarqiMos(w, target))) return null;
     const c: any = await this.crmCache.lookup(target, { forceRefresh: true });
     if (!c?.found) return { ok: false, sabab: `Shartnoma ${target} CRM'da topilmadi — boshqa shartnoma bering` };

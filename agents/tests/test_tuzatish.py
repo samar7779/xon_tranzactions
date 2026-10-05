@@ -275,6 +275,50 @@ class QisqaRaqamTest(_Base):
         self.assertIn("OplatyKv qatori ham yangilandi", t)
 
 
+class XatoUlashTest(_Base):
+    """05.10: XATO to'lov, shartnoma CRM'da aniq va obyekt bir xil -> ariza o'rniga mas'ul tasdig'i bilan."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.javob["preview"] = {
+            "ok": True, "valid": True, "errors": [], "harf": None,
+            "ulash": {"from": "2118MSO252POT", "to": "2118MSO252P", "obyekt": "MSO"},
+            "xato": {"inList": True, "xabar": "XATO ro'yxatida"}, "tx": dict(TX_VIEW, shartnoma="2118MSO252POT"),
+            "changes": [{"field": "shartnoma", "from": "2118MSO252POT", "to": "2118MSO252P"}],
+            "crm": {"contract": "2118MSO252P", "found": True, "customerName": "ALIYEV", "objectName": "MSO"}}
+        self.javob["options"] = dict(OPTIONS, tx=dict(TX_VIEW, shartnoma="2118MSO252POT"),
+                                     xato={"inList": True, "xabar": "XATO ro'yxatida"})
+
+    async def test_tasdiq_bilan_ulanadi_tasdiqsiz_saqlanmaydi(self):
+        await TZ.handle("TUZATISH: tx=%s shartnoma=2118MSO252P tasdiq=Samar izoh=chek bor" % TX, self.out)
+        s = self._sorov_xabari("To'lovni tahrirlash")
+        for frag in ("Shartnoma: 2118MSO252POT -&gt; 2118MSO252P", "CRM: ALIYEV, MSO",
+                     "XATO ro'yxatidan ulanadi: ariza o'rniga tasdiq bilan (obyekt MSO bir xil).", "Tasdiqladi: <b>Samar</b>",
+                     'Tasdiqlash uchun "tasdiqlayman" deb yozing'):
+            self.assertIn(frag, s["text"])
+        self.assertFalse([c for c in self.calls if c["path"] == C.TUZATISH_KOPRIK_APPLY])   # tasdiqsiz saqlanmaydi
+        token = self._token(C.KV_TZ_APPR)
+        self.assertEqual(self.kv[C.kv_key(C.KV_TZ_APPR, token=token)]["items"],
+                         [{"tx": TX, "kontragent": "", "kategoriya": "", "shartnoma": "2118MSO252P"}])
+        self.javob["apply"] = {"ok": True, "batchId": "b1", "results": [
+            {"tx": TX, "id": "e1", "status": "applied", "errors": [], "oplataKv": None,
+             "changes": [{"field": "shartnoma", "from": "2118MSO252POT", "to": "2118MSO252P"}]}],
+            "sync": {"ok": True, "added": 0, "updated": 1, "skipped": 0}}
+        await TZ.decide(token, True, self.out, None)
+        await asyncio_gather()
+        [apply] = [c for c in self.calls if c["path"] == C.TUZATISH_KOPRIK_APPLY]
+        self.assertEqual((apply["body"]["approvedBy"], apply["body"]["comment"]), ("Samar", "chek bor"))
+        self.assertIn("Shartnoma: 2118MSO252POT -> 2118MSO252P", self.texts()[-1])
+
+    async def test_tasdiqlovchi_yoq_bolsa_soraladi_ariza_demaydi(self):
+        await TZ.handle("TUZATISH: tx=%s shartnoma=2118MSO252P" % TX, self.out)
+        [t] = self.texts()
+        self.assertIn("Kim tasdiqlaydi", t)
+        self.assertNotIn("XATO ro'yxatida", t)
+        self.assertNotIn("Kontragent (yoki", t)                  # faqat shartnoma: kontragent so'ralmaydi
+        self.assertEqual(self.kv, {})
+
+
 class HarfQoidaTest(_Base):
     """Harf farqi qoidasi (egasi, 2026-10-03): XATO to'lov, oxirgi 1-2 harf -> arizasiz va TASDIQSIZ."""
 

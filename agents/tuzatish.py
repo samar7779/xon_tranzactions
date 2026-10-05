@@ -12,6 +12,8 @@ Oqim (LLM'siz, deterministik; Leader faqat egasi matnini `TUZATISH:` qatoriga ay
 Harf farqi qoidasi (egasi, 2026-10-03): aniq shartnoma raqami berilgan qator avval tekshiriladi; XATO ro'yxatidagi
 to'lovda to'g'ri shartnoma faqat oxirgi 1-2 harfi bilan farq qilsa (backend: CRM'da bor va yagona) — so'rovsiz,
 arizasiz va tasdiqsiz darrov ko'chiriladi.
+XATO ulash (egasi, 2026-10-05): boshqa XATO to'lov — shartnoma CRM'da aniq va obyekt bir xil bo'lsa (backend `ulash`)
+ariza o'rniga odatdagi oqim: preview -> mas'ul ismi, izoh -> "tasdiqlayman" -> saqlash (tarixda ex_id, kim).
 Ko'prik: faqat loopback, kalit header'da (payment_check bilan bir xil manzil va kalit).
 """
 from __future__ import annotations
@@ -280,6 +282,10 @@ def preview_html(previews: List[Tuple[Qator, Dict[str, Any]]], tasdiq: str, izoh
         crm = p.get("crm")
         if crm and crm.get("found"):
             q.append("  CRM: %s" % _e(", ".join(x for x in (crm.get("customerName"), crm.get("objectName")) if x) or "bor"))
+        u = p.get("ulash")
+        if u:
+            q.append("  XATO ro'yxatidan ulanadi: ariza o'rniga tasdiq bilan (%s)." % _e(
+                "obyekt %s bir xil" % u.get("obyekt") if u.get("obyekt") else "obyekt solishtirilmadi: raqamda kod yo'q"))
         qolgan = [_MAYDON_NOMI[f] for f in ("kontragent", "kategoriya", "shartnoma")
                   if f not in {c.get("field") for c in (p.get("changes") or [])}]
         if qolgan:
@@ -354,6 +360,7 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
         q.izoh = q.izoh if q.izoh is not None else umumiy_izoh
     # 0) aniq shartnoma berilgan qator: avval backend tekshiruvi (harf farqi qoidasi — so'rovsiz va tasdiqsiz)
     tayyor: Dict[str, Dict[str, Any]] = {}
+    ulash: set = set()                                  # XATO -> shartnoma, mas'ul tasdig'i bilan
     harf: List[Tuple[Qator, Dict[str, Any]]] = []
     rad: List[str] = []
     qolgan: List[Qator] = []
@@ -368,6 +375,13 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
             return
         if p.get("valid") and p.get("harf"):
             harf.append((q, p))
+        elif p.get("valid") and p.get("ulash"):
+            # faqat shartnoma ulanadi: kontragent/kategoriya so'ralmaydi; tasdiqlovchi va izoh odatdagidek so'raladi
+            q.kontragent = q.kontragent if q.kontragent is not None else C.TUZATISH_QOLSIN
+            q.kategoriya = q.kategoriya if q.kategoriya is not None else C.TUZATISH_QOLSIN
+            ulash.add(q.tx)
+            tayyor[q.tx] = p
+            qolgan.append(q)
         elif (p.get("xato") or {}).get("inList"):
             rad.append("%s\n%s" % (_tx_sarlavha(p.get("tx"), q.tx), "\n".join(str(e) for e in (p.get("errors") or []))))
         else:
@@ -394,7 +408,7 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
                 await _say(outbox, "To'lov topilmadi: %s. ID ni tekshiring." % q.tx, reply_to=reply_to)
                 return
             xato = opt.get("xato") or {}
-            if xato.get("inList"):                      # XATO ro'yxatidagi to'lov: savol yo'q, ariza yo'li
+            if xato.get("inList") and q.tx not in ulash:    # XATO, shartnoma aniq emas: savol yo'q, ariza yo'li
                 await _say(outbox, "%s\n%s" % (_tx_sarlavha(opt.get("tx"), q.tx), xato.get("xabar") or ""),
                            reply_to=reply_to)
                 return
@@ -419,7 +433,7 @@ async def _handle(qatorlar: List[Qator], outbox: Any, reply_to: Optional[int]) -
         except KoprikXato as exc:
             await _say(outbox, "Tekshiruv bajarilmadi: %s." % exc.sabab, reply_to=reply_to)
             return
-        if (p.get("xato") or {}).get("inList"):
+        if (p.get("xato") or {}).get("inList") and not p.get("valid"):
             xato_royxat.append("%s\n%s" % (_tx_sarlavha(p.get("tx"), q.tx), (p.get("xato") or {}).get("xabar") or ""))
         elif not p.get("valid"):
             xatolar.append("%s:\n%s" % (_tx_sarlavha(p.get("tx"), q.tx),
