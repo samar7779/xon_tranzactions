@@ -1645,6 +1645,116 @@ export class TransactionsService {
   }
 
   /**
+   * АКТ СВЕРКИ (kontragent bo'yicha o'zaro hisob-kitob) — 1C uslubida.
+   * Tanlangan tashkilot (toName/fromName yoki INN) bilan davr uchun:
+   * boshlang'ich saldo + operatsiyalar (sana/hujjat/chiqim/kirim/yuguruvchi saldo) + yakuniy saldo.
+   * Saldo = kirim − chiqim (bizning tomondan; + = ular ko'proq yuborgan, − = biz ko'proq to'laganmiz).
+   */
+  async sverkaCounterparty(opts: {
+    name?: string; inn?: string; from?: string; to?: string; bankId?: string; accountId?: string;
+  }) {
+    const name = (opts.name || '').trim();
+    const inn = (opts.inn || '').trim();
+    if (!name && !inn) return { ok: false, error: 'name yoki inn kerak' };
+
+    const base: any = {};
+    if (opts.bankId) base.bankId = opts.bankId;
+    if (opts.accountId) base.accountId = opts.accountId;
+    // Kontragent moslash: chiqimda qabul qiluvchi (toName/toInn), kirimda jo'natuvchi (fromName/fromInn)
+    const cpWhere: any = {
+      ...base,
+      OR: [
+        { direction: 'OUT', ...(inn ? { toInn: inn } : { toName: name }) },
+        { direction: 'IN', ...(inn ? { fromInn: inn } : { fromName: name }) },
+      ],
+    };
+
+    const from = opts.from ? new Date(opts.from) : null;
+    const to = opts.to ? new Date(opts.to + 'T23:59:59.999') : null;
+
+    // Boshlang'ich saldo (from'dan oldin)
+    let opening = 0;
+    if (from) {
+      const [oIn, oOut] = await Promise.all([
+        this.prisma.transaction.aggregate({ where: { ...cpWhere, direction: 'IN', txnDate: { lt: from } }, _sum: { amount: true } }),
+        this.prisma.transaction.aggregate({ where: { ...cpWhere, direction: 'OUT', txnDate: { lt: from } }, _sum: { amount: true } }),
+      ]);
+      opening = Number(oIn._sum.amount || 0) - Number(oOut._sum.amount || 0);
+    }
+
+    const dateF: any = {};
+    if (from) dateF.gte = from;
+    if (to) dateF.lte = to;
+    const rows = await this.prisma.transaction.findMany({
+      where: { ...cpWhere, ...((from || to) ? { txnDate: dateF } : {}) },
+      orderBy: [{ txnDate: 'asc' }, { id: 'asc' }],
+      select: { id: true, txnDate: true, docNumber: true, direction: true, amount: true, description: true },
+      take: 1000,
+    });
+
+    let running = opening;
+    let totalIn = 0;
+    let totalOut = 0;
+    const operations = rows.map((o) => {
+      const inflow = o.direction === 'IN' ? Number(o.amount) : 0;
+      const outflow = o.direction === 'OUT' ? Number(o.amount) : 0;
+      totalIn += inflow;
+      totalOut += outflow;
+      running += inflow - outflow;
+      return {
+        date: o.txnDate.toISOString().slice(0, 10),
+        docNumber: o.docNumber || null,
+        inflow, outflow, running,
+        description: (o.description || '').slice(0, 120),
+      };
+    });
+    const closing = opening + totalIn - totalOut;
+    return { ok: true, name: name || inn, from: opts.from || null, to: opts.to || null, opening, totalIn, totalOut, closing, count: operations.length, operations };
+  }
+
+  /**
+   * SHARTNOMA SVERKA — shartnoma bo'yicha to'lovlar statementi (ОплатыКв dan).
+   * Boshlang'ich (from'dan oldin to'langan) + operatsiyalar (sana/turi/summa/yuguruvchi) + jami to'langan.
+   */
+  async sverkaContract(opts: { contract: string; from?: string; to?: string }) {
+    const c = (opts.contract || '').replace(/\s+/g, '').toUpperCase();
+    if (!c) return { ok: false, error: 'contract kerak' };
+    const from = opts.from ? new Date(opts.from) : null;
+    const to = opts.to ? new Date(opts.to + 'T23:59:59.999') : null;
+
+    let opening = 0;
+    if (from) {
+      const o = await this.prisma.oplataKv.aggregate({ where: { contractNo: c, date: { lt: from } }, _sum: { paymentAmount: true } });
+      opening = Number(o._sum.paymentAmount || 0);
+    }
+    const dateF: any = {};
+    if (from) dateF.gte = from;
+    if (to) dateF.lte = to;
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { contractNo: c, ...((from || to) ? { date: dateF } : {}) },
+      orderBy: [{ date: 'asc' }],
+      select: { date: true, paymentAmount: true, firstInstallment: true, txType: true, client: true, object: true },
+      take: 1000,
+    });
+
+    let running = opening;
+    let total = 0;
+    const operations = rows.map((r) => {
+      const amt = Number(r.paymentAmount || 0);
+      total += amt;
+      running += amt;
+      return {
+        date: r.date.toISOString().slice(0, 10),
+        amount: amt,
+        kind: Number(r.firstInstallment || 0) !== 0 ? '1 взнос' : (r.txType || 'ежемесячный'),
+        running,
+      };
+    });
+    const info = rows[0] || null;
+    return { ok: true, contract: c, client: info?.client || null, object: info?.object || null, opening, totalPaid: total, closing: opening + total, count: operations.length, operations };
+  }
+
+  /**
    * XATO shartnomalar — tranzaksiyalarda ishlatilgan, lekin CRM tasdiqlamagan
    * (verified emas) shartnoma raqamlari. Har biri uchun nechta tx va jami summa.
    */

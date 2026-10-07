@@ -141,6 +141,31 @@ export class TransactionsController {
     });
   }
 
+  @Get('sverka/counterparty')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW, PERMISSIONS.DASHBOARD_RECON)
+  @ApiOperation({ summary: 'Акт сверки — kontragent bo\'yicha o\'zaro hisob-kitob (saldo + operatsiyalar)' })
+  sverkaCounterparty(
+    @Query('name') name?: string,
+    @Query('inn') inn?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('bankId') bankId?: string,
+    @Query('accountId') accountId?: string,
+  ) {
+    return this.svc.sverkaCounterparty({ name, inn, from, to, bankId, accountId });
+  }
+
+  @Get('sverka/contract')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW, PERMISSIONS.DASHBOARD_RECON)
+  @ApiOperation({ summary: 'Shartnoma sverka — shartnoma bo\'yicha to\'lovlar statementi (ОплатыКв)' })
+  sverkaContract(
+    @Query('contract') contract?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.svc.sverkaContract({ contract: contract || '', from, to });
+  }
+
   @Get('xato-contracts')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'XATO shartnomalar — CRM tasdiqlamagan shartnoma raqamlari (tx soni + jami summa)' })
