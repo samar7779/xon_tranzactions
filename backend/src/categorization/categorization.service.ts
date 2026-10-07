@@ -68,7 +68,28 @@ interface CategoryRefs {
 const KEYWORDS_SALARY = [
   'ПЕРЕЧИСЛЯЕТСЯ ЗАРПЛАТА', 'ТРУДОВОЙ ОТПУСК', 'ТУРДОВОЙ ОТПУСК',
   'АЛИМЕНТ', 'БОЛЬНИЧНОГО', 'БОЛНИЧНОГО',
+  // Eng keng tarqalgan yozilishlar yetishmayotgan edi — 2026-05 dan buyon
+  // ~450 ta maosh to'lovi kategoriyasiz qolgan. (desc Ё→Е normallashtirilgan,
+  // shuning uchun 'РАСЧЕТ', 'РАСЧЁТ' emas.)
+  'ЗАРАБОТНАЯ ПЛАТА', 'ОТПУСКНЫЕ', 'ВЫПЛАТА ПРЕМИИ',
+  'РАСЧЕТ ПРИ ПРЕКРАЩЕНИИ ТРУДОВ', 'МАТЕРИАЛЬНАЯ ПОМОЩ',
 ];
+
+/**
+ * "АВАНС АВГУСТ 2026", "ПРЕМИЯ ИЮЛЬ 2026" kabi yozuvlar.
+ * ⚠️ Yolg'iz 'АВАНС' yoki 'ПРЕМИЯ' so'zini kalit qilib bo'lmaydi — ular
+ * yetkazib beruvchi to'lovlarida ham uchraydi ("аванс по договору").
+ * Shuning uchun ortidan OY nomi kelishi shart qilingan.
+ */
+const RE_SALARY_OY =
+  /(АВАНС|ПРЕМИЯ|ЗАРПЛАТА)\s+(ЯНВАР|ФЕВРАЛ|МАРТ|АПРЕЛ|МАЙ|ИЮН|ИЮЛ|АВГУСТ|СЕНТЯБР|ОКТЯБР|НОЯБР|ДЕКАБР)/;
+
+/**
+ * O'z hisoblarimiz orasidagi ko'chirma — bank izohida o'zbekcha yoziladi.
+ * Hisob raqami bo'yicha tekshiruv ishlamay qolganda (masalan ikkilamchi hisob
+ * bazada ro'yxatdan o'tmagan bo'lsa) shu zaxira belgi ishlaydi.
+ */
+const KEYWORDS_TRANSFER = ['ИККИЛАМЧИ ХИСОБВАРА', 'АСОСИЙ ХИСОБВАРА'];
 const KEYWORDS_BANK = ['CORPORATE', 'ТАРИФ', 'TARIF'];
 const KEYWORDS_LOAN = ['(ЗАЙМ)', '(ЗАЕМ)'];
 // SCHETCHIK keywords — stem (o'zak) shaklida, qo'shimchalar (...ЛАР, ...И, ...ГА) bilan ham match.
@@ -1672,7 +1693,7 @@ export class CategorizationService {
     }
 
     // ── 5) Zarplata
-    if (!categoryId && KEYWORDS_SALARY.some((k) => desc.includes(k))) {
+    if (!categoryId && (KEYWORDS_SALARY.some((k) => desc.includes(k)) || RE_SALARY_OY.test(desc))) {
       categoryId = refs.SALARY;
       reason = 'desc zarplata';
     }
@@ -1691,6 +1712,11 @@ export class CategorizationService {
       if (otherAcc && ownAccs.has(otherAcc.trim())) {
         categoryId = refs.TRANSFER;
         reason = "o'z hisoblarimiz orasida (Переброска)";
+      } else if (KEYWORDS_TRANSFER.some((k) => desc.includes(k))) {
+        // Hisob raqami bo'yicha topilmadi, lekin izohda aniq yozilgan:
+        // "иккиламчи хисобваракдан асосий хисобварагига" va aksincha.
+        categoryId = refs.TRANSFER;
+        reason = "desc ichki ko'chirma (asosiy ↔ ikkilamchi hisob)";
       }
     }
 
@@ -2104,12 +2130,16 @@ export class CategorizationService {
     if (this.ownAccountsCache && (now - this.ownAccountsCache.loadedAt) < CategorizationService.OWN_ACCOUNTS_TTL) {
       return this.ownAccountsCache.numbers;
     }
+    // ⚠️ ESKI raqamlar ham kerak: bank rekvizitni almashtirsa (Kapitalbank
+    // 2026-10-05), tarixiy tranzaksiyalarda eski hisob raqami yozilgan bo'ladi
+    // va ularsiz o'z hisoblarimiz orasidagi ko'chirma tanilmay qoladi.
     const accs = await this.prisma.bankAccount.findMany({
-      select: { accountNo: true },
+      select: { accountNo: true, previousAccountNo: true },
     });
     const set = new Set<string>();
     for (const a of accs) {
       if (a.accountNo) set.add(a.accountNo.trim());
+      if (a.previousAccountNo) set.add(a.previousAccountNo.trim());
     }
     this.ownAccountsCache = { numbers: set, loadedAt: now };
     return set;
