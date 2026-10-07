@@ -179,9 +179,23 @@ export class TaminotService {
     return x.replace(/[^0-9A-Z]/g, '');
   }
 
-  /** ERP "Дог№" dan shartnoma tokeni: "№ 34/VATAN от 10.2.2026" → "34VATAN" */
+  /**
+   * ERP "Дог№" dan shartnoma tokeni: "№ 34/VATAN от 10.2.2026" → "34VATAN"
+   *
+   * ⚠️ Sanani kesish uchun "ОТ" so'zi bo'yicha ajratiladi. Ilgari bu kirillcha
+   * matnda ISHLAMASDI: JS regexdagi `\b` faqat [A-Za-z0-9_] uchun chegara
+   * hisoblaydi, kirill harflari esa "so'z belgisi" emas — shuning uchun
+   * `\bОТ\b` hech qachon mos kelmasdi va sana tokenga qo'shilib ketardi:
+   *   "№ 01/2026 от 6.1.2026" → "012026OT612026"  (to'g'risi: "012026")
+   * Shuning uchun avval transliteratsiya qilamiz (probellar saqlanadi), keyin
+   * lotincha "OT" bo'yicha kesamiz — endi `\b` to'g'ri ishlaydi.
+   */
   private dogToken(s: string | null | undefined): string {
-    const head = String(s || '').toUpperCase().split(/\bОТ\b|\bOT\b/)[0];
+    let up = String(s || '').toUpperCase();
+    up = Array.from(up)
+      .map((ch) => (TaminotService.CYR[ch] !== undefined ? TaminotService.CYR[ch] : ch))
+      .join('');
+    const head = up.split(/\bOT\b/)[0];
     const t = this.normTok(head);
     return t.length >= 4 ? t : '';
   }
@@ -378,6 +392,8 @@ export class TaminotService {
       const txDay = new Date(tx.txnDate);
       const toks = this.descTokens(tx.description);
       const names = `${this.coarse(tx.toName)}|${this.coarse(tx.fromName)}`;
+      // Nomni ikki tomonlama solishtirish uchun alohida ham saqlaymiz.
+      const nomlar = [this.coarse(tx.toName), this.coarse(tx.fromName)].filter((n) => n.length >= 8);
 
       // Moslik topilmasa SABABINI aniqlaydi — shartnoma tokeni bo'yicha eng yaqin nomzod
       const sababniYoz = () => {
@@ -444,7 +460,16 @@ export class TaminotService {
         const diff = Math.round(Math.abs(c.sana.getTime() - txDay.getTime()) / 86_400_000);
         if (diff > MAX_DAY) continue;
         const byDog = !!c.dogTok && toks.has(c.dogTok);
-        const byName = !!c.taminotchiC && c.taminotchiC.length >= 5 && names.includes(c.taminotchiC);
+        // ⚠️ Ilgari faqat `names.includes(erpNom)` tekshirilardi — ya'ni ERP nomi
+        // bank nomining ICHIDA TO'LIQ bo'lishi shart edi. Bank uzun nomlarni
+        // KESIB saqlaydi, shuning uchun bitta harf yetishmay mos kelmasdi:
+        //   bank: ...SARDORBEKSOBITHONOG    erp: ...SARDORBEKSOBITHONOGLI
+        // Endi ikki tomonlama tekshiriladi (qaysi biri qisqa bo'lsa, u
+        // ikkinchisining ichida bo'lsa yetarli). Noto'g'ri moslik bo'lmasligi
+        // uchun ikkala nom ham kamida 8 belgi bo'lishi shart.
+        const erpNom = c.taminotchiC || '';
+        const byName = erpNom.length >= 8 &&
+          nomlar.some((n) => n.includes(erpNom) || erpNom.includes(n));
         if (byDog || byName) hits.push({ c, diff, byDog, byName });
       }
       if (hits.length === 0) { sababniYoz(); await eskiniTozala(tx); continue; }
