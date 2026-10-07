@@ -41,6 +41,7 @@ import { AuditModule } from './audit/audit.module';
 import { CorrectionBotModule } from './correction-bot/correction-bot.module';
 import { ShmitdModule } from './shmitd/shmitd.module';
 import { TaminotModule } from './taminot/taminot.module';
+import { KategoriyaAgentModule } from './kategoriya-agent/kategoriya-agent.module';
 import { BankPwdModule } from './bank-pwd/bank-pwd.module';
 import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
 import { LeaderModule } from './leader/leader.module';
@@ -95,6 +96,7 @@ import { TrSupportModule } from './tr-support/tr-support.module';
     CorrectionBotModule,
     ShmitdModule,
     TaminotModule,
+    KategoriyaAgentModule,
     BankPwdModule,
     DeveloperApiModule,
     ChekModule,

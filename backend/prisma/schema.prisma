@@ -1569,3 +1569,57 @@ model LeaderAlert {
   @@index([checkKey, createdAt])
   @@map("leader_alerts")
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// KATEGORIYA AGENTI — 4 ta qo'l asbobini bitta oqimga yig'adi:
+//   1) qoidalar  2) schotchik  3) minfin tozalash  4) ta'minot  5) AI
+// Har ishga tushirish yoziladi (web'da kuzatish va loglar uchun).
+// ─────────────────────────────────────────────────────────────────────
+model KategoriyaAgentRun {
+  id         String    @id @default(cuid())
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  status     String    @db.VarChar(16) // running | ok | error | stopped
+  trigger    String    @db.VarChar(16) // manual | cron
+  dryRun     Boolean   @default(false) @map("dry_run")
+  dateFrom   String?   @map("date_from") @db.VarChar(10)
+  dateTo     String?   @map("date_to") @db.VarChar(10)
+  userId     String?   @map("user_id")
+  bosqich    String?   @db.VarChar(24) // hozir qaysi bosqichda
+  stages     Json? // har bosqich natijasi (xulosa)
+  aiSoralgan Int       @default(0) @map("ai_soralgan")
+  aiQoyilgan Int       @default(0) @map("ai_qoyilgan")
+  error      String?   @db.Text
+
+  qarorlar KategoriyaAgentQaror[]
+
+  @@index([startedAt])
+  @@index([status])
+  @@map("kategoriya_agent_runs")
+}
+
+// AI bosqichining HAR BIR qarori — nega shunday qo'ygani ko'rinib turishi uchun.
+model KategoriyaAgentQaror {
+  id            String   @id @default(cuid())
+  runId         String   @map("run_id")
+  transactionId String   @map("transaction_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  bosqich       String   @db.VarChar(24) // qoidalar | schotchik | minfin | taminot | ai
+  summa         Decimal? @db.Decimal(20, 2)
+  sana          String?  @db.VarChar(10)
+  kontragent    String?  @db.VarChar(255)
+  categoryCode  String?  @map("category_code") @db.VarChar(32)
+  modda         String?  @db.VarChar(255) // xarajat moddasi
+  obyekt        String?  @db.VarChar(255)
+  shartnoma     String?  @db.VarChar(255)
+  shartnomaSana String?  @map("shartnoma_sana") @db.VarChar(10)
+  ishonch       Int      @default(0) // 0..100
+  qoyildi       Boolean  @default(false) // DB'ga yozildimi
+  sabab         String?  @db.Text
+
+  run KategoriyaAgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([transactionId])
+  @@map("kategoriya_agent_qarorlar")
+}

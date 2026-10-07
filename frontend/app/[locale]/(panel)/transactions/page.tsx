@@ -22,6 +22,7 @@ import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { TrSupportTab } from '@/components/tr-support-tab';
+import { KategoriyaAgentDialog } from '@/components/kategoriya-agent-dialog';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
 import { TimeDiagnosticsDialog } from '@/components/time-diagnostics-dialog';
 import { PurposeInfoButton, PurposeModal } from '@/components/purpose-modal';
@@ -311,6 +312,7 @@ export default function TransactionsPage() {
 
   // Recategorize progress modal — live polling bilan ko'rsatadi
   const [recategorizeOpen, setRecategorizeOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
   const [addFromTxOpen, setAddFromTxOpen] = useState(false);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
@@ -834,6 +836,16 @@ export default function TransactionsPage() {
                 )}
                 {extraUnlocked && extraToolsOpen && (
                   <div className="mt-0.5">
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setAgentOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <Bot className="h-4 w-4 mr-2 text-violet-600 dark:text-violet-400" />
+                        <span className="flex-1 font-semibold">Kategoriya agenti</span>
+                        <span className="text-[9.5px] text-slate-400 ml-1">5 bosqich</span>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onSelect={(e) => { e.preventDefault(); setBackfillOpen(true); }}
                       className="cursor-pointer"
@@ -1605,6 +1617,7 @@ export default function TransactionsPage() {
 
       {/* ═══ KATEGORIYALASH JARAYONI (LIVE) ═══ */}
       <RecategorizeProgressDialog open={recategorizeOpen} onOpenChange={setRecategorizeOpen} />
+      <KategoriyaAgentDialog open={agentOpen} onOpenChange={setAgentOpen} />
       <SchotchikBackfillDialog open={schotchikBackfillOpen} onOpenChange={setSchotchikBackfillOpen} />
       <AddFromTxDialog open={addFromTxOpen} onOpenChange={setAddFromTxOpen} />
       <CategorizeDiagnoseDialog open={diagnoseOpen} onOpenChange={setDiagnoseOpen} />
