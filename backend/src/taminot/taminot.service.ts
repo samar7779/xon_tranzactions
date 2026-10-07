@@ -389,6 +389,37 @@ export class TaminotService {
 
     for (const tx of txs) {
       const amt = Math.round(Math.abs(Number(tx.amount)));
+      /** Topilgan mosliкni yozadi (ikkala bosqich uchun umumiy). */
+      const yoz = async (c: any, diff: number, usul: string) => {
+        matched++;
+        const label = c.kategoriya || '(moddasiz)';
+        tally.set(label, (tally.get(label) || 0) + 1);
+        if (samples.length < 25) {
+          samples.push({
+            date: tx.txnDate.toISOString().slice(0, 10),
+            amount: String(tx.amount),
+            bankName: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 30) || '',
+            supplier: String(c.taminotchi || '').slice(0, 28),
+            article: String(c.kategoriya || '').slice(0, 30),
+            contract: String(c.dogno || '').slice(0, 26),
+            dayDiff: diff,
+            how: usul,
+          });
+        }
+        if (!dryRun) {
+          await this.prisma.transaction.update({
+            where: { id: tx.id },
+            data: {
+              erpPaymentId: c.id,
+              erpSupplier: String(c.taminotchi || '').slice(0, 255) || null,
+              erpArticle: String(c.kategoriya || '').slice(0, 255) || null,
+              erpContract: String(c.dogno || '').slice(0, 255) || null,
+              erpObject: String(c.obyekt || '').slice(0, 255) || null,
+              erpMatchedAt: new Date(),
+            },
+          }).catch((e) => this.log.warn(`erp yozish xato (${tx.id}): ${e?.message}`));
+        }
+      };
       const txDay = new Date(tx.txnDate);
       const toks = this.descTokens(tx.description);
       const names = `${this.coarse(tx.toName)}|${this.coarse(tx.fromName)}`;
@@ -452,8 +483,44 @@ export class TaminotService {
         }
       };
 
+      /**
+       * 2-BOSQICH — summa teng bo'lmasa ham, SHARTNOMA + SANA mos kelsa.
+       *
+       * Bank bitta to'lov qiladi, ta'minotda esa u bir nechta qatorga bo'linib
+       * yoziladi (modda yoki obyekt bo'yicha). Shuning uchun summa hech qachon
+       * aniq teng bo'lmaydi va 1-bosqich ularni topa olmaydi. Haqiqiy misol:
+       *   bank  500 000 000  MUROT-INSHOATI  №138LUS  05.10
+       *   erp   364 094 000  MUROT-INSHOATI  №138LUS  05.10
+       *
+       * Bu yerda PUL emas, faqat YORLIQ (modda/obyekt/yetkazib beruvchi)
+       * ko'chiriladi — shuning uchun summa farqi xavfli emas. Himoya: topilgan
+       * nomzodlarning hammasi BIR XIL modda/obyekt/yetkazib beruvchi bo'lishi
+       * shart. Turlicha bo'lsa — qaysi birini yozishni bilmaymiz, tegmaymiz.
+       */
+      const ikkinchiBosqich = (): { c: any; diff: number } | 'noaniq' | null => {
+        const nomzod: Array<{ c: any; diff: number }> = [];
+        const korilgan = new Set<string>();
+        for (const t of toks) {
+          for (const c of byDog.get(t) || []) {
+            if (korilgan.has(c.id)) continue;
+            korilgan.add(c.id);
+            const diff = Math.round(Math.abs(c.sana.getTime() - txDay.getTime()) / 86_400_000);
+            if (diff <= MAX_DAY) nomzod.push({ c, diff });
+          }
+        }
+        if (!nomzod.length) return null;
+        const xil = new Set(nomzod.map((x) => `${x.c.taminotchi}|${x.c.kategoriya}|${x.c.obyekt}`));
+        if (xil.size > 1) return 'noaniq';
+        return nomzod.sort((a, b) => a.diff - b.diff)[0];
+      };
+
       const cands = byAmount.get(amt);
-      if (!cands || cands.length === 0) { sababniYoz(); await eskiniTozala(tx); continue; }
+      if (!cands || cands.length === 0) {
+        const t2 = ikkinchiBosqich();
+        if (t2 === 'noaniq') { ambiguous++; await eskiniTozala(tx); continue; }
+        if (t2) { await yoz(t2.c, t2.diff, 'shartnoma'); continue; }
+        sababniYoz(); await eskiniTozala(tx); continue;
+      }
 
       const hits: Array<{ c: any; diff: number; byDog: boolean; byName: boolean }> = [];
       for (const c of cands) {
@@ -472,7 +539,12 @@ export class TaminotService {
           nomlar.some((n) => n.includes(erpNom) || erpNom.includes(n));
         if (byDog || byName) hits.push({ c, diff, byDog, byName });
       }
-      if (hits.length === 0) { sababniYoz(); await eskiniTozala(tx); continue; }
+      if (hits.length === 0) {
+        const t2 = ikkinchiBosqich();
+        if (t2 === 'noaniq') { ambiguous++; await eskiniTozala(tx); continue; }
+        if (t2) { await yoz(t2.c, t2.diff, 'shartnoma'); continue; }
+        sababniYoz(); await eskiniTozala(tx); continue;
+      }
 
       hits.sort((a, b) => (a.diff - b.diff) || ((b.byDog ? 1 : 0) - (a.byDog ? 1 : 0)));
       // Turli yetkazib beruvchiga teng nomzodlar — noaniq, tegmaymiz
@@ -480,35 +552,8 @@ export class TaminotService {
       const rivals = hits.filter((h) => h.diff === best.diff && h.c.taminotchi !== best.c.taminotchi);
       if (rivals.length > 0) { ambiguous++; await eskiniTozala(tx); continue; }
 
-      matched++;
-      const label = best.c.kategoriya || '(moddasiz)';
-      tally.set(label, (tally.get(label) || 0) + 1);
-      if (samples.length < 25) {
-        samples.push({
-          date: tx.txnDate.toISOString().slice(0, 10),
-          amount: String(tx.amount),
-          bankName: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 30) || '',
-          supplier: best.c.taminotchi.slice(0, 28),
-          article: best.c.kategoriya.slice(0, 30),
-          contract: best.c.dogno.slice(0, 26),
-          dayDiff: best.diff,
-          how: best.byDog && best.byName ? 'shartnoma+nom' : best.byDog ? 'shartnoma' : 'nom',
-        });
-      }
-
-      if (!dryRun) {
-        await this.prisma.transaction.update({
-          where: { id: tx.id },
-          data: {
-            erpPaymentId: best.c.id,
-            erpSupplier: best.c.taminotchi.slice(0, 255) || null,
-            erpArticle: best.c.kategoriya.slice(0, 255) || null,
-            erpContract: best.c.dogno.slice(0, 255) || null,
-            erpObject: best.c.obyekt.slice(0, 255) || null,
-            erpMatchedAt: new Date(),
-          },
-        }).catch((e) => this.log.warn(`erp yozish xato (${tx.id}): ${e?.message}`));
-      }
+      await yoz(best.c, best.diff,
+        best.byDog && best.byName ? 'shartnoma+nom' : best.byDog ? 'shartnoma' : 'nom');
     }
 
     const byArticle = Array.from(tally.entries())
