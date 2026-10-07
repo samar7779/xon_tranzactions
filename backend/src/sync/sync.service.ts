@@ -559,8 +559,19 @@ export class SyncService implements OnModuleInit {
 
     const isBackfill = !!opts?.dates?.length;
     // Sana ro'yxati — backfill bo'lsa berilgan sanalar, aks holda oxirgi daysBack kun
+    // ⚠️ Bank API sanani FAQAT dd.MM.yyyy formatida qabul qiladi. Backfill
+    // sanalari chaqiruvchidan kelganidek uzatilardi; paneldagi <input type=date>
+    // esa ISO (2026-10-06) beradi va Kapitalbank 400 qaytarardi:
+    //   {"$.date":["Поле должно быть формата 'dd.MM.yyyy'."]}
+    // Natijada backfill jim turib hech narsa olmasdi. Shuning uchun ikkala
+    // ko'rinishni ham qabul qilib, bank formatiga keltiramiz.
+    const bankSana = (s: string): string => {
+      const t = String(s || '').trim();
+      const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return iso ? `${iso[3]}.${iso[2]}.${iso[1]}` : t;
+    };
     const rawDates: string[] = isBackfill
-      ? opts!.dates!
+      ? opts!.dates!.map(bankSana)
       : Array.from({ length: Math.max(1, this.daysBack) }, (_, i) =>
           format(subDays(new Date(), i), 'dd.MM.yyyy'),
         );
