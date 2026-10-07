@@ -103,7 +103,9 @@ IZOH: Dict[str, str] = {
     "oplatykv_sync": (
         "CLIENT bank to'lovidan OplatyKv qatori yaratilmaganlar (3 kun), yetim qatorlar (30 kun), kelajak "
         "updated_at. Summa so'm, vaqt Toshkent. XATO shartnoma ham sync bo'ladi, sabab emas. Avto-sync logi "
-        "DB'da yo'q, oxirgi cron qatori taxminiy belgi. Yetim qatorni o'chirishni taklif qilma."
+        "DB'da yo'q, oxirgi cron qatori taxminiy belgi. sync_xatolar = oxirgi sync yoza olmagan to'lovlar: to'lov "
+        "ID, shartnoma va sababini ayt (masalan shartnoma raqami 50 belgidan uzun -> panelda shartnomani tuzatish). "
+        "Yetim qatorni o'chirishni taklif qilma."
     ),
     "bank_changes": (
         "DELETED, EDITED, MOVED, aniqlangan vaqt (Toshkent), summa so'm. MOVED o'chirish emas: sana "
@@ -1753,6 +1755,31 @@ def _collect_xato() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 _OKV_SOZLAMALAR = ("oplatykv.txAutoSyncMinutes", "oplatykv.txMinDate", "oplatykv.dayStart", "oplatykv.dayEnd",
                    "oplatykv.nightStart", "oplatykv.nightEnd")
+_OKV_XATOLAR_KALIT = "oplatykv.syncXatolar"      # backend syncFromTransactions yozadi (2026-10-07)
+_TX_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+\-]{2,199}$")
+
+
+def _okv_sync_xatolar(qiymat: Any) -> Optional[Dict[str, Any]]:
+    """settings 'oplatykv.syncXatolar' (JSON): oxirgi sync yoza olmagan to'lovlar sabab bilan. Yo'q/buzuq -> None."""
+    try:
+        d = json.loads(qiymat) if isinstance(qiymat, str) and qiymat.strip() else None
+    except ValueError:
+        return None
+    if not isinstance(d, dict) or not _int(d.get("soni")):
+        return None
+    vaqt = None
+    try:
+        vaqt = config.fmt_local(datetime.fromisoformat(str(d.get("vaqt")).replace("Z", "+00:00")))
+    except ValueError:
+        vaqt = None
+    namunalar = []
+    for x in (d.get("namunalar") or [])[:10]:
+        if not isinstance(x, dict):
+            continue
+        tx = str(x.get("tx") or "")
+        namunalar.append({"tx": tx if _TX_ID_RE.match(tx) else _clean(tx, 80), "shartnoma": _clean(x.get("shartnoma"), 60),
+                          "sabab": _clean(x.get("sabab"), 200)})
+    return {"vaqt": vaqt, "kim": _clean(d.get("actor"), 60), "soni": _int(d.get("soni")), "namunalar": namunalar}
 
 
 def _collect_oplatykv_sync() -> Dict[str, Any]:
@@ -1786,6 +1813,7 @@ def _collect_oplatykv_sync() -> Dict[str, Any]:
             (today - timedelta(days=30),),
         )
         kelajak = _row(cur, "SELECT COUNT(*) AS n FROM oplata_kv WHERE updated_at > %s", (config.naive_utc(now),))
+        xatolar = _row(cur, "SELECT value FROM settings WHERE key = %s", (_OKV_XATOLAR_KALIT,))
     return {
         "birlik": SOM,
         "tushmagan": {
@@ -1799,6 +1827,7 @@ def _collect_oplatykv_sync() -> Dict[str, Any]:
         "oxirgi_cron_qator_oyna_kun": 3,
         "yetim": {"oxirgi_kun": 30, "soni": _int(yetim.get("soni")), "summa": _pul(yetim.get("summa"))},
         "kelajak_updated_at": _int(kelajak.get("n")),
+        "sync_xatolar": _okv_sync_xatolar(xatolar.get("value")),   # null = oxirgi sync hammasini yozgan
         "sozlamalar": {k: _sv(st, k, 30) for k in _OKV_SOZLAMALAR},
     }
 

@@ -2076,6 +2076,54 @@ export class OplataKvService {
     };
   }
 
+  /** Oxirgi sync'da OplatyKv'ga yozilmagan to'lovlar (sabab bilan) — bot (Checker oplatykv_sync) o'qiydi. */
+  static readonly K_SYNC_XATOLAR = 'oplatykv.syncXatolar';
+
+  /** OplatyKv ustun cheklovlariga (schema) sig'maydigan yangi qator — yozilmaydi, sabab qaytariladi. */
+  static syncQatorSababi(r: { contractNo: string; txType: string | null; sourceTxId: string }): string | null {
+    if (r.contractNo.length > 50) return `shartnoma raqami 50 belgidan uzun (${r.contractNo.length} belgi)`;
+    if ((r.txType || '').length > 60) return `Tip (kategoriya nomi) 60 belgidan uzun: "${(r.txType || '').slice(0, 40)}..."`;
+    if (r.sourceTxId.length > 255) return "to'lov ID 255 belgidan uzun";
+    return null;
+  }
+
+  /** Prisma xatosi -> egasiga tushunarli sabab (qaysi ustun, nima bo'ldi). */
+  static syncXatoSababi(e: any): string {
+    const code = String(e?.code || '');
+    const matn = `${JSON.stringify(e?.meta || {})} ${String(e?.message || '')}`.toLowerCase();
+    const ustun: Array<[string, string]> = [
+      ['contract_no', 'shartnoma raqami (50 belgigacha)'], ['tx_type', 'Tip (60 belgigacha)'],
+      ['source_tx_id', "to'lov ID (255 belgigacha)"], ['created_by_name', 'yaratgan (190 belgigacha)'],
+      ['client', 'mijoz (255 belgigacha)'], ['object', 'obyekt (255 belgigacha)'],
+    ];
+    const u = ustun.find(([k]) => matn.includes(k));
+    if (code === 'P2000' || matn.includes('too long')) return `${u ? u[1] : 'maydon'} uchun qiymat juda uzun`;
+    if (code === 'P2002' || matn.includes('unique constraint')) {
+      return "OplatyKv'da shu ID bilan qator allaqachon bor — bog'lanishi uzilgan bo'lishi mumkin (shartnoma avval tozalangan)";
+    }
+    return String(e?.message || e).replace(/\s+/g, ' ').slice(0, 200);
+  }
+
+  private async syncXatolariniSaqla(
+    yozilmadi: Array<{ tx: string; shartnoma: string | null; sabab: string }>, actorName: string,
+  ): Promise<void> {
+    try {
+      if (!yozilmadi.length) {
+        if (await this.settings.get(OplataKvService.K_SYNC_XATOLAR)) {
+          await this.settings.set(OplataKvService.K_SYNC_XATOLAR, null, actorName.slice(0, 190));
+        }
+        return;
+      }
+      await this.settings.set(OplataKvService.K_SYNC_XATOLAR, JSON.stringify({
+        vaqt: new Date().toISOString(), actor: actorName, soni: yozilmadi.length, namunalar: yozilmadi.slice(0, 20),
+      }), actorName.slice(0, 190));
+      this.log.warn(`syncFromTransactions: ${yozilmadi.length} ta to'lov OplatyKv'ga yozilmadi: ${
+        yozilmadi.slice(0, 5).map((y) => `${y.tx} (${y.shartnoma || '-'}): ${y.sabab}`).join('; ')}`);
+    } catch (e: any) {
+      this.log.warn(`syncXatolariniSaqla xato: ${e?.message}`);
+    }
+  }
+
   async syncFromTransactions(opts: { minDate?: Date | null; limit?: number; actor?: Actor; runInline?: boolean } = {}) {
     const startedAt = Date.now();
     const minDate = opts.minDate ?? null;
@@ -2175,7 +2223,10 @@ export class OplataKvService {
     let skippedExists = 0;
     let skippedError = 0;
     const errorSamples: Array<{ txId: string; reason: string }> = [];
+    // OplatyKv'ga yozilmagan to'lovlar (sabab bilan): bitta buzuq qator boshqalarini to'smaydi, egasiga ko'rinadi
+    const yozilmadi: Array<{ tx: string; shartnoma: string | null; sabab: string }> = [];
     const actorName = opts.actor?.name || 'auto · tranzaksiyadan';
+    const kes = (s: string | null | undefined, n: number): string | null => (s ? s.slice(0, n) : null);
 
     // ─── BATCH: barcha valid tx'lar (XATO ham kiritiladi — keyin tuzatilganda update bo'ladi) ───
     const validTxs = txList.filter((t) => t.contractNumber && t.txnDate);
@@ -2197,6 +2248,7 @@ export class OplataKvService {
       data: any;
       changedFields: string[];
       historyNote: string;
+      txKey: string;
     }> = [];
 
     for (const tx of validTxs) {
@@ -2226,8 +2278,8 @@ export class OplataKvService {
         paymentAmount: amount,
         purpose: tx.description || null,
         txType: txTypeName,
-        client: crm?.customerName || txParty || null,
-        object: mapObject(crm?.objectName),
+        client: kes(crm?.customerName || txParty || null, 255),   // ustun 255: uzun nom qatorni to'smasin
+        object: kes(mapObject(crm?.objectName), 255),
       };
 
       if (existing) {
@@ -2251,10 +2303,17 @@ export class OplataKvService {
             data: updateData,
             changedFields,
             historyNote: `Tranzaksiyadan yangilandi (txId: ${tx.id})`,
+            txKey: dedupKey,
           });
         } else {
           skippedExists++;
         }
+      } else if (OplataKvService.syncQatorSababi({ contractNo: tx.contractNumber!, txType: txTypeName, sourceTxId: dedupKey })) {
+        skippedError++;
+        yozilmadi.push({
+          tx: dedupKey, shartnoma: tx.contractNumber,
+          sabab: OplataKvService.syncQatorSababi({ contractNo: tx.contractNumber!, txType: txTypeName, sourceTxId: dedupKey })!,
+        });
       } else {
         toCreate.push({
           id: oplataId,
@@ -2282,19 +2341,43 @@ export class OplataKvService {
       try {
         const res = await this.prisma.oplataKv.createMany({ data: chunk, skipDuplicates: true });
         added += res.count;
-      } catch (e: any) {
-        skippedError += chunk.length;
-        if (errorSamples.length < 5) {
-          errorSamples.push({ txId: 'batch', reason: e?.message || 'createMany xato' });
+        if (res.count < chunk.length) {
+          // skipDuplicates jimgina tashlab ketgan qatorlar (ID band) — endi ko'rinadi
+          const bor = new Set((await this.prisma.oplataKv.findMany({
+            where: { sourceTxId: { in: chunk.map((c) => String(c.sourceTxId)) } }, select: { sourceTxId: true },
+          })).map((r) => r.sourceTxId));
+          for (const c of chunk) {
+            if (bor.has(String(c.sourceTxId))) continue;
+            skippedError++;
+            yozilmadi.push({
+              tx: String(c.sourceTxId), shartnoma: c.contractNo,
+              sabab: `OplatyKv'da shu ID (${String(c.id).slice(0, 60)}) bilan boshqa qator bor — bog'lanishi uzilgan`
+                + " (shartnoma avval tozalangan bo'lishi mumkin)",
+            });
+          }
         }
-        this.log.warn(`createMany chunk[${i}] xato: ${e?.message}`);
+      } catch (e: any) {
+        // Bitta buzuq qator butun paketni to'smasin: qatorma-qator, xatolisi sababi bilan qoladi
+        this.log.warn(`createMany chunk[${i}] xato, qatorma-qator yoziladi: ${e?.message}`);
+        for (const c of chunk) {
+          try {
+            await this.prisma.oplataKv.create({ data: c });
+            added++;
+          } catch (e2: any) {
+            skippedError++;
+            yozilmadi.push({ tx: String(c.sourceTxId), shartnoma: c.contractNo, sabab: OplataKvService.syncXatoSababi(e2) });
+            if (errorSamples.length < 5) errorSamples.push({ txId: String(c.sourceTxId), reason: OplataKvService.syncXatoSababi(e2) });
+          }
+        }
       }
     }
 
-    // BULK history createMany
-    if (toCreateHistory.length > 0) {
+    // BULK history createMany — faqat yozilgan qatorlar uchun
+    const yozilmaganKalit = new Set(yozilmadi.map((y) => y.tx));
+    const historyRows = toCreateHistory.filter((_h, k) => !yozilmaganKalit.has(String(toCreate[k]?.sourceTxId)));
+    if (historyRows.length > 0) {
       try {
-        await this.prisma.oplataKvHistory.createMany({ data: toCreateHistory });
+        await this.prisma.oplataKvHistory.createMany({ data: historyRows });
       } catch (e: any) {
         this.log.warn(`historyCreateMany xato: ${e?.message}`);
       }
@@ -2322,12 +2405,14 @@ export class OplataKvService {
           updated++;
         } catch (e: any) {
           skippedError++;
+          yozilmadi.push({ tx: u.txKey, shartnoma: u.data?.contractNo ?? null, sabab: OplataKvService.syncXatoSababi(e) });
           if (errorSamples.length < 5) {
             errorSamples.push({ txId: u.id, reason: e?.message || 'update xato' });
           }
         }
       }));
     }
+    await this.syncXatolariniSaqla(yozilmadi, actorName);
 
     const syncDuration = Math.round((Date.now() - startedAt) / 1000);
     const skippedTotal = skippedNoData + skippedExists + skippedError;
@@ -2404,6 +2489,7 @@ export class OplataKvService {
         error:  skippedError,
       },
       errorSamples,
+      yozilmadi: yozilmadi.slice(0, 20),
       objectsBackground: true,
       xatoQuickClean,  // Sinxron tozalangan XATO splitlar (response qaytishidan oldin)
       duration: totalDuration,

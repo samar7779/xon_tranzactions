@@ -618,6 +618,14 @@ def _check_oplatykv_sync() -> Tuple[str, str, Optional[dict]]:
             if kechikish is not None:
                 qachon += ", backend sync jadvalidan %d daq kechikkan" % round(kechikish)
             msgs.append("%d ta CLIENT to'lov oplata_kv ga tushmagan (3 kun)%s" % (round(n), qachon))
+    # 2026-10-07: sync yoza olmagan to'lovlar — sababi bilan (bitta buzuq to'lov endi boshqalarini to'smaydi)
+    xat = _find_key(sec, "sync_xatolar")
+    if isinstance(xat, dict) and (_num(xat.get("soni")) or 0) > 0:
+        st = "warn"
+        namuna = "; ".join("%s (%s): %s" % (x.get("tx") or "-", x.get("shartnoma") or "-", x.get("sabab") or "-")
+                           for x in (xat.get("namunalar") or [])[:3] if isinstance(x, dict))
+        msgs.append("sync %d ta to'lovni yoza olmadi%s — %s" % (
+            round(_num(xat.get("soni")) or 0), (" (%s)" % xat["vaqt"]) if xat.get("vaqt") else "", namuna or "sabab yo'q"))
     # egasi qarori 2026-09-30: kelajak updated_at yolg'iz warn bermaydi, soni info bo'lib qoladi
     jim_izoh = ""
     if kelajak and kelajak > 0:
