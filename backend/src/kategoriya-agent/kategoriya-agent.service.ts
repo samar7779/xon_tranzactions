@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -28,7 +28,7 @@ export type Bosqich = (typeof BOSQICHLAR)[number];
  * `kategoriya_agent_qarorlar` ga — web'da kuzatish va loglar uchun.
  */
 @Injectable()
-export class KategoriyaAgentService {
+export class KategoriyaAgentService implements OnModuleInit {
   private readonly log = new Logger(KategoriyaAgentService.name);
 
   /** Bir vaqtda bitta oqim — ikki marta bosilsa ikkinchisi rad etiladi. */
@@ -38,8 +38,17 @@ export class KategoriyaAgentService {
   private toxtatish = false;
 
   private static readonly BILIM_YOL = 'agents/knowledge/kategoriya.md';
-  /** AI bosqichida bir yurishda ko'rib chiqiladigan eng ko'p to'lov. */
-  private static readonly AI_LIMIT = Number(process.env.KATEGORIYA_AI_LIMIT || 200);
+  /**
+   * AI bosqichida bir yurishda ko'riladigan eng ko'p to'lov.
+   *
+   * Qat'iy 200 edi — natija juda kam chiqardi. Endi KUNLIK KVOTAdan kelib
+   * chiqadi: qolgan so'rovlar × paket hajmi. Ya'ni bitta yurish kunlik
+   * ruxsatni to'liq ishlatadi, chegarani esa bitta joy boshqaradi.
+   */
+  private aiLimit(qolganSorov: number): number {
+    const hisob = Math.max(0, qolganSorov) * KategoriyaAiService.PAKET;
+    return Math.min(hisob, Number(process.env.KATEGORIYA_AI_LIMIT || 5000));
+  }
   /** Bir diagnostika chaqiruvida nechta to'lov (servis chegarasi 2000). */
   private static readonly QOIDA_SAHIFA = 2000;
   /** Eng ko'p nechta sahifa — cheksiz aylanishdan himoya. */
@@ -53,6 +62,12 @@ export class KategoriyaAgentService {
    * to'xtaymiz — qolgan to'lovlar ertaga ko'riladi.
    */
   private static readonly AI_KUNLIK_CAP = Number(process.env.KATEGORIYA_AI_KUNLIK_CAP || 30);
+  /**
+   * Qaysi kategoriyalar xarajat moddasini KUTADI.
+   * Maosh, soliq, bank, ichki ko'chirma — ularda modda bo'lmaydi, AI ga
+   * berilsa kvota behuda ketadi.
+   */
+  private static readonly MODDA_KUTADIGAN = ['COUNTERPARTY', 'COUNTERPARTY_RETURN'];
   /** Paketlar orasidagi pauza — obunaga portlash bo'lib urilmaslik uchun. */
   private static readonly AI_PAUZA_MS = Number(process.env.KATEGORIYA_AI_PAUZA_MS || 1500);
 
@@ -62,6 +77,31 @@ export class KategoriyaAgentService {
     private readonly taminot: TaminotService,
     private readonly ai: KategoriyaAiService,
   ) {}
+
+  /**
+   * Backend qayta ishga tushganda "ishlamoqda" holatida qolib ketgan yurishlarni
+   * yopadi.
+   *
+   * Nega kerak: oqim xotirada yashaydi (ishlayapti bayrog'i). Deploy yoki
+   * restart bo'lsa jarayon o'ladi, bazadagi qator esa `running` bo'lib qoladi
+   * va ro'yxatda abadiy "ishlamoqda" ko'rinadi — yolg'on holat.
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const r = await this.prisma.kategoriyaAgentRun.updateMany({
+        where: { status: 'running' },
+        data: {
+          status: 'error',
+          error: "backend qayta ishga tushdi (deploy/restart) — yurish uzildi, qaytadan boshlang",
+          finishedAt: new Date(),
+          bosqich: null,
+        },
+      });
+      if (r.count > 0) this.log.warn(`${r.count} ta uzilib qolgan yurish yopildi`);
+    } catch (e: any) {
+      this.log.warn(`uzilgan yurishlarni yopib bo'lmadi: ${e?.message || e}`);
+    }
+  }
 
   // ───────────────────────────── boshqarish ─────────────────────────────
 
@@ -215,11 +255,20 @@ export class KategoriyaAgentService {
     const stages: Record<string, any> = {};
     const dryRun = opts.dryRun === true;
 
+    /** Bosqich BOSHLANDI — web'da "hozir shu yerda" ko'rinsin. */
+    const bosqichBoshla = async (b: Bosqich) => {
+      await this.prisma.kategoriyaAgentRun.update({
+        where: { id: runId },
+        data: { bosqich: b },
+      }).catch(() => undefined);
+    };
+
+    /** Bosqich TUGADI — natijasi saqlanadi. */
     const bosqichYoz = async (b: Bosqich, natija: any) => {
       stages[b] = natija;
       await this.prisma.kategoriyaAgentRun.update({
         where: { id: runId },
-        data: { bosqich: b, stages },
+        data: { stages },
       }).catch(() => undefined);
     };
 
@@ -235,6 +284,7 @@ export class KategoriyaAgentService {
     // faqat kategoriyasizlarni (categoryId = null) oladi va har biri uchun
     // SABABNI qaytaradi. Butun tarixni qayta hisoblash kerak bo'lsa — eski
     // "Kategoriyalash" tugmasi joyida turibdi.
+    await bosqichBoshla('qoidalar');
     try {
       await bosqichYoz('qoidalar', await this.qoidalarBosqichi(opts.dateFrom, opts.dateTo, dryRun, opts.userId || null));
     } catch (e: any) {
@@ -243,6 +293,7 @@ export class KategoriyaAgentService {
     if (this.toxtatish) return this.yakunla(runId, stages, 'stopped');
 
     // ── 2) SCHOTCHIK ──
+    await bosqichBoshla('schotchik');
     try {
       const r2 = await this.cat.backfillSchotchik({ dryRun, dateFrom: opts.dateFrom, dateTo: opts.dateTo });
       await bosqichYoz('schotchik', { ok: r2.ok, stats: r2.stats });
@@ -252,6 +303,7 @@ export class KategoriyaAgentService {
     if (this.toxtatish) return this.yakunla(runId, stages, 'stopped');
 
     // ── 3) МИНФИН TOZALASH ──
+    await bosqichBoshla('minfin');
     try {
       const r3 = await this.cat.fixMinfinCategory({
         dateFrom: opts.dateFrom, dryRun, actorId: opts.userId || undefined,
@@ -263,6 +315,7 @@ export class KategoriyaAgentService {
     if (this.toxtatish) return this.yakunla(runId, stages, 'stopped');
 
     // ── 4) TA'MINOT (faqat o'qish) ──
+    await bosqichBoshla('taminot');
     try {
       const r4 = await this.taminot.matchTransactions({
         dateFrom: opts.dateFrom, dateTo: opts.dateTo, dryRun, rematch: opts.rematch === true,
@@ -280,6 +333,7 @@ export class KategoriyaAgentService {
     if (this.toxtatish) return this.yakunla(runId, stages, 'stopped');
 
     // ── 5) AI — qoldiq ──
+    await bosqichBoshla('ai');
     if (opts.aiYoq === true) {
       await bosqichYoz('ai', { ok: true, otkazildi: "so'rovda o'chirilgan" });
     } else {
@@ -401,26 +455,58 @@ export class KategoriyaAgentService {
       return { ok: false, error: `bilim fayli yo'q: ${KategoriyaAgentService.BILIM_YOL}` };
     }
 
-    const qoldiq = await this.prisma.transaction.findMany({
-      where: {
-        txnDate: {
-          gte: new Date(`${dateFrom}T00:00:00+05:00`),
-          ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999+05:00`) } : {}),
-        },
-        direction: 'OUT',
-        NOT: { category: { code: 'CLIENT' } },
-        OR: [{ categoryId: null }, { erpArticle: null }],
-      },
-      select: {
-        id: true, txnDate: true, amount: true, direction: true,
-        fromName: true, toName: true, description: true,
-        contractNumber: true, fromAccount: true, toAccount: true,
-      },
+    // Kunlik chegara — qolgan joy. Python agentlarga kvota qoldirish uchun.
+    const ishlatilgan = await this.bugungiChaqiriq();
+    const qolganJoy = KategoriyaAgentService.AI_KUNLIK_CAP - ishlatilgan;
+    if (qolganJoy <= 0) {
+      return {
+        ok: true, qoldiq: 0, soralgan: 0, qoyilgan: 0, past: 0,
+        chegara: `kunlik chegara tugadi (${ishlatilgan}/${KategoriyaAgentService.AI_KUNLIK_CAP}) — ertaga davom etadi`,
+      };
+    }
+    const limit = this.aiLimit(qolganJoy);
+
+    const sanaOraliq = {
+      gte: new Date(`${dateFrom}T00:00:00+05:00`),
+      ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999+05:00`) } : {}),
+    };
+    const maydonlar = {
+      id: true, txnDate: true, amount: true, direction: true,
+      fromName: true, toName: true, description: true,
+      contractNumber: true, fromAccount: true, toAccount: true,
+    } as const;
+
+    // ── Navbat tartibi muhim ──
+    // Ilgari shart `categoryId = null YOKI erpArticle = null` edi. Ikkinchi
+    // qism maosh, soliq, bank va ichki ko'chirmalarni ham tortib kelardi —
+    // ularning xarajat moddasi BO'LMAYDI ham, lekin kvotani yeb qo'yardi.
+    // Endi ikki navbat, foydasi bo'yicha:
+    //   1) umuman kategoriyasiz  — eng qimmatli, qaror shu yerda tug'iladi
+    //   2) kontragent to'lovi, lekin moddasi yo'q — Ravshan aka talabi
+    const kategoriyasiz = await this.prisma.transaction.findMany({
+      where: { txnDate: sanaOraliq, direction: 'OUT', categoryId: null },
+      select: maydonlar,
       orderBy: { txnDate: 'desc' },
-      take: KategoriyaAgentService.AI_LIMIT,
+      take: limit,
     });
 
-    if (qoldiq.length === 0) return { ok: true, qoldiq: 0, soralgan: 0, qoyilgan: 0, past: 0 };
+    const moddasiz = kategoriyasiz.length >= limit ? [] : await this.prisma.transaction.findMany({
+      where: {
+        txnDate: sanaOraliq,
+        direction: 'OUT',
+        erpArticle: null,
+        category: { code: { in: KategoriyaAgentService.MODDA_KUTADIGAN } },
+      },
+      select: maydonlar,
+      orderBy: { txnDate: 'desc' },
+      take: limit - kategoriyasiz.length,
+    });
+
+    const qoldiq = [...kategoriyasiz, ...moddasiz];
+
+    if (qoldiq.length === 0) {
+      return { ok: true, qoldiq: 0, kategoriyasiz: 0, moddasiz: 0, soralgan: 0, qoyilgan: 0, past: 0 };
+    }
 
     const kategoriyalar = await this.prisma.category.findMany({
       where: { parentId: null },
@@ -428,16 +514,6 @@ export class KategoriyaAgentService {
       orderBy: { sortOrder: 'asc' },
     });
     const kodMap = new Map(kategoriyalar.map((c) => [c.code, c.id]));
-
-    // Kunlik chegara — qolgan joy. Python agentlarga kvota qoldirish uchun.
-    const ishlatilgan = await this.bugungiChaqiriq();
-    const qolganJoy = KategoriyaAgentService.AI_KUNLIK_CAP - ishlatilgan;
-    if (qolganJoy <= 0) {
-      return {
-        ok: true, qoldiq: qoldiq.length, soralgan: 0, qoyilgan: 0, past: 0,
-        chegara: `kunlik chegara tugadi (${ishlatilgan}/${KategoriyaAgentService.AI_KUNLIK_CAP}) — ertaga davom etadi`,
-      };
-    }
 
     let soralgan = 0, qoyilgan = 0, past = 0, xato = 0, chaqiriq = 0;
     let limitUrildi = false;
@@ -547,6 +623,8 @@ export class KategoriyaAgentService {
     return {
       ok: xato < 3 && !limitUrildi,
       qoldiq: qoldiq.length,
+      kategoriyasiz: kategoriyasiz.length,
+      moddasiz: moddasiz.length,
       soralgan, qoyilgan, past,
       chaqiriq,
       kunlik: `${ishlatilgan + chaqiriq}/${KategoriyaAgentService.AI_KUNLIK_CAP}`,
