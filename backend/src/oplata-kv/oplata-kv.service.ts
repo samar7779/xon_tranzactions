@@ -626,6 +626,24 @@ export class OplataKvService {
    * tx'ga setContractManual → oplata_kv AVTOMAT sinxronlanadi (contractNo/obyekt/klient).
    * CRM'da bor bo'lsa kanonik shaklda saqlaydi va XATO'dan chiqadi.
    */
+  /**
+   * CRM obyekt nomini ОплатыКв da ishlatiladigan nomga o'giradi.
+   *
+   * ⚠️ MAJBURIY: aks holda bir xil obyekt ikki xil nom bilan yozilib, hisobotda
+   * ikkita alohida qator bo'lib ko'rinadi (masalan "ВАТАН" va "VATAN RESIDENCE").
+   * Ilgari mapping faqat syncFromTransactions da qo'llanilardi; qo'lda shartnoma
+   * biriktirish va CRM qayta tekshiruvi esa xom CRM nomini yozardi.
+   */
+  private async obyektNomi(crmName: string | null | undefined): Promise<string | undefined> {
+    const nom = (crmName || '').trim();
+    if (!nom) return undefined;
+    const m = await this.prisma.oplataKvObjectMapping.findFirst({
+      where: { crmName: { equals: nom, mode: 'insensitive' } },
+      select: { oplataName: true },
+    });
+    return m?.oplataName || nom;
+  }
+
   async botAssignContract(
     oplataKvId: string, contractNo: string, actorName: string,
   ): Promise<{ ok: boolean; error?: string; contractNo?: string; client?: string | null; object?: string | null; found?: boolean }> {
@@ -647,7 +665,7 @@ export class OplataKvService {
     } else {
       await this.prisma.oplataKv.update({
         where: { id: row.id },
-        data: { contractNo: finalNo, object: cc?.objectName ?? undefined, client: cc?.customerName ?? undefined },
+        data: { contractNo: finalNo, object: await this.obyektNomi(cc?.objectName), client: cc?.customerName ?? undefined },
       });
     }
     this.log.log(`Bot: to'lov ${oplataKvId} → shartnoma ${finalNo} biriktirildi (bajardi: ${actorName})`);
@@ -858,7 +876,7 @@ export class OplataKvService {
                 where: { id: row.id },
                 data: {
                   contractNo: cc.contractNumber,
-                  object: cc.objectName ?? undefined,
+                  object: await this.obyektNomi(cc.objectName),
                   client: cc.customerName ?? undefined,
                 },
               });
