@@ -10,7 +10,7 @@ import {
   TrendingUp, Zap, Database, RefreshCcw, Search, X, History, Settings, ShieldAlert, Save,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
   Plus, Trash2, ArrowRight, Building2, Sparkles, Trash, Layers, Split,
-  Download, FileText, ArrowRightLeft, Link2,
+  Download, FileText, ArrowRightLeft, Link2, Send,
 } from 'lucide-react';
 // Clock allaqachon import qilingan
 import { Card, CardContent } from '@/components/ui/card';
@@ -313,6 +313,15 @@ export default function SyncLogsPage() {
   );
 }
 
+// Bayt → o'qiladigan hajm (backup status uchun)
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const u = ['KB', 'MB', 'GB', 'TB'];
+  let v = n / 1024, i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(1)} ${u[i]}`;
+}
+
 // ═══ SYNC SOZLAMALARI — syncMinDate + oplatykv TX minDate ═══
 function SyncSettingsPanel() {
   const t = useTranslations('syncLogs');
@@ -525,6 +534,57 @@ function SyncSettingsPanel() {
   const [openOplata, setOpenOplata] = useState(false);
   // Ichidagi sozlamalar (4 ta funksiya) default yashirin — ZIP downloads va eslatma ko'rinadi
   const [showOplataSettings, setShowOplataSettings] = useState(false);
+
+  // ── BACKUP (to'liq loyiha → Telegram) — default yashirin ──
+  const [openBackup, setOpenBackup] = useState(false);
+  const [bkEnabled, setBkEnabled] = useState(false);
+  const [bkTimes, setBkTimes] = useState('21:00');
+  const [bkToken, setBkToken] = useState('');
+  const [bkChatId, setBkChatId] = useState('');
+  const [bkDirty, setBkDirty] = useState(false);
+  const backupQuery = useQuery({
+    queryKey: ['backup-config'],
+    queryFn: () => api.get<{
+      enabled: boolean; times: string; chatId: string; tokenSet: boolean; tokenHint: string;
+      status: { running: boolean; phase: string | null; lastOkAt: string | null; lastError: string | null; lastSizeBytes: number | null; lastParts: number | null };
+    }>('/backup/config'),
+    refetchInterval: (q: any) => (q.state.data?.status?.running ? 3000 : false),
+  });
+  useEffect(() => {
+    const d = backupQuery.data;
+    if (!d) return;
+    setBkEnabled(d.enabled);
+    setBkTimes(d.times || '21:00');
+    setBkChatId(d.chatId || '');
+    setBkDirty(false);
+    // token inputi bo'sh qoladi (maskalangan) — faqat almashtirmoqchi bo'lsa kiritiladi
+  }, [backupQuery.data?.enabled, backupQuery.data?.times, backupQuery.data?.chatId]);
+  const backupSaveMut = useMutation({
+    mutationFn: () => api.post<any>('/backup/config', {
+      enabled: bkEnabled,
+      times: bkTimes,
+      chatId: bkChatId,
+      ...(bkToken.trim() ? { botToken: bkToken.trim() } : {}),
+    }),
+    onSuccess: () => {
+      toast.success(t('backupSaved'));
+      setBkToken('');
+      setBkDirty(false);
+      qc.invalidateQueries({ queryKey: ['backup-config'] });
+    },
+    onError: (e: any) => toast.error(e?.message || t('saveError')),
+  });
+  const backupRunMut = useMutation({
+    mutationFn: () => api.post<any>('/backup/run', {}),
+    onSuccess: () => {
+      toast.success(t('backupStarted'));
+      qc.invalidateQueries({ queryKey: ['backup-config'] });
+    },
+    onError: (e: any) => toast.error(e?.message || t('saveError')),
+  });
+  const bkStatus = backupQuery.data?.status;
+  const bkTokenHint = backupQuery.data?.tokenHint || '';
+  const bkRunning = !!bkStatus?.running;
 
   // Eslatma: 'Bank API tekshiruvi' kartochkasi Tranzaksiyalar sahifasidagi
   // Tools dropdown'iga ko'chirildi — bu yerdan olib tashlandi (takror edi).
@@ -1032,6 +1092,129 @@ function SyncSettingsPanel() {
               </div>
             </div>
           )}
+
+          {/* ── BACKUP — to'liq loyiha → Telegram (yopiq, bosilganda ochiladi) ── */}
+          <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setOpenBackup((v) => !v)}
+              className="w-full flex items-center gap-3 text-left"
+            >
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 grid place-items-center text-white shadow shrink-0">
+                <Database className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100">{t('backupTitle')}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {bkEnabled ? t('backupSubOn', { times: backupQuery.data?.times || bkTimes }) : t('backupSubOff')}
+                </div>
+              </div>
+              <ChevronDown className={cn('h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform shrink-0', openBackup && 'rotate-180')} />
+            </button>
+
+            {openBackup && (
+              <div className="mt-4 space-y-4">
+                <div className="text-[12px] text-slate-500 dark:text-slate-400 max-w-2xl">{t('backupDesc')}</div>
+
+                {/* Ogohlantirish — shifrsiz */}
+                <div className="flex items-start gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2.5 text-[11.5px] text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{t('backupWarn')}</span>
+                </div>
+
+                {/* Avto backup toggle + vaqt */}
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('backupEnabled')}</Label>
+                    <button
+                      type="button"
+                      onClick={() => { setBkEnabled((v) => !v); setBkDirty(true); }}
+                      className={cn('relative w-12 h-6 rounded-full transition-colors', bkEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')}
+                    >
+                      <span className={cn('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform', bkEnabled && 'translate-x-6')} />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('backupTimes')}</Label>
+                    <Input
+                      value={bkTimes}
+                      onChange={(e) => { setBkTimes(e.target.value); setBkDirty(true); }}
+                      placeholder="21:00"
+                      className="h-10 w-40"
+                    />
+                    <div className="text-[10.5px] text-slate-400 dark:text-slate-500">{t('backupTimesHint')}</div>
+                  </div>
+                </div>
+
+                {/* Token + guruh ID */}
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('backupToken')}</Label>
+                    <Input
+                      type="password"
+                      value={bkToken}
+                      onChange={(e) => { setBkToken(e.target.value); setBkDirty(true); }}
+                      placeholder={backupQuery.data?.tokenSet ? t('backupTokenSet', { hint: bkTokenHint }) : '123456:AA...'}
+                      className="h-10"
+                    />
+                    <div className="text-[10.5px] text-slate-400 dark:text-slate-500">{t('backupTokenHint')}</div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('backupChatId')}</Label>
+                    <Input
+                      value={bkChatId}
+                      onChange={(e) => { setBkChatId(e.target.value); setBkDirty(true); }}
+                      placeholder="-1001234567890"
+                      className="h-10"
+                    />
+                    <div className="text-[10.5px] text-slate-400 dark:text-slate-500">{t('backupChatIdHint')}</div>
+                  </div>
+                </div>
+
+                {/* Saqlash + Hozir backup olish */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    onClick={() => backupSaveMut.mutate()}
+                    disabled={!bkDirty || backupSaveMut.isPending}
+                    className="h-10 px-4 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    {backupSaveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {tc('save')}
+                  </Button>
+                  <Button
+                    onClick={() => backupRunMut.mutate()}
+                    disabled={backupRunMut.isPending || bkRunning || !backupQuery.data?.tokenSet || !bkChatId}
+                    variant="outline"
+                    className="h-10 px-4 gap-2 border-cyan-300 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-800 dark:text-cyan-300 dark:hover:bg-cyan-950/40"
+                  >
+                    {(backupRunMut.isPending || bkRunning) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    {bkRunning ? t('backupRunning') : t('backupRunNow')}
+                  </Button>
+                </div>
+
+                {/* Holat */}
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-1 text-[11.5px] max-w-md">
+                  {bkRunning ? (
+                    <div className="flex items-center gap-2 text-cyan-600 dark:text-cyan-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> {bkStatus?.phase || t('backupRunning')}
+                    </div>
+                  ) : bkStatus?.lastOkAt ? (
+                    <>
+                      <div className="flex justify-between gap-2"><span className="text-slate-500 dark:text-slate-400">{t('backupLastOk')}</span><b className="text-slate-700 dark:text-slate-200">{new Date(bkStatus.lastOkAt).toLocaleString()}</b></div>
+                      {bkStatus.lastSizeBytes != null && (
+                        <div className="flex justify-between gap-2"><span className="text-slate-500 dark:text-slate-400">{t('backupLastSize')}</span><b className="text-slate-700 dark:text-slate-200 tabular-nums">{fmtBytes(bkStatus.lastSizeBytes)}{bkStatus.lastParts && bkStatus.lastParts > 1 ? ` · ${bkStatus.lastParts} ${t('backupParts')}` : ''}</b></div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-slate-400 dark:text-slate-500">{t('backupNever')}</div>
+                  )}
+                  {bkStatus?.lastError && (
+                    <div className="text-rose-600 dark:text-rose-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">{t('backupLastError')}: {bkStatus.lastError}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* ── EXPORT ZIP — Arizalar + Переброска ── */}
           <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">

@@ -17,6 +17,7 @@ import { KapitalbankModule } from './integrations/kapitalbank/kapitalbank.module
 import { HamkorbankModule } from './integrations/hamkorbank/hamkorbank.module';
 import { SyncModule } from './sync/sync.module';
 import { DeployModule } from './deploy/deploy.module';
+import { BackupModule } from './backup/backup.module';
 import { CustomersModule } from './customers/customers.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { PaymentsModule } from './payments/payments.module';
@@ -76,6 +77,7 @@ import { TrSupportModule } from './tr-support/tr-support.module';
 
     SyncModule,
     DeployModule,
+    BackupModule,
     ApiExplorerModule,
     CrmModule,
     CrmSverkaModule,
