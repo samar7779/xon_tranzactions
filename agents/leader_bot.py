@@ -797,7 +797,7 @@ async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
     if qaror is None:
         return False
     kutilgan: List[Tuple[Any, str, Dict[str, Any]]] = []
-    for name in ("tuzatish", "ariza", "eksport", "perebroska"):
+    for name in ("tuzatish", "ariza", "eksport"):
         mod = _mod(name)
         if mod is None or not callable(getattr(mod, "kutilayotgan", None)):
             continue
@@ -816,10 +816,9 @@ async def _matn_tasdiq(text: str, replied: Any, msg: Any) -> bool:
         return True
     mod, tok, p = tanlov[0]
     toast = await mod.decide(tok, qaror, _outbox(), None)
-    if qaror and toast in (C.MSG_TUZATISH_QABUL, C.MSG_ARIZA_QABUL, C.MSG_EKSPORT_QABUL, C.MSG_PEREBROSKA_QABUL):
+    if qaror and toast in (C.MSG_TUZATISH_QABUL, C.MSG_ARIZA_QABUL, C.MSG_EKSPORT_QABUL):
         await _say(toast, escape=True, reply_to=getattr(msg, "message_id", None))
-    elif qaror and toast not in (C.MSG_TUZATISH_BEKOR, C.MSG_ARIZA_BEKOR, C.MSG_EKSPORT_BEKOR, C.MSG_PEREBROSKA_BEKOR,
-                                 C.MSG_MUDDAT_OTGAN):
+    elif qaror and toast not in (C.MSG_TUZATISH_BEKOR, C.MSG_ARIZA_BEKOR, C.MSG_EKSPORT_BEKOR, C.MSG_MUDDAT_OTGAN):
         await _say(toast, escape=True, reply_to=getattr(msg, "message_id", None))
     return True
 
@@ -1506,7 +1505,7 @@ async def cmd_reset(msg: Message) -> None:
         await on_text(msg)
         return
     await asyncio.to_thread(history.clear_history)
-    for name in ("reja", "memory_blocks", "tuzatish", "ariza", "eksport", "perebroska"):
+    for name in ("reja", "memory_blocks", "tuzatish", "ariza", "eksport"):
         module = _mod(name)
         if module is None:
             continue

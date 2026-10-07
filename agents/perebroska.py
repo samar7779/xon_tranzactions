@@ -1,14 +1,16 @@
 """AI Perebroska — TR Support (egasi qarori, 2026-10-05): perebroska arizasi (fayl) botga kelsa, panel
-OplatyKv > "+" > AI Perebroska bilan AYNAN bir xil ishlaydi.
+OplatyKv > "+" > AI Perebroska bilan AYNAN bir xil ishlaydi. Egasi qarori (2026-10-07): TASDIQ SO'RALMAYDI —
+to'siq bo'lmasa bot darrov yaratadi va natijani formatlangan xabar bilan yuboradi.
 
 Oqim (LLM'siz; Leader egasining xabari/faylini `PEREBROSKA:` qatoriga aylantiradi):
 1. `PEREBROSKA: fayl=<leader_bot_...pdf> [tasdiq=<ism>] [izoh=<matn>]`. Fayl berilmasa shu xabardagi fayl olinadi.
 2. POST agent-bridge/perebroska/tahlil -> panel agenti (analyzePerereboskaAriza) arizani o'qiydi: manba va maqsad
-   shartnoma(lar), summa, arizachi, ogohlantirishlar. Natija fayl bo'yicha PEREBROSKA_TAHLIL_TTL_S keshlanadi
-   (tasdiqlovchi ismi keyin aytilsa AI qayta chaqirilmaydi).
-3. Yaratib bo'lmaydigan holat (shartnoma topilmadi, obyekt boshqa, summa teng emas, qoldiq yetmaydi) -> sababi, tasdiq yo'q.
-   Aks holda ko'rinish + "tasdiqlayman" (tugmasiz). Tasdiqlovchi ismi majburiy.
-4. "tasdiqlayman" -> POST agent-bridge/perebroska/yarat (createPerereboska, panelda "Yaratish" bilan bir xil) -> natija.
+   shartnoma(lar), summa, arizachi, ogohlantirishlar.
+3. To'siq bo'lsa (shartnoma topilmadi, obyekt boshqa, summa teng emas, qoldiq yetmaydi, TAKROR bo'lishi mumkin) —
+   yaratilmaydi, sababi aytiladi.
+4. Aks holda darrov POST agent-bridge/perebroska/yarat (createPerereboska, panelda "Yaratish" bilan bir xil) ->
+   natija kartasi (manba, obyekt, summa, maqsadlar, OplatyKv qatorlari, guruh ID).
+Himoya: bir fayl bo'yicha bir marta (pb_yaratildi_<hex> claim) — qayta yuborilsa ikkinchi marta yaratilmaydi.
 """
 from __future__ import annotations
 
@@ -17,9 +19,8 @@ import html
 import logging
 import os
 import re
-import secrets
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
 from . import config
 from . import contract as C
@@ -32,8 +33,6 @@ _KALITLAR = ("fayl", "tasdiq", "izoh")
 _KALIT_RE = re.compile(r"(?i)\b(%s)\s*=\s*" % "|".join(_KALITLAR))
 _FAYL_RE = re.compile(r"^leader_bot_([0-9a-f]{16})\.(jpg|jpeg|png|webp|gif|pdf|doc|docx)$")
 _O_QILADI_RE = re.compile(r"\.(jpg|jpeg|png|webp|gif|pdf)$")     # AI Perebroska faqat PDF va rasmni o'qiydi
-_TOKEN_RE = re.compile(r"^[0-9a-f]{16}$")
-_BG_TASKS: set = set()
 
 
 @dataclass
@@ -82,8 +81,13 @@ def _toza(s: Any, n: int = 400) -> str:
     return t[:n]
 
 
+def _kun(iso: Any) -> str:
+    dt = config.parse_iso(str(iso or ""))
+    return config.fmt_local(dt, "%d.%m.%Y") if dt else "-"
+
+
 def toskiqlar(r: Dict[str, Any]) -> List[str]:
-    """Yaratib bo'lmaydigan sabablar (createPerereboska ham rad etadi) — bo'lsa tasdiq so'ralmaydi."""
+    """Yaratilmaydigan sabablar. createPerereboska rad etadiganlari + TAKROR (tasdiqsiz rejimda avtomat yaratilmaydi)."""
     e = r.get("extracted") or {}
     out: List[str] = []
     if not e.get("fromContractNo"):
@@ -107,43 +111,78 @@ def toskiqlar(r: Dict[str, Any]) -> List[str]:
         out.append("maqsad summalari jami o'tkaziladigan summaga teng emas")
     if r.get("balanceEnough") is False:
         out.append("manba qoldig'i yetarli emas")
+    takror = r.get("duplicates") or []
+    if takror:
+        out.append("takror bo'lishi mumkin: %s dan shu summada allaqachon %d ta perebroska bor (%s)" % (
+            e.get("fromContractNo") or "-", len(takror), ", ".join(_kun(x.get("date")) for x in takror[:5])))
     return out
 
 
-def tahlil_html(r: Dict[str, Any], tasdiq: Optional[str], tosiq: List[str]) -> str:
+def _qism_tahlil(r: Dict[str, Any]) -> List[str]:
+    """Agent tahlili (arizachi, xulosa, ogohlantirishlar) — natija va rad kartasining umumiy qismi."""
     e, ex = r.get("extracted") or {}, TZ._e
-    q = ["<b>AI Perebroska</b> — %s" % ("tasdiqlang" if not tosiq and tasdiq else "agent tahlili"), ""]
-    q.append("Manba: <b>%s</b> — %s; to'langan %s so'm" % (
-        ex(e.get("fromContractNo") or "-"), ex(", ".join(x for x in (e.get("fromClient"), e.get("objectName")) if x) or "-"),
-        TZ._pul(e.get("fromBalance")) if e.get("fromBalance") is not None else "-"))
-    q.append("O'tkaziladigan summa: <b>%s so'm</b>%s" % (
-        TZ._pul(e.get("totalAmount")), " (agent arizadagi summani tuzatdi)" if e.get("amountCorrected") else ""))
-    q.append("Maqsad:")
-    for i, d in enumerate(e.get("destinations") or [], 1):
-        q.append("%d. <b>%s</b> — %s so'm (%s)%s" % (
-            i, ex(d.get("contractNo") or "-"), TZ._pul(d.get("amount")),
-            ex(", ".join(x for x in (d.get("client"), d.get("object")) if x) or "-"),
-            "" if d.get("found") else " — TOPILMADI"))
+    q: List[str] = []
     mos = e.get("applicantMatchesHolder")
     q.append("Arizachi: %s%s" % (ex(e.get("applicantName") or "o'qilmadi"),
                                  {True: " (maqsad egasiga mos)", False: " (maqsad egasiga MOS EMAS)"}.get(mos, "")))
-    q.append("Agent xulosasi: %s" % ("hujjat mos" if r.get("agentState") == "verified" else "tekshirish kerak"))
+    q.append("Agent xulosasi: %s%s" % ("hujjat mos" if r.get("agentState") == "verified" else "tekshirish kerak",
+                                       " (agent arizadagi summani tuzatdi)" if e.get("amountCorrected") else ""))
     ogoh = [w for w in (r.get("warnings") or []) if w]
     if ogoh:
         q.append("Ogohlantirishlar:")
         q += ["• " + ex(_toza(w, 300)) for w in ogoh[:8]]
-    if e.get("notes"):
-        q.append("Agent izohi: " + ex(_toza(e["notes"])))
+    return q
+
+
+def rad_html(r: Dict[str, Any], tosiq: List[str]) -> str:
+    """To'siq bo'lsa: agent o'qigani + sabab. Hech narsa yaratilmaydi."""
+    e, ex = r.get("extracted") or {}, TZ._e
+    q = ["<b>Perebroska yaratilmadi</b>", ""]
+    q.append("Manba: <code>%s</code> — %s" % (ex(e.get("fromContractNo") or "-"), ex(e.get("fromClient") or "-")))
+    if e.get("objectName"):
+        q.append("Obyekt: <b>%s</b>" % ex(e["objectName"]))
+    q.append("Summa: <b>%s so'm</b>" % TZ._pul(e.get("totalAmount")))
+    dests = e.get("destinations") or []
     q.append("")
-    if tosiq:
-        q.append("<b>Yaratib bo'lmaydi:</b> " + ex("; ".join(tosiq)) + ".")
-        q.append("Panelda OplatyKv > + > AI Perebroska orqali shu arizani tekshiring.")
-    elif not tasdiq:
-        q.append(ex(C.MSG_PEREBROSKA_KIM))
-    else:
-        q.append("Tasdiqladi: <b>%s</b>. Yaratilsa OplatyKv'da manbadan minus, maqsadga plus qator qo'shiladi;"
-                 " orqaga qaytarish panelda (AI Perebroska > Tarix)." % ex(tasdiq))
-        q += ["", ex(C.TASDIQ_YOZING.format(daq=max(1, C.APPROVAL_TTL_S // 60)))]
+    q.append("Maqsad (%d):" % len(dests))
+    for d in dests:
+        q.append("• <code>%s</code> · %s so'm — %s%s" % (
+            ex(d.get("contractNo") or "-"), TZ._pul(d.get("amount")), ex(d.get("client") or "-"),
+            "" if d.get("found") else " (TOPILMADI)"))
+    q.append("")
+    q += _qism_tahlil(r)
+    q += ["", "<b>Sabab:</b> " + ex("; ".join(tosiq)) + ".",
+          ex("Panelda OplatyKv > + > AI Perebroska orqali shu arizani tekshiring.")]
+    return "\n".join(q)
+
+
+def natija_html(t: Dict[str, Any], r: Dict[str, Any], kim: str) -> str:
+    """Yaratilgandan keyin: panel guruh xabari tuzilishida (manba, obyekt, summa, maqsadlar, kim, ID) + OplatyKv."""
+    e, ex = t.get("extracted") or {}, TZ._e
+    qatorlar = r.get("qatorlar") or []
+    manba = next((x for x in qatorlar if _f(x.get("summa")) < 0), None) or {}
+    maqsad = [x for x in qatorlar if _f(x.get("summa")) > 0]
+    q = ["<b>Perebroska yaratildi</b>", ""]
+    q.append("Manba: <code>%s</code> — %s" % (ex(manba.get("contractNo") or e.get("fromContractNo") or "-"),
+                                            ex(manba.get("mijoz") or e.get("fromClient") or "-")))
+    obyekt = manba.get("obyekt") or e.get("objectName")
+    if obyekt:
+        q.append("Obyekt: <b>%s</b>" % ex(obyekt))
+    q.append("Summa: <b>%s so'm</b>" % TZ._pul(r.get("amount")))
+    q.append("Sana: %s" % _kun(manba.get("sana") or (maqsad[0].get("sana") if maqsad else None)))
+    q.append("")
+    q.append("Maqsad (%d):" % len(maqsad))
+    for x in maqsad:
+        q.append("• <code>%s</code> · +%s so'm — %s" % (ex(x.get("contractNo") or "-"), TZ._pul(x.get("summa")),
+                                                     ex(x.get("mijoz") or "-")))
+    q.append("")
+    q += _qism_tahlil(t)
+    q.append("")
+    q.append("OplatyKv: %d qator qo'shildi (manba %s, maqsad +%s so'm)." % (
+        len(qatorlar), TZ._pul(manba.get("summa")) if manba else "-", TZ._pul(sum(_f(x.get("summa")) for x in maqsad))))
+    q.append("Kim: TR Support (%s)" % ex(kim))
+    q.append("Guruh ID: <code>%s</code>" % ex(r.get("groupId") or "-"))
+    q.append(ex("Orqaga qaytarish: OplatyKv > + > AI Perebroska > Tarix."))
     return "\n".join(q)
 
 
@@ -159,28 +198,9 @@ async def handle(text: Any, outbox: Any, reply_to: Optional[int] = None, rasmlar
         await _handle(s, outbox, reply_to, list(rasmlar or ()))
     except Exception:  # noqa: BLE001
         log.exception("perebroska yiqildi")
-        await TZ._say(outbox, "Perebroska tayyorlanmadi: ichki xato. Qayta urinib ko'ring.", reply_to=reply_to)
+        await TZ._say(outbox, "Perebroska bajarilmadi: ichki xato. Panelda AI Perebroska > Tarix ni tekshiring.",
+                      reply_to=reply_to)
     return True
-
-
-async def _tahlil(fayl: str, outbox: Any, reply_to: Optional[int]) -> Optional[Dict[str, Any]]:
-    """Kesh (fayl bo'yicha) yoki AI tahlili. Xato bo'lsa egasiga aytiladi va None."""
-    m = _FAYL_RE.match(fayl)
-    key = C.kv_key(C.KV_PB_TAHLIL, token=m.group(1)) if m else ""
-    kesh = await asyncio.to_thread(db.kv_get_json, key) if key else None
-    if isinstance(kesh, dict) and kesh.get("fayl") == fayl and \
-            config.now_utc().timestamp() - float(kesh.get("created_ts") or 0) <= C.PEREBROSKA_TAHLIL_TTL_S:
-        return kesh.get("r")
-    await TZ._say(outbox, C.MSG_PEREBROSKA_TAHLIL, reply_to=reply_to)
-    try:
-        r = await asyncio.to_thread(TZ._koprik, C.PEREBROSKA_KOPRIK_TAHLIL, body={"fayl": fayl},
-                                    timeout=C.PEREBROSKA_TAHLIL_TIMEOUT_S)
-    except TZ.KoprikXato as exc:
-        await TZ._say(outbox, "AI Perebroska tahlili bajarilmadi: %s." % exc.sabab, reply_to=reply_to)
-        return None
-    if key:
-        await asyncio.to_thread(db.kv_set_json, key, {"fayl": fayl, "created_ts": config.now_utc().timestamp(), "r": r})
-    return r
 
 
 async def _handle(s: Sorov, outbox: Any, reply_to: Optional[int], rasmlar: List[str]) -> None:
@@ -194,97 +214,49 @@ async def _handle(s: Sorov, outbox: Any, reply_to: Optional[int], rasmlar: List[
         await say(outbox, "AI Perebroska faqat PDF yoki rasmni o'qiydi. Arizani PDF yoki rasm qilib yuboring.",
                   reply_to=reply_to)
         return
-    r = await _tahlil(fayl, outbox, reply_to)
-    if r is None:
+    hex_ = _FAYL_RE.match(fayl).group(1)          # type: ignore[union-attr]
+    belgi = C.kv_key(C.KV_PB_YARATILDI, token=hex_)
+    oldin = await asyncio.to_thread(db.kv_get_json, belgi)
+    if oldin is not None:
+        g = oldin.get("groupId") if isinstance(oldin, dict) else None
+        await say(outbox, "Bu ariza bo'yicha perebroska allaqachon %s. Qayta yaratilmaydi; kerak bo'lsa panelda"
+                          " AI Perebroska > Tarix." % (("yaratilgan (guruh ID %s)" % g) if g else "bajarilmoqda"),
+                  reply_to=reply_to)
         return
-    tosiq = toskiqlar(r)
-    tasdiq = (s.tasdiq or "").strip() or None
-    matn = tahlil_html(r, tasdiq, tosiq)
-    hist = re.sub(r"<[^>]+>", "", html.unescape(matn))
-    if tosiq or not tasdiq:
-        await say(outbox, matn, html_mode=True, reply_to=reply_to, hist=hist)
+
+    await say(outbox, C.MSG_PEREBROSKA_TAHLIL, reply_to=reply_to)
+    try:
+        t = await asyncio.to_thread(TZ._koprik, C.PEREBROSKA_KOPRIK_TAHLIL, body={"fayl": fayl},
+                                    timeout=C.PEREBROSKA_TAHLIL_TIMEOUT_S)
+    except TZ.KoprikXato as exc:
+        await say(outbox, "AI Perebroska tahlili bajarilmadi: %s." % exc.sabab, reply_to=reply_to)
         return
-    e = r.get("extracted") or {}
+    tosiq = toskiqlar(t)
+    if tosiq:
+        matn = rad_html(t, tosiq)
+        await say(outbox, matn, html_mode=True, reply_to=reply_to, hist=re.sub(r"<[^>]+>", "", html.unescape(matn)))
+        return
+
+    # bir fayl — bir perebroska: parallel yoki qayta yuborishda ikkinchi marta yaratilmaydi
+    if not await asyncio.to_thread(db.kv_claim, belgi, config.iso_utc()):
+        await say(outbox, "Bu ariza bo'yicha perebroska allaqachon bajarilmoqda. Qayta yaratilmaydi.", reply_to=reply_to)
+        return
+    e = t.get("extracted") or {}
     dests = [{"contractNo": str(d.get("contractNo")), "amount": _f(d.get("amount"))} for d in e.get("destinations") or []]
     sana = str(e.get("date") or "")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", sana):
         sana = config.fmt_local(config.now_utc(), "%Y-%m-%d")
-    token = secrets.token_hex(8)
-    payload = {
-        "token": token, "created_ts": config.now_utc().timestamp(), "tasdiq": tasdiq[:120],
-        "body": {"fayl": fayl, "fromContractNo": e.get("fromContractNo"), "amount": round(sum(d["amount"] for d in dests), 2),
-                 "date": sana, "destinations": dests, "agentState": r.get("agentState"),
-                 "agentReason": r.get("agentReason"), "agentData": e, "tasdiq": tasdiq[:120],
-                 "izoh": (s.izoh or None)},
-    }
-    key = C.kv_key(C.KV_PB_APPR, token=token)
-    await asyncio.to_thread(db.kv_set_json, key, payload)
-    mid = await say(outbox, matn, html_mode=True, reply_to=reply_to, hist=hist)
-    if mid is None:
-        await asyncio.to_thread(db.kv_del, key)
-    else:
-        payload["mid"] = mid
-        await asyncio.to_thread(db.kv_set_json, key, payload)
-
-
-def kutilayotgan() -> List[Tuple[str, Dict[str, Any]]]:
-    out: List[Tuple[str, Dict[str, Any]]] = []
-    for key in db.kv_keys(C.KV_PB_APPR.split("{", 1)[0]):
-        p = db.kv_get_json(key)
-        if isinstance(p, dict) and _TOKEN_RE.match(str(p.get("token") or "")) and not TZ._eskirgan(p):
-            out.append((str(p["token"]), p))
-    return out
-
-
-async def decide(token: str, approve: bool, outbox: Any, message_id: Optional[int]) -> str:
-    """Matnli tasdiq ("tasdiqlayman" / "yo'q"). Bir martalik (pb_run_<token> claim). Toast qaytaradi."""
-    if not _TOKEN_RE.match(token or ""):
-        return C.MSG_MUDDAT_OTGAN
-    appr, run = C.kv_key(C.KV_PB_APPR, token=token), C.kv_key(C.KV_PB_RUN, token=token)
-    payload = await asyncio.to_thread(db.kv_get_json, appr)
-    if not isinstance(payload, dict) or payload.get("token") != token:
-        return C.MSG_MUDDAT_OTGAN
-    if not await asyncio.to_thread(db.kv_claim, run, config.iso_utc()):
-        return "Bu so'rov allaqachon hal qilingan."
-    await asyncio.to_thread(db.kv_del, appr)
-    if TZ._eskirgan(payload):
-        await TZ._say(outbox, "Tasdiq muddati o'tdi. Perebroska yaratilmadi, qaytadan so'rang.")
-        return C.MSG_MUDDAT_OTGAN
-    if not approve:
-        await TZ._say(outbox, C.MSG_PEREBROSKA_BEKOR)
-        return C.MSG_PEREBROSKA_BEKOR
-    task = asyncio.create_task(_yarat(payload, outbox))
-    _BG_TASKS.add(task)
-    task.add_done_callback(_BG_TASKS.discard)
-    return C.MSG_PEREBROSKA_QABUL
-
-
-def natija_matni(r: Dict[str, Any], tasdiq: str) -> str:
-    q = ["Perebroska yaratildi (tasdiq: %s), %s so'm:" % (tasdiq, TZ._pul(r.get("amount")))]
-    for x in r.get("qatorlar") or []:
-        summa = _f(x.get("summa"))
-        q.append("• %s: %s%s so'm, %s%s" % (
-            x.get("contractNo") or "-", "+" if summa > 0 else "", TZ._pul(summa),
-            TZ._sana(x.get("sana")).split(" ")[0] if x.get("sana") else "-",
-            (" — " + ", ".join(v for v in (x.get("mijoz"), x.get("obyekt")) if v)) if (x.get("mijoz") or x.get("obyekt")) else ""))
-    q.append("OplatyKv'ga %d qator qo'shildi. Tarix va orqaga qaytarish: OplatyKv > + > AI Perebroska > Tarix." % len(
-        r.get("qatorlar") or []))
-    return "\n".join(q)
-
-
-async def _yarat(payload: Dict[str, Any], outbox: Any) -> None:
+    kim = (s.tasdiq or "").strip()[:120] or C.PEREBROSKA_KIM_DEFAULT
+    body = {"fayl": fayl, "fromContractNo": e.get("fromContractNo"), "amount": round(sum(d["amount"] for d in dests), 2),
+            "date": sana, "destinations": dests, "agentState": t.get("agentState"), "agentReason": t.get("agentReason"),
+            "agentData": e, "tasdiq": kim, "izoh": (s.izoh or None)}
     try:
-        r = await asyncio.to_thread(TZ._koprik, C.PEREBROSKA_KOPRIK_YARAT, body=payload.get("body") or {},
-                                    timeout=C.PEREBROSKA_YARAT_TIMEOUT_S)
+        r = await asyncio.to_thread(TZ._koprik, C.PEREBROSKA_KOPRIK_YARAT, body=body, timeout=C.PEREBROSKA_YARAT_TIMEOUT_S)
     except TZ.KoprikXato as exc:
-        await TZ._say(outbox, "Perebroska yaratilmadi: %s. Panelda AI Perebroska orqali tekshiring." % exc.sabab)
+        await asyncio.to_thread(db.kv_del, belgi)      # yaratilmadi — qayta urinish mumkin
+        await say(outbox, "Perebroska yaratilmadi: %s. Panelda AI Perebroska orqali tekshiring." % exc.sabab,
+                  reply_to=reply_to)
         return
-    except Exception:  # noqa: BLE001
-        log.exception("perebroska yarat yiqildi")
-        await TZ._say(outbox, "Perebroska yaratilmadi: ichki xato. Panelda AI Perebroska > Tarix ni tekshiring.")
-        return
-    await TZ._say(outbox, natija_matni(r, str(payload.get("tasdiq") or "-")))
-
-
-def purge_pending() -> int:
-    return db.kv_del_prefix(C.KV_PB_APPR.split("{", 1)[0])
+    await asyncio.to_thread(db.kv_set_json, belgi, {"groupId": r.get("groupId"), "at": config.iso_utc()})
+    matn = natija_html(t, r, kim)
+    await say(outbox, matn, html_mode=True, reply_to=reply_to, hist=re.sub(r"<[^>]+>", "", html.unescape(matn)))

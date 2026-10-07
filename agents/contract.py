@@ -448,9 +448,7 @@ KV_TZ_APPR = "tz_appr_{token}"
 KV_TZ_RUN = "tz_run_{token}"
 KV_AR_APPR = "ar_appr_{token}"
 KV_AR_RUN = "ar_run_{token}"
-KV_PB_APPR = "pb_appr_{token}"     # AI Perebroska: yaratish tasdig'i (matn bilan)
-KV_PB_RUN = "pb_run_{token}"
-KV_PB_TAHLIL = "pb_tahlil_{token}"  # fayl bo'yicha AI tahlili keshi (token = fayl nomidagi hex)
+KV_PB_YARATILDI = "pb_yaratildi_{token}"  # AI Perebroska: bir fayl — bir yaratish (token = fayl nomidagi hex)
 KV_EK_APPR = "ek_appr_{token}"
 KV_EK_RUN = "ek_run_{token}"
 KV_EK_ROY = "ek_roy_{token}"
@@ -1080,11 +1078,8 @@ PEREBROSKA_KOPRIK_TAHLIL = "/api/agent-bridge/perebroska/tahlil"
 PEREBROSKA_KOPRIK_YARAT = "/api/agent-bridge/perebroska/yarat"
 PEREBROSKA_TAHLIL_TIMEOUT_S = 180
 PEREBROSKA_YARAT_TIMEOUT_S = 120
-PEREBROSKA_TAHLIL_TTL_S = 1800
+PEREBROSKA_KIM_DEFAULT = "egasi"   # tasdiq so'ralmaydi (egasi qarori 2026-10-07); ism aytilmasa shu yoziladi
 MSG_PEREBROSKA_TAHLIL = "Ariza AI Perebroska agentiga berildi, tahlil qilinmoqda..."
-MSG_PEREBROSKA_KIM = "Kim tasdiqlaydi? Ismini yozing (masalan: tasdiq Salokhiddin) — keyin tasdiq so'rovi chiqadi."
-MSG_PEREBROSKA_QABUL = "Qabul qilindi, perebroska yaratilmoqda..."
-MSG_PEREBROSKA_BEKOR = "Bekor qilindi. Perebroska yaratilmadi."
 XATO_FAYL_RE = re.compile(r"(?im)^\s*XATO_FAYL:[ \t]*(.*)$")
 HISOB_KOPRIK = "/api/agent-bridge/hisob"
 XATO_FAYL_KOPRIK = "/api/agent-bridge/xato-royxat"

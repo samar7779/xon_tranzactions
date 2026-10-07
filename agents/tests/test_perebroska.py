@@ -1,7 +1,7 @@
-"""perebroska: AI Perebroska bot orqali (tahlil -> tasdiq -> yaratish) — ko'prik, kv va fayl soxta; tarmoq yo'q."""
+"""perebroska: AI Perebroska bot orqali (tahlil -> darrov yaratish, tasdiqsiz; egasi qarori 2026-10-07) —
+ko'prik, kv va fayl soxta; tarmoq yo'q."""
 from __future__ import annotations
 
-import asyncio
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,16 +19,19 @@ FAYL = "leader_bot_0123456789abcdef.pdf"
 TAHLIL: Dict[str, Any] = {
     "ok": True, "agentState": "verified", "agentReason": "ok", "warnings": [], "balanceEnough": True, "duplicates": [],
     "extracted": {
-        "fromContractNo": "24SRH24EF", "fromClient": "AHMEDOV ANVAR", "fromFound": True, "objectName": "SRH",
-        "fromBalance": 120000000, "totalAmount": 70944290, "amountCorrected": False, "date": "2026-10-05",
-        "destinations": [{"contractNo": "4105SRH26RL", "amount": 70944290, "client": "AHMEDOVA ANBAR", "object": "SRH",
-                          "found": True, "balance": 0}],
-        "applicantName": "Ahmedova Anbar", "applicantMatchesHolder": True, "notes": "- manba **24SRH24EF**",
+        "fromContractNo": "1817ZUR24HW", "fromClient": "Abdukadirov Alisher Abdurasilovich", "fromFound": True,
+        "objectName": "ЗУРСАН", "fromBalance": 120000000, "totalAmount": 95000000, "amountCorrected": False,
+        "date": "2026-10-05",
+        "destinations": [{"contractNo": "1818ZUR24QB", "amount": 95000000, "client": "Abdukadirov Alisher Abdurasilovich",
+                          "object": "ЗУРСАН", "found": True, "balance": 0}],
+        "applicantName": "Abdukadirov Alisher", "applicantMatchesHolder": True, "notes": "- manba **1817ZUR24HW**",
     },
 }
-YARAT = {"ok": True, "groupId": "g1", "amount": 70944290, "qatorlar": [
-    {"contractNo": "24SRH24EF", "summa": -70944290, "sana": "2026-10-05T00:00:00.000Z", "mijoz": "AHMEDOV ANVAR", "obyekt": "SRH"},
-    {"contractNo": "4105SRH26RL", "summa": 70944290, "sana": "2026-10-05T00:00:00.000Z", "mijoz": "AHMEDOVA ANBAR", "obyekt": "SRH"}]}
+YARAT = {"ok": True, "groupId": "pg_7f3a", "amount": 95000000, "qatorlar": [
+    {"contractNo": "1817ZUR24HW", "summa": -95000000, "sana": "2026-10-05T00:00:00.000Z",
+     "mijoz": "Abdukadirov Alisher Abdurasilovich", "obyekt": "ЗУРСАН"},
+    {"contractNo": "1818ZUR24QB", "summa": 95000000, "sana": "2026-10-05T00:00:00.000Z",
+     "mijoz": "Abdukadirov Alisher Abdurasilovich", "obyekt": "ЗУРСАН"}]}
 
 
 class ParseTest(unittest.TestCase):
@@ -42,11 +45,14 @@ class ParseTest(unittest.TestCase):
     def test_toskiqlar(self):
         self.assertEqual(PB.toskiqlar(TAHLIL), [])
         r = {**TAHLIL, "balanceEnough": False, "extracted": {**TAHLIL["extracted"], "destinations": [
-            {"contractNo": "77ZUR26AA", "amount": 70944290, "object": "ZUR", "found": True}]}}
-        self.assertEqual(PB.toskiqlar(r), ["obyekt mos emas: 77ZUR26AA (ZUR), manba SRH", "manba qoldig'i yetarli emas"])
+            {"contractNo": "77SRH26AA", "amount": 95000000, "object": "SRH", "found": True}]}}
+        self.assertEqual(PB.toskiqlar(r), ["obyekt mos emas: 77SRH26AA (SRH), manba ЗУРСАН", "manba qoldig'i yetarli emas"])
         r = {**TAHLIL, "extracted": {**TAHLIL["extracted"], "fromFound": False, "totalAmount": 5}}
-        self.assertIn("manba shartnoma 24SRH24EF topilmadi (CRM va to'lovlarda yo'q)", PB.toskiqlar(r))
+        self.assertIn("manba shartnoma 1817ZUR24HW topilmadi (CRM va to'lovlarda yo'q)", PB.toskiqlar(r))
         self.assertIn("maqsad summalari jami o'tkaziladigan summaga teng emas", PB.toskiqlar(r))
+        r = {**TAHLIL, "duplicates": [{"date": "2026-10-01", "amount": 95000000}]}
+        self.assertEqual(PB.toskiqlar(r), ["takror bo'lishi mumkin: 1817ZUR24HW dan shu summada allaqachon 1 ta"
+                                           " perebroska bor (01.10.2026)"])
 
 
 class OqimTest(_Base):
@@ -62,63 +68,77 @@ class OqimTest(_Base):
         self.javob["tahlil"] = TAHLIL
         self.javob["yarat"] = YARAT
 
-    async def test_tahlil_tasdiq_yaratish_natija(self):
-        await PB.handle("PEREBROSKA: tasdiq=Salokhiddin izoh=ariza", self.out, reply_to=3, rasmlar=[str(self.dir / FAYL)])
-        [c] = self.calls
-        self.assertEqual((c["path"], c["method"], c["body"]), (C.PEREBROSKA_KOPRIK_TAHLIL, "POST", {"fayl": FAYL}))
-        self.assertEqual(self.texts()[0], C.MSG_PEREBROSKA_TAHLIL)
-        s = self._sorov_xabari("AI Perebroska")
-        for frag in ("<b>AI Perebroska</b> — tasdiqlang", "Manba: <b>24SRH24EF</b> — AHMEDOV ANVAR, SRH; to'langan 120 000 000 so'm",
-                     "O'tkaziladigan summa: <b>70 944 290 so'm</b>", "1. <b>4105SRH26RL</b> — 70 944 290 so'm (AHMEDOVA ANBAR, SRH)",
-                     "Arizachi: Ahmedova Anbar (maqsad egasiga mos)", "Agent xulosasi: hujjat mos", "Agent izohi: - manba 24SRH24EF",
-                     "Tasdiqladi: <b>Salokhiddin</b>", 'Tasdiqlash uchun "tasdiqlayman" deb yozing'):
-            self.assertIn(frag, s["text"])
-        self.assertFalse([x for x in self.calls if x["path"] == C.PEREBROSKA_KOPRIK_YARAT])   # tasdiqsiz yaratilmaydi
-        token = self._token(C.KV_PB_APPR)
-        self.assertEqual([t for t, _p in PB.kutilayotgan()], [token])
-        self.assertEqual(await PB.decide(token, True, self.out, None), C.MSG_PEREBROSKA_QABUL)
-        await asyncio.gather(*list(PB._BG_TASKS))
-        [y] = [x for x in self.calls if x["path"] == C.PEREBROSKA_KOPRIK_YARAT]
-        self.assertEqual({k: y["body"][k] for k in ("fayl", "fromContractNo", "amount", "date", "destinations", "agentState", "tasdiq", "izoh")},
-                         {"fayl": FAYL, "fromContractNo": "24SRH24EF", "amount": 70944290, "date": "2026-10-05",
-                          "destinations": [{"contractNo": "4105SRH26RL", "amount": 70944290}], "agentState": "verified",
-                          "tasdiq": "Salokhiddin", "izoh": "ariza"})
-        self.assertEqual(y["body"]["agentData"]["fromContractNo"], "24SRH24EF")
-        t = self.texts()[-1]
-        for frag in ("Perebroska yaratildi (tasdiq: Salokhiddin), 70 944 290 so'm:", "• 24SRH24EF: -70 944 290 so'm, 05.10.2026",
-                     "• 4105SRH26RL: +70 944 290 so'm, 05.10.2026 — AHMEDOVA ANBAR, SRH", "OplatyKv'ga 2 qator qo'shildi."):
-            self.assertIn(frag, t)
-        self.assertEqual(await PB.decide(token, True, self.out, None), C.MSG_MUDDAT_OTGAN)   # bir martalik
+    def _yollar(self) -> List[str]:
+        return [c["path"] for c in self.calls]
 
-    async def test_tasdiqlovchisiz_ism_soraladi_tahlil_keshdan(self):
+    async def test_tasdiqsiz_darrov_yaratadi_natija_kartasi(self):
+        await PB.handle("PEREBROSKA: tasdiq=samar izoh=ariza", self.out, reply_to=3, rasmlar=[str(self.dir / FAYL)])
+        self.assertEqual(self._yollar(), [C.PEREBROSKA_KOPRIK_TAHLIL, C.PEREBROSKA_KOPRIK_YARAT])
+        self.assertEqual(self.calls[0]["body"], {"fayl": FAYL})
+        y = self.calls[1]["body"]
+        self.assertEqual({k: y[k] for k in ("fayl", "fromContractNo", "amount", "date", "destinations", "agentState", "tasdiq", "izoh")},
+                         {"fayl": FAYL, "fromContractNo": "1817ZUR24HW", "amount": 95000000, "date": "2026-10-05",
+                          "destinations": [{"contractNo": "1818ZUR24QB", "amount": 95000000}], "agentState": "verified",
+                          "tasdiq": "samar", "izoh": "ariza"})
+        self.assertEqual(y["agentData"]["fromContractNo"], "1817ZUR24HW")
+        self.assertEqual(self.kv, {C.kv_key(C.KV_PB_YARATILDI, token="0123456789abcdef"): mock.ANY})
+        tahlil_xabari, karta = self.texts()
+        self.assertEqual(tahlil_xabari, C.MSG_PEREBROSKA_TAHLIL)
+        self.assertNotIn("tasdiqlayman", karta)
+        for frag in ("<b>Perebroska yaratildi</b>",
+                     "Manba: <code>1817ZUR24HW</code> — Abdukadirov Alisher Abdurasilovich", "Obyekt: <b>ЗУРСАН</b>",
+                     "Summa: <b>95 000 000 so'm</b>", "Sana: 05.10.2026", "Maqsad (1):",
+                     "• <code>1818ZUR24QB</code> · +95 000 000 so'm — Abdukadirov Alisher Abdurasilovich",
+                     "Arizachi: Abdukadirov Alisher (maqsad egasiga mos)", "Agent xulosasi: hujjat mos",
+                     "OplatyKv: 2 qator qo'shildi (manba -95 000 000, maqsad +95 000 000 so'm).",
+                     "Kim: TR Support (samar)", "Guruh ID: <code>pg_7f3a</code>",
+                     "Orqaga qaytarish: OplatyKv &gt; + &gt; AI Perebroska &gt; Tarix."):
+            self.assertIn(frag, karta)
+        self.assertNotRegex(karta.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", ""),
+                            r"[<>]")                                      # Telegram HTML: ekranlanmagan < > yo'q
+
+    async def test_bir_fayl_bir_marta(self):
         await PB.handle("PEREBROSKA: fayl=%s" % FAYL, self.out)
-        self.assertIn(C.MSG_PEREBROSKA_KIM, self.texts()[-1])
-        self.assertEqual(self._token(C.KV_PB_APPR), "")
-        await PB.handle("PEREBROSKA: fayl=%s tasdiq=Salokhiddin" % FAYL, self.out)
-        self.assertEqual(len([x for x in self.calls if x["path"] == C.PEREBROSKA_KOPRIK_TAHLIL]), 1)   # AI qayta chaqirilmadi
-        self.assertTrue(self._token(C.KV_PB_APPR))
+        self.assertEqual(self.calls[1]["body"]["tasdiq"], C.PEREBROSKA_KIM_DEFAULT)     # ism aytilmasa ham yaratadi
+        await PB.handle("PEREBROSKA: fayl=%s" % FAYL, self.out)
+        self.assertIn("allaqachon yaratilgan (guruh ID pg_7f3a)", self.texts()[-1])
+        self.assertEqual(self._yollar().count(C.PEREBROSKA_KOPRIK_YARAT), 1)
+        self.assertEqual(self._yollar().count(C.PEREBROSKA_KOPRIK_TAHLIL), 1)         # AI qayta chaqirilmadi
 
-    async def test_toskiq_bolsa_tasdiq_yoq_va_rad(self):
-        self.javob["tahlil"] = {**TAHLIL, "extracted": {**TAHLIL["extracted"], "destinations": [
-            {"contractNo": "4105SRH26RL", "amount": 70944290, "found": False}]}}
+    async def test_toskiq_va_takror_yaratilmaydi(self):
+        self.javob["tahlil"] = {**TAHLIL, "warnings": ["Takror bo'lishi mumkin"],
+                                "duplicates": [{"date": "2026-10-01", "amount": 95000000}]}
         await PB.handle("PEREBROSKA: fayl=%s tasdiq=S" % FAYL, self.out)
         t = self.texts()[-1]
-        self.assertIn("<b>Yaratib bo'lmaydi:</b> maqsadli shartnoma 4105SRH26RL topilmadi.", t)
-        self.assertNotIn("tasdiqlayman", t)
-        self.assertEqual(self._token(C.KV_PB_APPR), "")
+        for frag in ("<b>Perebroska yaratilmadi</b>", "Maqsad (1):", "<b>Sabab:</b> takror bo'lishi mumkin",
+                     "Panelda OplatyKv &gt; + &gt; AI Perebroska orqali"):
+            self.assertIn(frag, t)
+        self.assertNotIn(C.PEREBROSKA_KOPRIK_YARAT, self._yollar())
+        self.assertEqual(self.kv, {})
+        self.javob["tahlil"] = {**TAHLIL, "extracted": {**TAHLIL["extracted"], "destinations": [
+            {"contractNo": "1818ZUR24QB", "amount": 95000000, "found": False}]}}
+        await PB.handle("PEREBROSKA: fayl=%s" % FAYL, self.out)
+        self.assertIn("maqsadli shartnoma 1818ZUR24QB topilmadi", self.texts()[-1])
+        self.assertIn("(TOPILMADI)", self.texts()[-1])
+        self.assertNotIn(C.PEREBROSKA_KOPRIK_YARAT, self._yollar())
 
-    async def test_yoq_word_fayl_va_faylsiz(self):
-        self.javob["tahlil"] = TAHLIL
-        await PB.handle("PEREBROSKA: fayl=%s tasdiq=S" % FAYL, self.out)
-        token = self._token(C.KV_PB_APPR)
-        self.assertEqual(await PB.decide(token, False, self.out, None), C.MSG_PEREBROSKA_BEKOR)
-        self.assertFalse([x for x in self.calls if x["path"] == C.PEREBROSKA_KOPRIK_YARAT])
+    async def test_yaratish_xatosi_qayta_urinish_mumkin(self):
+        self.javob["yarat"] = TZ.KoprikXato("HTTP 400: Manba qoldig'i yetarli emas")
+        await PB.handle("PEREBROSKA: fayl=%s" % FAYL, self.out)
+        self.assertIn("Perebroska yaratilmadi: HTTP 400: Manba qoldig'i yetarli emas", self.texts()[-1])
+        self.assertEqual(self.kv, {})                                                 # belgi olib tashlandi
+        self.javob["yarat"] = YARAT
+        await PB.handle("PEREBROSKA: fayl=%s" % FAYL, self.out)
+        self.assertIn("<b>Perebroska yaratildi</b>", self.texts()[-1])
+
+    async def test_word_fayl_va_faylsiz(self):
         word = "leader_bot_00000000000000aa.docx"
         (self.dir / word).write_bytes(b"doc")
         await PB.handle("PEREBROSKA: fayl=%s" % word, self.out)
         self.assertIn("faqat PDF yoki rasmni o'qiydi", self.texts()[-1])
         await PB.handle("PEREBROSKA:", self.out)
         self.assertIn("faylini yuboring", self.texts()[-1])
+        self.assertEqual(self.calls, [])
 
 
 class LeaderOqimTest(_FlowBase):
@@ -133,9 +153,9 @@ class LeaderOqimTest(_FlowBase):
 
         self._patch(LB, "_mod", lambda name: FakePB if name == "perebroska" else None)
         self.replies = [(C.RUN_OK, _leader_json("Ko'ryapman", intent=C.INTENT_PEREBROSKA,
-                                                task="PEREBROSKA: fayl=%s tasdiq=Salokhiddin" % FAYL))]
-        await self.handle(_msg(903, "shu perebroska arizasini qil, tasdiq Salokhiddin"))
-        self.assertEqual(chaqiruv, [("PEREBROSKA: fayl=%s tasdiq=Salokhiddin" % FAYL, 903)])
+                                                task="PEREBROSKA: fayl=%s tasdiq=samar" % FAYL))]
+        await self.handle(_msg(903, "shu perebroska arizasini qil"))
+        self.assertEqual(chaqiruv, [("PEREBROSKA: fayl=%s tasdiq=samar" % FAYL, 903)])
 
 
 if __name__ == "__main__":
