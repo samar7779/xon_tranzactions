@@ -503,6 +503,11 @@ model BankAccount {
 
   branch       String    @db.VarChar(8) // MFO (5 belgi, 8 zaxira)
   accountNo    String    @map("account_no") @db.VarChar(32)
+  // Hisob raqami o'zgarganda (bank rekvizit almashtirsa) ESKISI shu yerda qoladi.
+  // Tarixiy tranzaksiyalarda eski raqam yozilgan — mem. order kabi joylar hisobni
+  // o'sha raqam bo'yicha topadi, bu maydonsiz bog'lanish uziladi.
+  // Kapitalbank 2026-10-05 da 00974→01158 ga o'tganda shu muammo chiqqan edi.
+  previousAccountNo String? @map("previous_account_no") @db.VarChar(32)
   ownerName    String?   @map("owner_name") @db.VarChar(128)
   currency     String    @default("UZS") @db.VarChar(3)
   balance      Decimal?  @db.Decimal(18, 2)

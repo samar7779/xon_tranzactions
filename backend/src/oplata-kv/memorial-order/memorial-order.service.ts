@@ -348,8 +348,18 @@ export class MemorialOrderService {
     // Maqsadli hisob: shartnomaning TO'LIQ to'lovlaridagi oluvchi hisobiga mos
     // sync-hisob(lar) — aynan shu shartnoma tushadigan hisob. Shunda kerakmas
     // hisoblarga so'rov ketmaydi (chegara tejaladi). Topilmasa — hammasi.
+    // ⚠️ Tarixiy to'lovlarda hisob raqami o'sha paytdagi ko'rinishda yozilgan.
+    // Bank rekvizitni almashtirsa (Kapitalbank 2026-10-05: MFO 00974→01158,
+    // hisob raqamining nazorat belgisi o'zgardi), `toAccount` eski raqamni,
+    // `accountNo` esa yangisini saqlaydi — ular mos kelmay qoladi va bu ro'yxat
+    // bo'sh chiqadi. Natijada hamma hisobga so'rov ketib, MAX_CALLS budjeti
+    // tugaydi va order bo'sh bo'lib qoladi. Shuning uchun ESKI raqamni ham
+    // hisobga olamiz.
     const recipientAccts = new Set(blocks.filter((b) => b.toAccount).map((b) => b.toAccount));
-    let accounts = allAccounts.filter((a) => recipientAccts.has(a.accountNo));
+    let accounts = allAccounts.filter(
+      (a) => recipientAccts.has(a.accountNo) ||
+             (a.previousAccountNo != null && recipientAccts.has(a.previousAccountNo)),
+    );
     if (!accounts.length) accounts = allAccounts;
 
     // ── Sanalar IKKI BOSQICHDA so'raladi ──
