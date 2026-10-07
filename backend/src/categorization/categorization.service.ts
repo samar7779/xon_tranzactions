@@ -73,6 +73,12 @@ const KEYWORDS_SALARY = [
   // shuning uchun 'РАСЧЕТ', 'РАСЧЁТ' emas.)
   'ЗАРАБОТНАЯ ПЛАТА', 'ОТПУСКНЫЕ', 'ВЫПЛАТА ПРЕМИИ',
   'РАСЧЕТ ПРИ ПРЕКРАЩЕНИИ ТРУДОВ', 'МАТЕРИАЛЬНАЯ ПОМОЩ',
+  // ЯТТ o'z tadbirkorlik hisobidan o'z plastik kartasiga daromadini chiqaradi.
+  // Tekshirildi (129 ta, 5.8 mlrd): kimdan "ЯТТ LATIPOV ABDULLO...", kimga
+  // "ABDULLO LATIPOV", hisob 2312... (karta) — ikkala tomonda BIR XIL odam.
+  // Kontragent emas (tashqi xizmat ko'rsatuvchi yo'q), ko'chirma ham emas
+  // (pul hisoblarimiz doirasidan chiqadi) — bu odamga ketgan mehnat daromadi.
+  'ДОХОД ОТ ДЕЯТЕЛЬНОСТИ',
 ];
 
 /**
