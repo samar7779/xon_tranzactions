@@ -166,6 +166,14 @@ export class BackupService {
   @Cron(CronExpression.EVERY_MINUTE)
   async tick() {
     if (this.status.running) return;
+    // Tez tekshiruv — o'chirilgan bo'lsa (ko'p holat) ortiqcha o'qimaymiz
+    let enabled: string | null;
+    try {
+      enabled = await this.settingGet('backup.enabled');
+    } catch {
+      return;
+    }
+    if (enabled !== '1') return;
     let cfg: BackupConfig;
     try {
       cfg = await this.getConfig();
@@ -447,23 +455,38 @@ export class BackupService {
       form.append('caption', caption);
       form.append('parse_mode', 'HTML');
     }
-    const res = await fetch(`https://api.telegram.org/bot${this.curToken}/sendDocument`, {
-      method: 'POST',
-      body: form,
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(`Telegram sendDocument ${res.status}: ${txt.slice(0, 200)}`);
+    // Timeout — yuborish osilib qolsa backup abadiy "running" bo'lib qolmasin (10 daq/bo'lak)
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 10 * 60 * 1000);
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${this.curToken}/sendDocument`, {
+        method: 'POST',
+        body: form,
+        signal: ctrl.signal,
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Telegram sendDocument ${res.status}: ${txt.slice(0, 200)}`);
+      }
+    } finally {
+      clearTimeout(tm);
     }
   }
 
   private async sendMessage(text: string): Promise<void> {
     if (!this.curToken || !this.curChat) return;
-    await fetch(`https://api.telegram.org/bot${this.curToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: this.curChat, text, parse_mode: 'HTML', disable_web_page_preview: true }),
-    });
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 30_000);
+    try {
+      await fetch(`https://api.telegram.org/bot${this.curToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: this.curChat, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+        signal: ctrl.signal,
+      });
+    } catch { /* alert xabari — xato bo'lsa jim */ } finally {
+      clearTimeout(tm);
+    }
   }
 
   // ─────────────────────── Matnlar ───────────────────────
