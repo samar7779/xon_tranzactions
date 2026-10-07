@@ -1692,6 +1692,15 @@ export class CategorizationService {
       reason = 'desc bank xizmati (CORPORATE/TARIF)';
     }
 
+    // Ekvayring hisob-kitobi — bank POS (ТСП) orqali o'tgan xaridlar uchun
+    // bizga qaytaradi. Tekshirildi: KIRIM, o'z hisobimizga, shartnomasiz,
+    // o'rtacha ~22 ming so'm. Mijoz to'lovi EMAS (shartnoma yo'q).
+    // Subkategoriya qo'yilmaydi — bu "bank xizmati" (komissiya) emas.
+    if (!categoryId && desc.includes('ВОЗМЕЩЕНИЕ КЛИЕНТУ ПО ПОКУПКАМ')) {
+      categoryId = refs.BANK;
+      reason = 'ekvayring hisob-kitobi (ТСП)';
+    }
+
     // ── 5) Zarplata
     if (!categoryId && (KEYWORDS_SALARY.some((k) => desc.includes(k)) || RE_SALARY_OY.test(desc))) {
       categoryId = refs.SALARY;
