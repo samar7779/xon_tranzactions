@@ -14,7 +14,7 @@ const ALL_PERMS = [
   'dashboard:kpi_inflow', 'dashboard:kpi_outflow', 'dashboard:kpi_txn',
   'dashboard:objects', 'dashboard:daily', 'dashboard:daily_bar', 'dashboard:client',
   'dashboard:xonpay', 'dashboard:top_accounts', 'dashboard:sync_status',
-  'dashboard:banks_breakdown', 'dashboard:net_flow',
+  'dashboard:banks_breakdown', 'dashboard:net_flow', 'dashboard:recon',
   'transactions:view',
   'accounts:view', 'accounts:manage',
   'credentials:view', 'credentials:manage', 'credentials:reveal', 'credentials:test',

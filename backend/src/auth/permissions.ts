@@ -25,6 +25,7 @@ export const PERMISSIONS = {
   DASHBOARD_SYNC_STATUS: 'dashboard:sync_status',           // Sync holati
   DASHBOARD_BANKS_BREAKDOWN: 'dashboard:banks_breakdown',   // Banklar bo'yicha taqsimot
   DASHBOARD_NET_FLOW: 'dashboard:net_flow',                 // Sof pul oqimi (30 kun)
+  DASHBOARD_RECON: 'dashboard:recon',                       // Tranzaksiya sverka paneli (bank qoldiq + tranzaksiya explorer)
 
   // Tranzaksiyalar — Tranzaksiyalar tab
   TRANSACTIONS_VIEW: 'transactions:view',
@@ -203,6 +204,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.DASHBOARD_SYNC_STATUS, label: 'Sync holati' },
           { value: PERMISSIONS.DASHBOARD_BANKS_BREAKDOWN, label: 'Banklar bo\'yicha taqsimot' },
           { value: PERMISSIONS.DASHBOARD_NET_FLOW, label: 'Sof pul oqimi (30 kun)' },
+          { value: PERMISSIONS.DASHBOARD_RECON, label: 'Tranzaksiya sverka paneli (bank qoldiq + explorer)' },
         ],
       },
       {

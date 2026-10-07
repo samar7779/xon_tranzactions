@@ -19,6 +19,7 @@ export const PERMS = {
   DASHBOARD_SYNC_STATUS: 'dashboard:sync_status',
   DASHBOARD_BANKS_BREAKDOWN: 'dashboard:banks_breakdown',
   DASHBOARD_NET_FLOW: 'dashboard:net_flow',
+  DASHBOARD_RECON: 'dashboard:recon',
   TRANSACTIONS_VIEW: 'transactions:view',
   TRANSACTIONS_MANUAL_EDIT: 'transactions:manual_edit',
   TRANSACTIONS_MANUAL_CONTRACT: 'transactions:manual_contract',

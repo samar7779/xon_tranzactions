@@ -31,6 +31,7 @@ import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 import { DailySummaryWidget } from '@/components/daily-summary-widget';
+import { ReconcileWidget } from '@/components/reconcile-widget';
 
 const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6'];
 
@@ -613,6 +614,9 @@ export default function DashboardPage() {
           onClose={() => setObjDetail(null)}
         />
         </>)}
+
+        {/* ═══ TRANZAKSIYA SVERKA (bank qoldiq + explorer) — ruxsatли xodimlarga ═══ */}
+        <ReconcileWidget />
 
         {/* ═══ KUNLIK XULOSA (ОплатыКв — kun + solishtirish) ═══ */}
         <DailySummaryWidget />

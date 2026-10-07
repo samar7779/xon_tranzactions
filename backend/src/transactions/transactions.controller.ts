@@ -72,14 +72,14 @@ export class TransactionsController {
   }
 
   @Get()
-  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW, PERMISSIONS.DASHBOARD_RECON)
   @ApiOperation({ summary: "Tranzaksiyalar ro'yxati (filter + pagination)" })
   list(@Query() q: ListTransactionsDto) {
     return this.svc.list(q);
   }
 
   @Get('distinct')
-  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW, PERMISSIONS.DASHBOARD_RECON)
   @ApiOperation({ summary: "Ustun bo'yicha distinct qiymatlar (Google Sheets filter uchun)" })
   distinct(
     @Query('column') column: string,
@@ -90,7 +90,7 @@ export class TransactionsController {
   }
 
   @Get('stats')
-  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW, PERMISSIONS.DASHBOARD_RECON)
   @ApiOperation({ summary: 'Statistika: jami, IN/OUT, banklar bo\'yicha (sana, bank, direction + Google Sheets stilidagi kolonna filterlari)' })
   stats(
     @Query('from') from?: string,
@@ -177,7 +177,7 @@ export class TransactionsController {
   }
 
   @Get('reconcile/today')
-  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_VIEW)
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_VIEW, PERMISSIONS.DASHBOARD_RECON)
   @ApiOperation({ summary: "Barcha aktiv hisoblar uchun bugungi sverka. syncMismatched=true bo'lsa farqli hisoblar uchun avto-sync+qayta sverka qiladi (smart 2-pass)" })
   async reconcileToday(
     @Query('date') date?: string,
