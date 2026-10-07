@@ -156,10 +156,33 @@ export class TaminotService {
     return x.replace(/[^0-9A-Z]/g, '');
   }
 
+  /**
+   * Shartnoma TOKENINI bir xil yozuvga keltiradi (kirill ↔ lotin).
+   *
+   * ⚠️ Ilgari yetkazib beruvchi NOMI `coarse()` orqali transliteratsiya
+   * qilinardi, shartnoma tokeni esa YO'Q. Shuning uchun ERP'dagi "34/VATAN"
+   * bank izohidagi "№34/ВАТАН" bilan hech qachon mos kelmasdi — ikkalasi
+   * bir xil shartnoma bo'lsa ham. Endi ikkala tomon bir xil qoida bilan
+   * normallashtiriladi.
+   *
+   * `coarse()` dan farqi: DROP_WORDS (OOO/MCHJ...) olib tashlanmaydi — ular
+   * token ichida tasodifan uchrab, raqamni buzmasligi uchun.
+   */
+  private normTok(s: string | null | undefined): string {
+    let x = String(s || '').toUpperCase();
+    x = Array.from(x)
+      .map((ch) => (TaminotService.CYR[ch] !== undefined ? TaminotService.CYR[ch] : ch))
+      .join('');
+    for (const [a, b] of [['SH', 'S'], ['CH', 'C'], ['YU', 'U'], ['YA', 'A'], ['X', 'H'], ['Q', 'K'], ['W', 'V']]) {
+      x = x.split(a).join(b);
+    }
+    return x.replace(/[^0-9A-Z]/g, '');
+  }
+
   /** ERP "Дог№" dan shartnoma tokeni: "№ 34/VATAN от 10.2.2026" → "34VATAN" */
   private dogToken(s: string | null | undefined): string {
     const head = String(s || '').toUpperCase().split(/\bОТ\b|\bOT\b/)[0];
-    const t = head.replace(/[^0-9A-ZА-ЯЁ]/g, '');
+    const t = this.normTok(head);
     return t.length >= 4 ? t : '';
   }
 
@@ -170,7 +193,7 @@ export class TaminotService {
     const re = /[№N]\s*([0-9A-ZА-ЯЁ/\-.]{4,20})/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(up)) !== null) {
-      const t = m[1].replace(/[^0-9A-ZА-ЯЁ]/g, '');
+      const t = this.normTok(m[1]);
       if (t.length >= 4) out.add(t);
     }
     return out;
@@ -209,6 +232,13 @@ export class TaminotService {
       erpDate: string; erpAmount: string; erpSupplier: string;
       erpArticle: string; erpContract: string; sabab: string;
     }>;
+    // "summa bor, lekin shartnoma/nom mos emas" guruhi uchun yonma-yon taqqoslash
+    nomFarqi: Array<{
+      date: string; amount: string; kunFarq: number;
+      bankNom: string; bankNomNorm: string;
+      erpNom: string; erpNomNorm: string;
+      erpDog: string; erpDogTok: string; bankToklar: string;
+    }>;
     samples: Array<{
       date: string; amount: string; bankName: string;
       supplier: string; article: string; contract: string; dayDiff: number; how: string;
@@ -243,7 +273,7 @@ export class TaminotService {
     });
 
     if (txs.length === 0) {
-      return { ok: true, dryRun, dateFrom, scanned: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, cleared: 0, byArticle: [], reasons: [], nearMiss: [], samples: [] };
+      return { ok: true, dryRun, dateFrom, scanned: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, cleared: 0, byArticle: [], reasons: [], nearMiss: [], nomFarqi: [], samples: [] };
     }
 
     // ── 2) Ta'minot to'lovlari (±3 kun kengaytirilgan oyna bilan) ──
@@ -305,6 +335,10 @@ export class TaminotService {
     const reasons = new Map<string, number>();
     const samples: any[] = [];
     const nearMiss: any[] = [];
+    // Eng katta guruh — "summa bor, lekin shartnoma/nom mos emas". Nega mos
+    // kelmaganini ko'rish uchun bank va ERP nomlarini YONMA-YON saqlaymiz
+    // (xom holda ham, normallashtirilgan holda ham).
+    const nomFarqi: any[] = [];
     let matched = 0, ambiguous = 0, notFound = 0, cleared = 0;
 
     /**
@@ -348,6 +382,26 @@ export class TaminotService {
             : 'shartnoma mos, lekin summa boshqa';
         } else if (byAmount.has(amt)) {
           sabab = 'summa bor, lekin shartnoma/nom mos emas';
+          if (nomFarqi.length < 20) {
+            const yaqin = (byAmount.get(amt) || [])
+              .map((c: any) => ({ c, dd: Math.round(Math.abs(c.sana.getTime() - txDay.getTime()) / 86_400_000) }))
+              .filter((x: any) => x.dd <= MAX_DAY)
+              .sort((a: any, b: any) => a.dd - b.dd)[0];
+            if (yaqin) {
+              nomFarqi.push({
+                date: tx.txnDate.toISOString().slice(0, 10),
+                amount: String(amt),
+                kunFarq: yaqin.dd,
+                bankNom: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 40) || '',
+                bankNomNorm: names.slice(0, 70),
+                erpNom: String(yaqin.c.taminotchi || '').slice(0, 40),
+                erpNomNorm: String(yaqin.c.taminotchiC || '').slice(0, 40),
+                erpDog: String(yaqin.c.dogno || '').slice(0, 24),
+                erpDogTok: yaqin.c.dogTok || '',
+                bankToklar: Array.from(toks).slice(0, 4).join(', '),
+              });
+            }
+          }
         } else {
           sabab = "ta'minotda bunday summa yo'q";
         }
@@ -435,6 +489,7 @@ export class TaminotService {
         .map(([reason, count]) => ({ reason, count }))
         .sort((a, b) => b.count - a.count),
       nearMiss,
+      nomFarqi,
     };
   }
 }
