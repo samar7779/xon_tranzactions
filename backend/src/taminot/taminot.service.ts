@@ -219,6 +219,8 @@ export class TaminotService {
     dryRun: boolean;
     dateFrom: string;
     scanned: number;
+    /** Shu davrda ALLAQACHON bog'langanlar — rematch=false da ular ko'rilmaydi */
+    alreadyLinked: number;
     erpRows: number;
     matched: number;
     ambiguous: number;
@@ -273,7 +275,7 @@ export class TaminotService {
     });
 
     if (txs.length === 0) {
-      return { ok: true, dryRun, dateFrom, scanned: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, cleared: 0, byArticle: [], reasons: [], nearMiss: [], nomFarqi: [], samples: [] };
+      return { ok: true, dryRun, dateFrom, scanned: 0, alreadyLinked: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, cleared: 0, byArticle: [], reasons: [], nearMiss: [], nomFarqi: [], samples: [] };
     }
 
     // ── 2) Ta'minot to'lovlari (±3 kun kengaytirilgan oyna bilan) ──
@@ -328,6 +330,19 @@ export class TaminotService {
         if (d) d.push(item); else byDog.set(item.dogTok, [item]);
       }
     }
+
+    // Allaqachon bog'langanlar soni — "Mos topildi: 1" chalg'itmasligi uchun.
+    // rematch=false bo'lsa ular umuman ko'rilmaydi, shuning uchun natijada
+    // kichik raqam chiqadi va ish qilinmayotgandek tuyuladi.
+    const alreadyLinked = await this.prisma.transaction.count({
+      where: {
+        txnDate: {
+          gte: new Date(`${dateFrom}T00:00:00+05:00`),
+          ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999+05:00`) } : {}),
+        },
+        erpPaymentId: { not: null },
+      },
+    });
 
     // ── 3) Moslash ──
     const MAX_DAY = 2;
@@ -483,7 +498,7 @@ export class TaminotService {
 
     return {
       ok: true, dryRun, dateFrom,
-      scanned: txs.length, erpRows: res.rows.length,
+      scanned: txs.length, alreadyLinked, erpRows: res.rows.length,
       matched, ambiguous, notFound, cleared, byArticle, samples,
       reasons: Array.from(reasons.entries())
         .map(([reason, count]) => ({ reason, count }))

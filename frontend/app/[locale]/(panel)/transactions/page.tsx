@@ -7345,6 +7345,7 @@ type SchotchikResult = {
   dateTo: string;
   stats: {
     scanned: number;
+  alreadyLinked?: number;
     matched: number;
     alreadyCorrect: number;
     needsUpdate: number;
@@ -8166,6 +8167,7 @@ interface FixMinfinResult {
   dryRun: boolean;
   dateFrom: string;
   scanned: number;
+  alreadyLinked?: number;
   changed: number;
   unchanged: number;
   noRule: number;
@@ -8336,6 +8338,7 @@ interface TaminotMatchResult {
   dryRun: boolean;
   dateFrom: string;
   scanned: number;
+  alreadyLinked?: number;
   erpRows: number;
   matched: number;
   ambiguous: number;
@@ -8444,7 +8447,8 @@ function TaminotMatchDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           <div className="space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
-                { l: 'Ko‘rildi', v: res.scanned, c: 'text-slate-700 dark:text-slate-200' },
+                { l: 'Allaqachon bog‘langan', v: (res as any).alreadyLinked ?? 0, c: 'text-violet-700 dark:text-violet-300' },
+                { l: 'Ko‘rildi (yangi)', v: res.scanned, c: 'text-slate-700 dark:text-slate-200' },
                 { l: 'Mos topildi', v: res.matched, c: 'text-emerald-700 dark:text-emerald-300' },
                 { l: 'Noaniq (tegilmadi)', v: res.ambiguous, c: 'text-amber-700 dark:text-amber-300' },
                 { l: 'Topilmadi', v: res.notFound, c: 'text-slate-500' },
