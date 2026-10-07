@@ -398,17 +398,31 @@ export class MemorialOrderService {
           if (calls >= MAX_CALLS) return;
           solingan.add(kalit);
           calls++;
-          try {
+          // ⚠️ Bank rekvizitni almashtirgan bo'lsa (Kapitalbank 2026-10-05),
+          // ESKI sanalardagi hujjatlar bankda ESKI hisob raqami ostida turadi —
+          // yangi raqam bo'yicha so'ralsa bo'sh qaytadi (xatosiz, shunchaki 0 ta).
+          // Shuning uchun bo'sh kelsa, o'sha sanani eski rekvizit bilan ham
+          // so'raymiz. Yangi sanalarda birinchi so'rovning o'zi yetadi.
+          const soraymiz = async (branch: string, account: string) => {
             const result = await this.kb.getDoc1C({
               baseUrl: bank.apiBaseUrl,
               login,
               password,
-              branch: acc.branch,
-              account: acc.accountNo,
+              branch,
+              account,
               date,
               useProxy: cred.useProxy === true,
             });
-            for (const it of result?.content || []) pool.push(it);
+            const items = result?.content || [];
+            for (const it of items) pool.push(it);
+            return items.length;
+          };
+          try {
+            const topildi = await soraymiz(acc.branch, acc.accountNo);
+            if (topildi === 0 && acc.previousAccountNo && calls < MAX_CALLS) {
+              calls++;
+              await soraymiz(acc.previousBranch || acc.branch, acc.previousAccountNo);
+            }
           } catch (e: any) {
             this.log.warn(`getDoc1C ${acc.accountNo} ${date}: ${e?.message}`);
           }

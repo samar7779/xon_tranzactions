@@ -508,6 +508,8 @@ model BankAccount {
   // o'sha raqam bo'yicha topadi, bu maydonsiz bog'lanish uziladi.
   // Kapitalbank 2026-10-05 da 00974→01158 ga o'tganda shu muammo chiqqan edi.
   previousAccountNo String? @map("previous_account_no") @db.VarChar(32)
+  // Eski MFO — bank so'rovida hisob raqami bilan birga kerak bo'ladi.
+  previousBranch    String? @map("previous_branch") @db.VarChar(8)
   ownerName    String?   @map("owner_name") @db.VarChar(128)
   currency     String    @default("UZS") @db.VarChar(3)
   balance      Decimal?  @db.Decimal(18, 2)
