@@ -8344,8 +8344,15 @@ interface TaminotMatchResult {
   ambiguous: number;
   notFound: number;
   cleared?: number;
+  /** Shartnoma mos keldi, lekin summa majburiyatdan oshib ketdi — yozilmadi */
+  shiftRad?: number;
   byArticle: Array<{ article: string; count: number }>;
   reasons?: Array<{ reason: string; count: number }>;
+  shiftOshdi?: Array<{
+    date: string; amount: string; bankName: string;
+    contract: string; contractDate: string; supplier: string;
+    erpTotal: string; alreadyUsed: string; excess: string; how: string;
+  }>;
   nomFarqi?: Array<{
     date: string; amount: string; kunFarq: number;
     bankNom: string; bankNomNorm: string;
@@ -8459,6 +8466,7 @@ function TaminotMatchDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 { l: 'Noaniq (tegilmadi)', v: res.ambiguous, c: 'text-amber-700 dark:text-amber-300' },
                 { l: 'Topilmadi', v: res.notFound, c: 'text-slate-500' },
                 { l: 'Bekor qilindi', v: res.cleared ?? 0, c: 'text-rose-600 dark:text-rose-300' },
+                { l: 'Summa oshdi', v: res.shiftRad ?? 0, c: 'text-orange-600 dark:text-orange-300' },
               ].map((k) => (
                 <div key={k.l} className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
                   <div className="text-[9.5px] uppercase tracking-wider text-slate-400">{k.l}</div>
@@ -8518,6 +8526,34 @@ function TaminotMatchDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                         <span className="truncate flex-1 text-teal-700 dark:text-teal-300">{s.erpSupplier} · {s.erpContract}</span>
                       </div>
                       <div className="text-[10px] text-amber-700 dark:text-amber-300 pl-[46px]">{s.sabab}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(res.shiftOshdi?.length ?? 0) > 0 && (
+              <div className="rounded-xl ring-1 ring-orange-200 dark:ring-orange-900 overflow-hidden">
+                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40">
+                  Summa shartnoma majburiyatidan oshdi — yozilmadi
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {res.shiftOshdi!.map((s, i) => (
+                    <div key={i} className="px-3 py-2 text-[11px] space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums text-slate-500 w-[74px] shrink-0">{s.date}</span>
+                        <span className="tabular-nums font-semibold w-[104px] text-right shrink-0">{Number(s.amount).toLocaleString('ru-RU')}</span>
+                        <span className="flex-1 truncate text-slate-600 dark:text-slate-300">{s.bankName}</span>
+                      </div>
+                      <div className="pl-[8px] text-[10.5px] text-slate-600 dark:text-slate-300">
+                        shartnoma: <span className="font-mono">{s.contract || '—'}</span>
+                        {s.contractDate ? <> · sana: <span className="font-mono">{s.contractDate}</span></> : null}
+                      </div>
+                      <div className="pl-[8px] text-[10.5px] tabular-nums text-slate-500 dark:text-slate-400">
+                        ta&apos;minot jami {Number(s.erpTotal).toLocaleString('ru-RU')} ·
+                        yozilgan {Number(s.alreadyUsed).toLocaleString('ru-RU')} ·
+                        <span className="text-orange-700 dark:text-orange-300 font-semibold"> oshdi {Number(s.excess).toLocaleString('ru-RU')}</span>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -146,6 +146,12 @@ export class TaminotService {
   };
   private static readonly DROP_WORDS = ['ООО', 'OOO', 'MCHJ', 'МЧЖ', 'ХК', 'XK', 'ЧП', 'ИП', 'АО', 'ЗАО'];
 
+  /** Majburiyat jamisi necha kunlik tarixdan yig'iladi (shartnoma bir yildan uzoq cho'zilishi mumkin). */
+  private static readonly MAJBURIYAT_TARIX_KUN = 730;
+  /** Summa shiftidagi yo'l qo'yiladigan farq: 1% yoki 10 000 so'm (yaxlitlash uchun). */
+  private static readonly SHIFT_FOIZ = 0.01;
+  private static readonly SHIFT_MIN = 10_000;
+
   private coarse(s: string | null | undefined): string {
     let x = String(s || '').toUpperCase();
     for (const w of TaminotService.DROP_WORDS) x = x.split(w).join(' ');
@@ -200,6 +206,34 @@ export class TaminotService {
     return t.length >= 4 ? t : '';
   }
 
+  /**
+   * ERP "Дог№" yoki bank izohidan SHARTNOMA SANASI:
+   *   "№ 34/VATAN от 10.2.2026" → "2026-02-10"
+   *
+   * Nega kerak: bitta yetkazib beruvchi bilan bir xil raqamli shartnoma yillar
+   * davomida qayta tuzilishi mumkin. Raqam bir xil, sana boshqa — bu IKKI
+   * ALOHIDA majburiyat. Sanani hisobga olmasak, o'tgan yilgi shartnoma to'lovi
+   * bu yilgi majburiyat hisobiga yozilib ketadi.
+   *
+   * `dogToken()` "ОТ" dan OLDINGI qismni oladi, bu funksiya — KEYINGISINI.
+   */
+  private sanaOt(s: string | null | undefined): string {
+    let up = String(s || '').toUpperCase();
+    up = Array.from(up)
+      .map((ch) => (TaminotService.CYR[ch] !== undefined ? TaminotService.CYR[ch] : ch))
+      .join('');
+    const bolak = up.split(/\bOT\b/);
+    const quyruq = bolak.length > 1 ? bolak.slice(1).join(' ') : up;
+    const dmy = quyruq.match(/(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})/);
+    const ymd = quyruq.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+    const [kun, oy, yil] = dmy
+      ? [dmy[1], dmy[2], dmy[3]]
+      : ymd ? [ymd[3], ymd[2], ymd[1]] : ['', '', ''];
+    const y = Number(yil), o = Number(oy), d = Number(kun);
+    if (!(y >= 2000 && y <= 2100 && o >= 1 && o <= 12 && d >= 1 && d <= 31)) return '';
+    return `${y}-${String(o).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
   /** Bank izohidan shartnoma tokenlari: "договору №335LMC от ..." → {"335LMC"} */
   private descTokens(d: string | null | undefined): Set<string> {
     const out = new Set<string>();
@@ -241,6 +275,8 @@ export class TaminotService {
     notFound: number;
     /** Eski bog'lanish bekor qilindi (qayta ko'rishda mos kelmay qolgan) */
     cleared: number;
+    /** Shartnoma mos keldi, lekin summa majburiyatdan oshib ketdi — yozilmadi */
+    shiftRad: number;
     byArticle: Array<{ article: string; count: number }>;
     reasons: Array<{ reason: string; count: number }>;
     nearMiss: Array<{
@@ -254,6 +290,12 @@ export class TaminotService {
       bankNom: string; bankNomNorm: string;
       erpNom: string; erpNomNorm: string;
       erpDog: string; erpDogTok: string; bankToklar: string;
+    }>;
+    /** Summa shifti rad etganlar — shartnoma to'g'ri, lekin jami oshib ketgan */
+    shiftOshdi: Array<{
+      date: string; amount: string; bankName: string;
+      contract: string; contractDate: string; supplier: string;
+      erpTotal: string; alreadyUsed: string; excess: string; how: string;
     }>;
     samples: Array<{
       date: string; amount: string; bankName: string;
@@ -289,7 +331,7 @@ export class TaminotService {
     });
 
     if (txs.length === 0) {
-      return { ok: true, dryRun, dateFrom, scanned: 0, alreadyLinked: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, cleared: 0, byArticle: [], reasons: [], nearMiss: [], nomFarqi: [], samples: [] };
+      return { ok: true, dryRun, dateFrom, scanned: 0, alreadyLinked: 0, erpRows: 0, matched: 0, ambiguous: 0, notFound: 0, cleared: 0, shiftRad: 0, byArticle: [], reasons: [], nearMiss: [], nomFarqi: [], shiftOshdi: [], samples: [] };
     }
 
     // ── 2) Ta'minot to'lovlari (±3 kun kengaytirilgan oyna bilan) ──
@@ -334,6 +376,7 @@ export class TaminotService {
         kategoriya: String(r.kategoriya || ''),
         dogno: String(r.dogno || ''),
         dogTok: this.dogToken(r.dogno),
+        dogSana: this.sanaOt(r.dogno),
         obyekt: String(r.obyekt || ''),
       };
       const arr = byAmount.get(amt);
@@ -343,6 +386,84 @@ export class TaminotService {
         const d = byDog.get(item.dogTok);
         if (d) d.push(item); else byDog.set(item.dogTok, [item]);
       }
+    }
+
+    // ── 2b) MAJBURIYATLAR: shartnoma (№ + sana) kesimida JAMI summa ──
+    //
+    // «PROWAYS» holati: bitta 100 mln majburiyat bir nechta hisob raqamdan
+    // bir nechta bo'lak qilib to'lanadi. Hech bir bo'lak ERP qatoriga summa
+    // bo'yicha teng kelmaydi, shuning uchun 1-bosqich ularni topa olmaydi.
+    //
+    // Yechim — summani TASHLAB YUBORMASLIK, balki SHIFT qilib ishlatish:
+    // bir shartnoma bo'yicha yozilgan to'lovlar yig'indisi o'sha shartnoma
+    // majburiyatidan OSHMASLIGI shart. Oshsa — yozmaymiz, odam ko'rsin.
+    //
+    // Jami butun tarix bo'yicha olinadi (faqat so'nggi kunlar emas), aks holda
+    // shift haqiqiydan kichik chiqib, to'g'ri to'lovlar ham rad etilardi.
+    const majFrom = new Date(`${dateFrom}T00:00:00+05:00`);
+    majFrom.setDate(majFrom.getDate() - TaminotService.MAJBURIYAT_TARIX_KUN);
+    const majRes = await this.getPool().query(
+      `select coalesce(p.legacy_meta->>'dogNo', '')                        as dogno,
+              coalesce(t.j->>'nomi', t.j->>'name', t.j->>'title',
+                       p.legacy_meta->>'rawPayee', '')                     as taminotchi,
+              coalesce(k.j->>'nomi', k.j->>'name', k.j->>'title', '')      as kategoriya,
+              coalesce(o.j->>'nomi', o.j->>'name', o.j->>'title', '')      as obyekt,
+              count(*)::int                                               as qator,
+              sum(round(coalesce(p.executed_amount, p.summa)))::bigint     as jami,
+              min(p.id::text)                                             as namuna
+         from public.tulovlar p
+         left join lateral (select to_jsonb(s) j from public.taminotchilar s       where s.id = p.taminotchi_id) t on true
+         left join lateral (select to_jsonb(c) j from public.tulov_kategoriyalar c where c.id = p.category_id)   k on true
+         left join lateral (select to_jsonb(ob) j from public.obyekts ob          where ob.id = p.obyekt_id)    o on true
+        where coalesce(p.legacy_meta->>'dogNo', '') <> ''
+          and p.tulov_sanasi >= $1
+        group by 1, 2, 3, 4`,
+      [majFrom.toISOString().slice(0, 10)],
+    );
+
+    /** Kalit: shartnoma tokeni + shartnoma sanasi — "34VATAN|2026-02-10". */
+    type Majburiyat = {
+      dogTok: string; dogSana: string; dogno: string;
+      jami: number; qator: number;
+      taminotchi: string; taminotchiC: string; kategoriya: string; obyekt: string;
+      namuna: string; xilma: boolean;
+    };
+    const byMajburiyat = new Map<string, Majburiyat>();
+    for (const r of majRes.rows) {
+      const dogTok = this.dogToken(r.dogno);
+      if (!dogTok) continue;
+      const dogSana = this.sanaOt(r.dogno);
+      const kalit = `${dogTok}|${dogSana}`;
+      const jami = Number(r.jami) || 0;
+      const bor = byMajburiyat.get(kalit);
+      if (!bor) {
+        byMajburiyat.set(kalit, {
+          dogTok, dogSana, dogno: String(r.dogno || ''),
+          jami, qator: Number(r.qator) || 0,
+          taminotchi: String(r.taminotchi || ''),
+          taminotchiC: this.coarse(r.taminotchi),
+          kategoriya: String(r.kategoriya || ''),
+          obyekt: String(r.obyekt || ''),
+          namuna: String(r.namuna),
+          xilma: false,
+        });
+        continue;
+      }
+      // Bir shartnoma ostida turli modda/obyekt/yetkazib beruvchi bo'lsa —
+      // qaysi birini yozishni bilmaymiz. Jami esa baribir qo'shiladi (shift).
+      bor.jami += jami;
+      bor.qator += Number(r.qator) || 0;
+      const farq = bor.taminotchi !== String(r.taminotchi || '')
+        || bor.kategoriya !== String(r.kategoriya || '')
+        || bor.obyekt !== String(r.obyekt || '');
+      if (farq) bor.xilma = true;
+    }
+
+    /** Bitta token bir nechta shartnoma sanasiga tegishli bo'lsa — sanasiz yozish taqiqlanadi. */
+    const tokenSanalari = new Map<string, Set<string>>();
+    for (const m of byMajburiyat.values()) {
+      const s = tokenSanalari.get(m.dogTok);
+      if (s) s.add(m.dogSana); else tokenSanalari.set(m.dogTok, new Set([m.dogSana]));
     }
 
     // Allaqachon bog'langanlar soni — "Mos topildi: 1" chalg'itmasligi uchun.
@@ -358,6 +479,44 @@ export class TaminotService {
       },
     });
 
+    // ── 2c) BAND summa: har bir majburiyatdan allaqachon qancha yozilgan ──
+    //
+    // Shift tekshiruvi bitta to'lov uchun emas, shartnoma bo'yicha JAMI uchun
+    // ishlaydi. Shu sababli oldin bog'langan to'lovlar ham hisobga olinadi.
+    // Hozir skanerlanayotganlari chiqarib tashlanadi — ular qayta sanalmasin.
+    const skanId = new Set(txs.map((t) => t.id));
+    const band = new Map<string, number>();
+    const bandQator = await this.prisma.transaction.findMany({
+      where: { erpPaymentId: { not: null }, NOT: { erpContract: null } },
+      select: { id: true, amount: true, erpContract: true },
+    });
+    for (const b of bandQator) {
+      if (skanId.has(b.id)) continue;
+      const tok = this.dogToken(b.erpContract);
+      if (!tok) continue;
+      const kalit = `${tok}|${this.sanaOt(b.erpContract)}`;
+      band.set(kalit, (band.get(kalit) || 0) + Math.round(Math.abs(Number(b.amount))));
+    }
+
+    /**
+     * SUMMA SHIFTI — moslikni yozishdan oldingi oxirgi tekshiruv.
+     *
+     * Shartnoma bo'yicha yozilgan to'lovlar yig'indisi ta'minotdagi majburiyat
+     * jamisidan oshib ketmasligi kerak. Oshsa — bu boshqa shartnoma yoki
+     * noto'g'ri moslik, tegmaymiz.
+     */
+    const shiftTekshir = (m: Majburiyat | undefined, amt: number): { ok: boolean; band: number; jami: number } => {
+      if (!m) return { ok: false, band: 0, jami: 0 };
+      const kalit = `${m.dogTok}|${m.dogSana}`;
+      const oldin = band.get(kalit) || 0;
+      const chek = m.jami + Math.max(m.jami * TaminotService.SHIFT_FOIZ, TaminotService.SHIFT_MIN);
+      return { ok: oldin + amt <= chek, band: oldin, jami: m.jami };
+    };
+
+    /** ERP qatoridan majburiyat kaliti — "34VATAN|2026-02-10". */
+    const majTop = (c: { dogTok?: string; dogSana?: string }): Majburiyat | undefined =>
+      c.dogTok ? byMajburiyat.get(`${c.dogTok}|${c.dogSana || ''}`) : undefined;
+
     // ── 3) Moslash ──
     const MAX_DAY = 2;
     const tally = new Map<string, number>();
@@ -368,7 +527,9 @@ export class TaminotService {
     // kelmaganini ko'rish uchun bank va ERP nomlarini YONMA-YON saqlaymiz
     // (xom holda ham, normallashtirilgan holda ham).
     const nomFarqi: any[] = [];
-    let matched = 0, ambiguous = 0, notFound = 0, cleared = 0;
+    let matched = 0, ambiguous = 0, notFound = 0, cleared = 0, shiftRad = 0;
+    /** Summa shifti sabab rad etilganlar — odam ko'rishi uchun ro'yxat. */
+    const shiftOshdi: any[] = [];
 
     /**
      * Qayta ko'rish (rematch) paytida moslik topilmasa — eski bog'lanish bekor
@@ -418,6 +579,13 @@ export class TaminotService {
               erpMatchedAt: new Date(),
             },
           }).catch((e) => this.log.warn(`erp yozish xato (${tx.id}): ${e?.message}`));
+        }
+        // Shu shartnoma bo'yicha band summa oshadi — keyingi bo'lak (PROWAYS)
+        // to'g'ri tekshirilsin. DRY-RUN da ham oshiriladi: aks holda sinov
+        // natijasi haqiqiy ishga tushirishdan farq qilib qolardi.
+        if (c.dogTok) {
+          const k = `${c.dogTok}|${c.dogSana || ''}`;
+          band.set(k, (band.get(k) || 0) + amt);
         }
       };
       const txDay = new Date(tx.txnDate);
@@ -514,11 +682,130 @@ export class TaminotService {
         return nomzod.sort((a, b) => a.diff - b.diff)[0];
       };
 
+      /**
+       * SUMMA DARVOZASI — hamma bosqich yozishdan oldin shu yerdan o'tadi.
+       *
+       * Summa "hisobga olinmaydi" degan holat YO'Q. Uch imkoniyat:
+       *   1. summa aniq teng         → o'tadi (eng ishonchli)
+       *   2. shartnoma majburiyatidan OSHMAYDI → o'tadi (bo'lib to'lash)
+       *   3. oshib ketadi            → YOZILMAYDI, ro'yxatga tushadi
+       *
+       * 2-holatda shartnoma bo'yicha ALLAQACHON yozilgan to'lovlar ham qo'shib
+       * hisoblanadi, shuning uchun bir majburiyatga chegaradan ortiq pul
+       * yozilmaydi.
+       */
+      const summaDarvoza = (c: any, usul: string, shiftShart = false): boolean => {
+        // `shiftShart` — 3-bosqich uchun: u yerda `c` sun'iy yig'ilgan majburiyat,
+        // uning summasi to'lov summasiga tasodifan teng chiqib, tekshiruvni
+        // chetlab o'tib ketmasligi kerak.
+        if (!shiftShart && Number(c.summa) === amt) return true;
+        const m = majTop(c);
+        if (!m) {
+          shiftRad++;
+          const s = "shartnoma jamisi aniqlanmadi — summa tekshirilmadi";
+          reasons.set(s, (reasons.get(s) || 0) + 1);
+          return false;
+        }
+        const t = shiftTekshir(m, amt);
+        if (t.ok) return true;
+        shiftRad++;
+        const s = 'summa shartnoma majburiyatidan oshib ketdi';
+        reasons.set(s, (reasons.get(s) || 0) + 1);
+        if (shiftOshdi.length < 20) {
+          shiftOshdi.push({
+            date: tx.txnDate.toISOString().slice(0, 10),
+            amount: String(amt),
+            bankName: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 30) || '',
+            contract: String(c.dogno || '').slice(0, 30),
+            contractDate: c.dogSana || '',
+            supplier: String(c.taminotchi || '').slice(0, 28),
+            erpTotal: String(t.jami),
+            alreadyUsed: String(t.band),
+            excess: String(t.band + amt - t.jami),
+            how: usul,
+          });
+        }
+        return false;
+      };
+
+      /**
+       * 3-BOSQICH — «PROWAYS» holati: bitta majburiyat bir nechta hisob
+       * raqamdan bir nechta bo'lak bo'lib to'langan.
+       *
+       * Misol: PROWAYS MCHJ ga 100 mln to'lash kerak, biz 40 + 35 + 25 qilib
+       * uch hisobdan chiqardik. Hech bir bo'lak ERP qatoriga teng emas va
+       * to'lov kunlari ham ta'minot qatoridan uzoq — 1 va 2-bosqich topmaydi.
+       *
+       * Shu yerda PAYMENT sanasi emas, SHARTNOMA sanasi hal qiladi:
+       * shartnoma raqami + shartnoma sanasi bir xil bo'lsa, bu bitta
+       * majburiyat. Summa esa shift sifatida ishlaydi (summaDarvoza).
+       */
+      const uchinchiBosqich = (): { c: any; diff: number } | 'noaniq' | null => {
+        const bankDogSana = this.sanaOt(tx.description);
+        const nomzod: Majburiyat[] = [];
+        for (const t of toks) {
+          const sanalar = tokenSanalari.get(t);
+          if (!sanalar || sanalar.size === 0) continue;
+          for (const sn of sanalar) {
+            // Bank izohida shartnoma sanasi bor bo'lsa — AYNAN mos kelishi shart.
+            // Yo'q bo'lsa — token bitta shartnoma sanasiga tegishli bo'lishi shart,
+            // aks holda qaysi shartnomaga tushganini bilmaymiz.
+            if (bankDogSana) { if (sn !== bankDogSana) continue; }
+            else if (sanalar.size > 1) return 'noaniq';
+            const m = byMajburiyat.get(`${t}|${sn}`);
+            if (m) nomzod.push(m);
+          }
+        }
+        if (!nomzod.length) return null;
+        const xil = new Set(nomzod.map((m) => `${m.taminotchi}|${m.kategoriya}|${m.obyekt}`));
+        if (xil.size > 1 || nomzod.some((m) => m.xilma)) return 'noaniq';
+        const m = nomzod[0];
+
+        // Yetkazib beruvchi nomi ham mos kelsin (token tasodifan uchrab qolmasin).
+        const erpNom = m.taminotchiC || '';
+        if (erpNom.length >= 8 && !nomlar.some((n) => n.includes(erpNom) || erpNom.includes(n))) return null;
+
+        // Sana mantiqi: shartnomadan oldin to'lov bo'lmaydi, 2 yildan keyin ham emas.
+        if (m.dogSana) {
+          const dog = new Date(`${m.dogSana}T12:00:00Z`);
+          const kun = Math.round((txDay.getTime() - dog.getTime()) / 86_400_000);
+          if (kun < -5 || kun > TaminotService.MAJBURIYAT_TARIX_KUN) return null;
+        }
+        return {
+          c: {
+            id: m.namuna, summa: m.jami, sana: txDay,
+            taminotchi: m.taminotchi, taminotchiC: m.taminotchiC,
+            kategoriya: m.kategoriya, dogno: m.dogno,
+            dogTok: m.dogTok, dogSana: m.dogSana, obyekt: m.obyekt,
+          },
+          diff: 0,
+        };
+      };
+
+      /** 2 → 3-bosqich ketma-ketligi (uch joyda bir xil ishlatiladi). */
+      const qolganBosqichlar = async (): Promise<boolean> => {
+        const t2 = ikkinchiBosqich();
+        if (t2 === 'noaniq') { ambiguous++; await eskiniTozala(tx); return true; }
+        if (t2) {
+          if (summaDarvoza(t2.c, 'shartnoma')) { await yoz(t2.c, t2.diff, 'shartnoma'); return true; }
+          // Shift rad etdi. 3-bosqich AYNAN shu majburiyatga boradi, demak u ham
+          // rad etiladi — qayta sanamaymiz, sabab allaqachon yozilgan.
+          await eskiniTozala(tx);
+          return true;
+        }
+        const t3 = uchinchiBosqich();
+        if (t3 === 'noaniq') { ambiguous++; await eskiniTozala(tx); return true; }
+        if (t3) {
+          if (summaDarvoza(t3.c, 'majburiyat', true)) { await yoz(t3.c, t3.diff, 'majburiyat'); return true; }
+          await eskiniTozala(tx);
+          return true;
+        }
+        return false;
+      };
+
       const cands = byAmount.get(amt);
       if (!cands || cands.length === 0) {
-        const t2 = ikkinchiBosqich();
-        if (t2 === 'noaniq') { ambiguous++; await eskiniTozala(tx); continue; }
-        if (t2) { await yoz(t2.c, t2.diff, 'shartnoma'); continue; }
+        if (await qolganBosqichlar()) continue;
         sababniYoz(); await eskiniTozala(tx); continue;
       }
 
@@ -540,9 +827,7 @@ export class TaminotService {
         if (byDog || byName) hits.push({ c, diff, byDog, byName });
       }
       if (hits.length === 0) {
-        const t2 = ikkinchiBosqich();
-        if (t2 === 'noaniq') { ambiguous++; await eskiniTozala(tx); continue; }
-        if (t2) { await yoz(t2.c, t2.diff, 'shartnoma'); continue; }
+        if (await qolganBosqichlar()) continue;
         sababniYoz(); await eskiniTozala(tx); continue;
       }
 
@@ -562,19 +847,21 @@ export class TaminotService {
       .slice(0, 20);
 
     this.log.log(
-      `taminot moslash: skan ${txs.length}, ERP ${res.rows.length}, mos ${matched}, ` +
-      `noaniq ${ambiguous}, topilmadi ${notFound}${dryRun ? ' [DRY-RUN]' : ' [YOZILDI]'}`,
+      `taminot moslash: skan ${txs.length}, ERP ${res.rows.length}, majburiyat ${byMajburiyat.size}, ` +
+      `mos ${matched}, noaniq ${ambiguous}, topilmadi ${notFound}, summa oshdi ${shiftRad}` +
+      `${dryRun ? ' [DRY-RUN]' : ' [YOZILDI]'}`,
     );
 
     return {
       ok: true, dryRun, dateFrom,
       scanned: txs.length, alreadyLinked, erpRows: res.rows.length,
-      matched, ambiguous, notFound, cleared, byArticle, samples,
+      matched, ambiguous, notFound, cleared, shiftRad, byArticle, samples,
       reasons: Array.from(reasons.entries())
         .map(([reason, count]) => ({ reason, count }))
         .sort((a, b) => b.count - a.count),
       nearMiss,
       nomFarqi,
+      shiftOshdi,
     };
   }
 }
