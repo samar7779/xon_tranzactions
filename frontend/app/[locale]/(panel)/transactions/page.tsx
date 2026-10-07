@@ -8346,6 +8346,12 @@ interface TaminotMatchResult {
   cleared?: number;
   byArticle: Array<{ article: string; count: number }>;
   reasons?: Array<{ reason: string; count: number }>;
+  nomFarqi?: Array<{
+    date: string; amount: string; kunFarq: number;
+    bankNom: string; bankNomNorm: string;
+    erpNom: string; erpNomNorm: string;
+    erpDog: string; erpDogTok: string; bankToklar: string;
+  }>;
   nearMiss?: Array<{
     date: string; amount: string; bankName: string;
     erpDate: string; erpAmount: string; erpSupplier: string;
@@ -8512,6 +8518,39 @@ function TaminotMatchDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                         <span className="truncate flex-1 text-teal-700 dark:text-teal-300">{s.erpSupplier} · {s.erpContract}</span>
                       </div>
                       <div className="text-[10px] text-amber-700 dark:text-amber-300 pl-[46px]">{s.sabab}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(res.nomFarqi?.length ?? 0) > 0 && (
+              <div className="rounded-xl ring-1 ring-amber-200 dark:ring-amber-900 overflow-hidden">
+                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40">
+                  Summa mos, nom/shartnoma mos emas — nega?
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {res.nomFarqi!.map((s, i) => (
+                    <div key={i} className="px-3 py-2 text-[11px] space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums text-slate-500 w-[74px] shrink-0">{s.date}</span>
+                        <span className="tabular-nums font-semibold w-[104px] text-right shrink-0">{Number(s.amount).toLocaleString('ru-RU')}</span>
+                        <span className="text-[10px] text-slate-400">sana farqi: {s.kunFarq} kun</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-slate-400 w-[46px] shrink-0">bank</span>
+                        <span className="flex-1 truncate text-slate-600 dark:text-slate-300">{s.bankNom}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-teal-600 w-[46px] shrink-0">erp</span>
+                        <span className="flex-1 truncate text-teal-700 dark:text-teal-300">{s.erpNom}</span>
+                      </div>
+                      <div className="pl-[46px] text-[10px] font-mono text-slate-500 dark:text-slate-400 break-all">
+                        bank→{s.bankNomNorm || '(bosh)'} · erp→{s.erpNomNorm || '(bosh)'}
+                      </div>
+                      <div className="pl-[46px] text-[10px] font-mono text-slate-500 dark:text-slate-400 break-all">
+                        erp dog: {s.erpDog || '—'} (tok: {s.erpDogTok || '—'}) · bank tok: {s.bankToklar || '—'}
+                      </div>
                     </div>
                   ))}
                 </div>
