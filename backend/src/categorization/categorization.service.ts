@@ -79,6 +79,9 @@ const KEYWORDS_SALARY = [
   // Kontragent emas (tashqi xizmat ko'rsatuvchi yo'q), ko'chirma ham emas
   // (pul hisoblarimiz doirasidan chiqadi) — bu odamga ketgan mehnat daromadi.
   'ДОХОД ОТ ДЕЯТЕЛЬНОСТИ',
+  // ГПХ = fuqarolik-huquqiy shartnoma: jismoniy shaxsga bajarilgan ish uchun
+  // to'lov. Yetkazib beruvchi emas, odam — shuning uchun mehnat xarajati.
+  'ВОЗНАГРАЖДЕНИЕ ПО ДОГОВОРУ ГПХ',
 ];
 
 /**
@@ -95,7 +98,7 @@ const RE_SALARY_OY =
  * Hisob raqami bo'yicha tekshiruv ishlamay qolganda (masalan ikkilamchi hisob
  * bazada ro'yxatdan o'tmagan bo'lsa) shu zaxira belgi ishlaydi.
  */
-const KEYWORDS_TRANSFER = ['ИККИЛАМЧИ ХИСОБВАРА', 'АСОСИЙ ХИСОБВАРА'];
+const KEYWORDS_TRANSFER = ['ИККИЛАМЧИ ХИСОБВАРА', 'АСОСИЙ ХИСОБВАРА', 'ПЕРЕБРОСКА'];
 const KEYWORDS_BANK = ['CORPORATE', 'ТАРИФ', 'TARIF'];
 const KEYWORDS_LOAN = ['(ЗАЙМ)', '(ЗАЕМ)'];
 // SCHETCHIK keywords — stem (o'zak) shaklida, qo'shimchalar (...ЛАР, ...И, ...ГА) bilan ham match.
