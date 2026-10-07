@@ -46,6 +46,7 @@ interface RunXulosa {
   stages: Record<string, any>;
   aiSoralgan: number;
   aiQoyilgan: number;
+  aiChaqiriq: number;
   error: string | null;
 }
 
@@ -53,7 +54,13 @@ interface Holat {
   ishlayapti: boolean;
   runId: string | null;
   bilimBor: boolean;
-  aiKalitBor: boolean;
+  /** AI yo'li — setup token (Claude Code obunasi), API kaliti ishlatilmaydi */
+  ai: {
+    ok: boolean; usul: string; tokenBor: boolean;
+    cliBor: boolean; versiya: string; buyruq: string; model: string;
+  };
+  /** Kunlik chegara — Python agentlar bilan bir obunani ulashadi */
+  aiKunlik: { ishlatilgan: number; chegara: number };
   oxirgi: RunXulosa | null;
 }
 
@@ -180,8 +187,12 @@ export function KategoriyaAgentDialog({
               matn={h.bilimBor ? 'Bilim fayli joyida' : "Bilim fayli yo'q (agents/knowledge/kategoriya.md)"}
             />
             <Belgi
-              ok={h.aiKalitBor}
-              matn={h.aiKalitBor ? 'AI kaliti sozlangan' : "AI kaliti yo'q — 5-bosqich ishlamaydi"}
+              ok={h.ai?.ok}
+              matn={h.ai?.ok
+                ? `Setup token joyida · ${h.ai.model}${h.ai.versiya ? ` · claude ${h.ai.versiya}` : ''}`
+                : !h.ai?.tokenBor
+                  ? "ANTHROPIC_SETUP_TOKEN yo'q — 5-bosqich ishlamaydi"
+                  : `claude CLI topilmadi (${h.ai?.buyruq}) — CLAUDE_CMD bilan yo'lni ko'rsating`}
             />
             <div className={cn(
               'rounded-xl px-3 py-2 text-[12px] ring-1 flex items-center gap-2',
@@ -193,6 +204,14 @@ export function KategoriyaAgentDialog({
                 ? <><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> Ishlamoqda{run?.bosqich ? ` — ${BOSQICH_NOM[run.bosqich]?.nom || run.bosqich}` : ''}</>
                 : <><Clock className="h-3.5 w-3.5 shrink-0" /> Bo&apos;sh turibdi</>}
             </div>
+          </div>
+        )}
+
+        {h?.aiKunlik && (
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2 text-[11.5px] text-slate-600 dark:text-slate-300 leading-snug">
+            AI kunlik chegara: <b className="tabular-nums">{h.aiKunlik.ishlatilgan}/{h.aiKunlik.chegara}</b> so&apos;rov.
+            Setup token Telegram agentlari (leader, support, checker, teacher) bilan bir obunada —
+            chegara shular uchun joy qoldirish uchun qo&apos;yilgan. Chegara tugasa qolgan to&apos;lovlar ertaga ko&apos;riladi.
           </div>
         )}
 
@@ -440,6 +459,9 @@ function BosqichNatija({ kalit, natija }: { kalit: string; natija: any }) {
   if (natija?.otkazildi) {
     return <div className="text-[11px] text-slate-500">o&apos;tkazib yuborildi — {String(natija.otkazildi)}</div>;
   }
+  if (natija?.chegara && !natija?.soralgan) {
+    return <div className="text-[11px] text-amber-700 dark:text-amber-300 leading-snug">{String(natija.chegara)}</div>;
+  }
 
   const juft: Array<[string, any]> = [];
   const q = (l: string, v: any) => { if (v !== undefined && v !== null) juft.push([l, v]); };
@@ -471,6 +493,8 @@ function BosqichNatija({ kalit, natija }: { kalit: string; natija: any }) {
     q('so‘raldi', natija?.soralgan);
     q('qo‘yildi', natija?.qoyilgan);
     q('ishonch past', natija?.past);
+    q('so‘rov', natija?.chaqiriq);
+    q('kunlik', natija?.kunlik);
     q('paket xato', natija?.paketXato);
   }
 
@@ -482,6 +506,11 @@ function BosqichNatija({ kalit, natija }: { kalit: string; natija: any }) {
           {l}: <b className="font-semibold">{typeof v === 'number' ? v.toLocaleString('ru-RU') : String(v)}</b>
         </span>
       ))}
+      {natija?.chegara && (
+        <span className="w-full text-[10.5px] text-amber-700 dark:text-amber-300 leading-snug">
+          {String(natija.chegara)}
+        </span>
+      )}
       {Array.isArray(natija?.xatolar) && natija.xatolar.length > 0 && (
         <span className="w-full text-[10.5px] text-amber-700 dark:text-amber-300 leading-snug">
           {natija.xatolar.join(' · ')}

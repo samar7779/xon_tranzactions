@@ -41,6 +41,17 @@ export class KategoriyaAgentService {
   /** AI bosqichida bir yurishda ko'rib chiqiladigan eng ko'p to'lov. */
   private static readonly AI_LIMIT = Number(process.env.KATEGORIYA_AI_LIMIT || 200);
   private static readonly RUNALL_KUTISH_MS = 15 * 60 * 1000;
+  /**
+   * AI chaqiruvlarining KUNLIK chegarasi.
+   *
+   * ⚠️ Setup token Python agentlar (leader / support / checker / teacher) bilan
+   * BIR XIL obunani ishlatadi. Agar bu agent kvotani yeb qo'ysa, ular ishlay
+   * olmay qoladi. Shuning uchun o'z chegaramizni qo'yamiz va unga yetganda
+   * to'xtaymiz — qolgan to'lovlar ertaga ko'riladi.
+   */
+  private static readonly AI_KUNLIK_CAP = Number(process.env.KATEGORIYA_AI_KUNLIK_CAP || 30);
+  /** Paketlar orasidagi pauza — obunaga portlash bo'lib urilmaslik uchun. */
+  private static readonly AI_PAUZA_MS = Number(process.env.KATEGORIYA_AI_PAUZA_MS || 1500);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -115,7 +126,8 @@ export class KategoriyaAgentService {
       ishlayapti: this.ishlayapti,
       runId: this.joriyRunId,
       bilimBor: fs.existsSync(this.bilimYoli()),
-      aiKalitBor: !!(await this.ai.kalit()),
+      ai: await this.ai.tayyorlik(),
+      aiKunlik: { ishlatilgan: await this.bugungiChaqiriq(), chegara: KategoriyaAgentService.AI_KUNLIK_CAP },
       oxirgi: oxirgi ? this.runXulosa(oxirgi) : null,
     };
   }
@@ -158,6 +170,20 @@ export class KategoriyaAgentService {
     };
   }
 
+  /**
+   * Bugun (Toshkent kuni) nechta AI chaqiruvi qilindi.
+   * Faqat O'ZIMIZNING jadvaldan sanaladi — `agents` sxemasiga tegilmaydi.
+   */
+  private async bugungiChaqiriq(): Promise<number> {
+    const bugun = new Date();
+    const tosh = new Date(bugun.getTime() + 5 * 3600_000).toISOString().slice(0, 10);
+    const agg = await this.prisma.kategoriyaAgentRun.aggregate({
+      _sum: { aiChaqiriq: true },
+      where: { startedAt: { gte: new Date(`${tosh}T00:00:00+05:00`) } },
+    }).catch(() => null);
+    return agg?._sum?.aiChaqiriq || 0;
+  }
+
   private runXulosa(r: any) {
     return {
       id: r.id,
@@ -172,6 +198,7 @@ export class KategoriyaAgentService {
       stages: r.stages || {},
       aiSoralgan: r.aiSoralgan,
       aiQoyilgan: r.aiQoyilgan,
+      aiChaqiriq: r.aiChaqiriq,
       error: r.error,
     };
   }
@@ -344,11 +371,25 @@ export class KategoriyaAgentService {
     });
     const kodMap = new Map(kategoriyalar.map((c) => [c.code, c.id]));
 
-    let soralgan = 0, qoyilgan = 0, past = 0, xato = 0;
+    // Kunlik chegara — qolgan joy. Python agentlarga kvota qoldirish uchun.
+    const ishlatilgan = await this.bugungiChaqiriq();
+    const qolganJoy = KategoriyaAgentService.AI_KUNLIK_CAP - ishlatilgan;
+    if (qolganJoy <= 0) {
+      return {
+        ok: true, qoldiq: qoldiq.length, soralgan: 0, qoyilgan: 0, past: 0,
+        chegara: `kunlik chegara tugadi (${ishlatilgan}/${KategoriyaAgentService.AI_KUNLIK_CAP}) — ertaga davom etadi`,
+      };
+    }
+
+    let soralgan = 0, qoyilgan = 0, past = 0, xato = 0, chaqiriq = 0;
+    let limitUrildi = false;
     const xatolar: string[] = [];
 
     for (let i = 0; i < qoldiq.length; i += KategoriyaAiService.PAKET) {
       if (this.toxtatish) break;
+      if (chaqiriq >= qolganJoy) break; // kunlik chegara
+      // Portlash bo'lib urilmaslik uchun paketlar orasida pauza.
+      if (chaqiriq > 0) await new Promise((r) => setTimeout(r, KategoriyaAgentService.AI_PAUZA_MS));
       const paket = qoldiq.slice(i, i + KategoriyaAiService.PAKET);
       const javob = await this.ai.qaror(
         bilim,
@@ -365,11 +406,19 @@ export class KategoriyaAgentService {
         kategoriyalar.map((c) => ({ code: c.code, name: c.name })),
       );
       soralgan += paket.length;
+      chaqiriq++;
 
       if (!javob.ok) {
         xato++;
         if (xatolar.length < 5) xatolar.push(javob.error || 'nomalum xato');
-        // Ketma-ket xato bo'lsa to'xtaymiz — kalit yoki limit muammosi, davom etish befoyda.
+        // Obuna chegarasi — DARHOL to'xtaymiz. Python agentlar ham shu tokenda
+        // ishlaydi, davom etsak ularni ham to'sib qo'yamiz.
+        if (javob.limit) {
+          limitUrildi = true;
+          this.log.warn("AI obuna chegarasi — bosqich to'xtatildi, agentlarga joy qoldirildi");
+          break;
+        }
+        // Ketma-ket xato bo'lsa to'xtaymiz — davom etish befoyda.
         if (xato >= 3) break;
         continue;
       }
@@ -426,15 +475,25 @@ export class KategoriyaAgentService {
 
       await this.prisma.kategoriyaAgentRun.update({
         where: { id: runId },
-        data: { aiSoralgan: soralgan, aiQoyilgan: qoyilgan },
+        data: { aiSoralgan: soralgan, aiQoyilgan: qoyilgan, aiChaqiriq: chaqiriq },
       }).catch(() => undefined);
     }
 
+    // Chaqiriq soni oxirida ham yoziladi — paket xato bo'lib yuqoridagi
+    // yangilanishga yetib bormagan holat uchun (kunlik hisob to'g'ri qolsin).
+    await this.prisma.kategoriyaAgentRun.update({
+      where: { id: runId },
+      data: { aiChaqiriq: chaqiriq },
+    }).catch(() => undefined);
+
     return {
-      ok: xato < 3,
+      ok: xato < 3 && !limitUrildi,
       qoldiq: qoldiq.length,
       soralgan, qoyilgan, past,
+      chaqiriq,
+      kunlik: `${ishlatilgan + chaqiriq}/${KategoriyaAgentService.AI_KUNLIK_CAP}`,
       paketXato: xato,
+      ...(limitUrildi ? { chegara: "obuna chegarasi — to'xtatildi, agentlarga joy qoldirildi" } : {}),
       ...(xatolar.length ? { xatolar } : {}),
     };
   }

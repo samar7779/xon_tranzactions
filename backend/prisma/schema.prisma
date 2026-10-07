@@ -1589,6 +1589,9 @@ model KategoriyaAgentRun {
   stages     Json? // har bosqich natijasi (xulosa)
   aiSoralgan Int       @default(0) @map("ai_soralgan")
   aiQoyilgan Int       @default(0) @map("ai_qoyilgan")
+  // AI ga nechta so'rov yuborildi — kunlik chegara shu bo'yicha sanaladi
+  // (setup token Python agentlar bilan ulashiladi, kvota yeb qo'yilmasin).
+  aiChaqiriq Int       @default(0) @map("ai_chaqiriq")
   error      String?   @db.Text
 
   qarorlar KategoriyaAgentQaror[]
