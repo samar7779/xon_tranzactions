@@ -1594,6 +1594,57 @@ export class TransactionsService {
   }
 
   /**
+   * CHIQIM/KIRIM TAHLILI — tanlangan o'lcham bo'yicha guruhlab summa+soni qaytaradi.
+   * dim: 'category' (kategoriya: ish haqi/soliq...), 'counterparty' (tashkilot — toName/fromName),
+   *      'account' (bizning firma/hisob), 'contract' (shartnoma).
+   * direction default OUT (chiqim). Sana + bank + hisob + qidiruv filtrlari (buildWhere).
+   */
+  async breakdown(opts: {
+    from?: string; to?: string; direction?: string; dim?: string;
+    bankId?: string; accountId?: string; q?: string; limit?: number;
+  }) {
+    const dim = (opts.dim || 'category').toLowerCase();
+    const dir = (opts.direction || 'OUT').toUpperCase();
+    const limit = Math.min(50, Math.max(5, Number(opts.limit) || 15));
+    const where: any = this.buildWhere({ ...opts, dateFrom: opts.from, dateTo: opts.to } as any);
+    where.direction = dir;
+
+    type Row = { key: string; label: string; amount: number; count: number };
+    let rows: Row[] = [];
+
+    if (dim === 'category') {
+      const g: any[] = await (this.prisma.transaction.groupBy as any)({ by: ['categoryId'], where, _sum: { amount: true }, _count: true });
+      const ids = g.map((x) => x.categoryId).filter(Boolean);
+      const cats = ids.length ? await this.prisma.category.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
+      const m = new Map(cats.map((c) => [c.id, c.name]));
+      rows = g.map((x) => ({ key: x.categoryId || 'none', label: (x.categoryId && m.get(x.categoryId)) || 'Kategoriyasiz', amount: Number(x._sum.amount || 0), count: x._count }));
+    } else if (dim === 'account') {
+      const g: any[] = await (this.prisma.transaction.groupBy as any)({ by: ['accountId'], where, _sum: { amount: true }, _count: true });
+      const ids = g.map((x) => x.accountId).filter(Boolean);
+      const accs = ids.length ? await this.prisma.bankAccount.findMany({ where: { id: { in: ids } }, select: { id: true, ownerName: true, accountNo: true, bank: { select: { name: true } } } }) : [];
+      const m = new Map(accs.map((a) => [a.id, a]));
+      rows = g.map((x) => {
+        const a = x.accountId ? m.get(x.accountId) : null;
+        const label = a ? `${a.ownerName || a.accountNo || ''}${a.bank?.name ? ' · ' + a.bank.name : ''}`.trim() : 'Hisobsiz';
+        return { key: x.accountId || 'none', label: label || 'Hisobsiz', amount: Number(x._sum.amount || 0), count: x._count };
+      });
+    } else if (dim === 'contract') {
+      const g: any[] = await (this.prisma.transaction.groupBy as any)({ by: ['contractNumber'], where: { ...where, contractNumber: { not: null } }, _sum: { amount: true }, _count: true });
+      rows = g.map((x) => ({ key: x.contractNumber || 'none', label: x.contractNumber || '—', amount: Number(x._sum.amount || 0), count: x._count }));
+    } else {
+      // counterparty (tashkilot) — chiqimda toName, kirimda fromName
+      const field = dir === 'IN' ? 'fromName' : 'toName';
+      const g: any[] = await (this.prisma.transaction.groupBy as any)({ by: [field], where, _sum: { amount: true }, _count: true });
+      rows = g.map((x) => ({ key: x[field] || 'none', label: x[field] || "Noma'lum", amount: Number(x._sum.amount || 0), count: x._count }));
+    }
+
+    rows.sort((a, b) => b.amount - a.amount);
+    const total = rows.reduce((s, r) => s + r.amount, 0);
+    const totalCount = rows.reduce((s, r) => s + r.count, 0);
+    return { ok: true, dim, direction: dir, total, totalCount, groupCount: rows.length, items: rows.slice(0, limit) };
+  }
+
+  /**
    * XATO shartnomalar — tranzaksiyalarda ishlatilgan, lekin CRM tasdiqlamagan
    * (verified emas) shartnoma raqamlari. Har biri uchun nechta tx va jami summa.
    */

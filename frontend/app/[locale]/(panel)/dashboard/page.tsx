@@ -32,6 +32,7 @@ import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 import { DailySummaryWidget } from '@/components/daily-summary-widget';
 import { ReconcileWidget } from '@/components/reconcile-widget';
+import { WidgetErrorBoundary } from '@/components/widget-error-boundary';
 
 const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6'];
 
@@ -615,8 +616,8 @@ export default function DashboardPage() {
         />
         </>)}
 
-        {/* ═══ TRANZAKSIYA SVERKA (bank qoldiq + explorer) — ruxsatли xodimlarga ═══ */}
-        <ReconcileWidget />
+        {/* ═══ TO'LOV TAHLILI (chiqim/kirim — kategoriya/tashkilot/firma/shartnoma) — ruxsatли ═══ */}
+        <WidgetErrorBoundary label="To'lov tahlili"><ReconcileWidget /></WidgetErrorBoundary>
 
         {/* ═══ KUNLIK XULOSA (ОплатыКв — kun + solishtirish) ═══ */}
         <DailySummaryWidget />

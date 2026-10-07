@@ -122,6 +122,25 @@ export class TransactionsController {
     });
   }
 
+  @Get('breakdown')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW, PERMISSIONS.DASHBOARD_RECON)
+  @ApiOperation({ summary: 'Chiqim/kirim tahlili — o\'lcham bo\'yicha (kategoriya/tashkilot/firma/shartnoma) summa+soni' })
+  breakdown(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('direction') direction?: string,
+    @Query('dim') dim?: string,
+    @Query('bankId') bankId?: string,
+    @Query('accountId') accountId?: string,
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.svc.breakdown({
+      from, to, direction, dim, bankId, accountId, q,
+      limit: limit != null && limit !== '' ? Number(limit) : undefined,
+    });
+  }
+
   @Get('xato-contracts')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'XATO shartnomalar — CRM tasdiqlamagan shartnoma raqamlari (tx soni + jami summa)' })
