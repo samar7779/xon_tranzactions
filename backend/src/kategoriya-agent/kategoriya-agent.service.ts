@@ -40,7 +40,10 @@ export class KategoriyaAgentService {
   private static readonly BILIM_YOL = 'agents/knowledge/kategoriya.md';
   /** AI bosqichida bir yurishda ko'rib chiqiladigan eng ko'p to'lov. */
   private static readonly AI_LIMIT = Number(process.env.KATEGORIYA_AI_LIMIT || 200);
-  private static readonly RUNALL_KUTISH_MS = 15 * 60 * 1000;
+  /** Bir diagnostika chaqiruvida nechta to'lov (servis chegarasi 2000). */
+  private static readonly QOIDA_SAHIFA = 2000;
+  /** Eng ko'p nechta sahifa — cheksiz aylanishdan himoya. */
+  private static readonly QOIDA_MAX_SAHIFA = 50;
   /**
    * AI chaqiruvlarining KUNLIK chegarasi.
    *
@@ -221,17 +224,21 @@ export class KategoriyaAgentService {
     };
 
     // ── 1) QOIDALAR ──
-    // runAll fonda ishlaydi va o'z holatini getStatus() da ko'rsatadi,
-    // shuning uchun tugashini kutamiz — keyingi bosqichlar uning natijasiga tayanadi.
-    const r1 = this.cat.runAll({ onlyUncategorized: true, actorId: opts.userId || undefined });
-    if (r1.started) {
-      const kutildi = await this.runAllKut();
-      const st = this.cat.getStatus();
-      await bosqichYoz('qoidalar', {
-        ishga: true, kutildi, progress: st.progress, lastError: st.lastError,
-      });
-    } else {
-      await bosqichYoz('qoidalar', { ishga: false, message: r1.message });
+    //
+    // ⚠️ Panel'dagi "Kategoriyalash" tugmasi (runAll) BUTUN tarixni oladi:
+    // sharti `categoryId = null YOKI contractNumber = null`, bu esa deyarli
+    // hamma tranzaksiyaga to'g'ri keladi (358 000+). Uni agent oqimi ichida
+    // kutib o'tirish mumkin emas — soatlab davom etadi va qolgan bosqichlar
+    // eskirgan ma'lumot ustida ishlaydi.
+    //
+    // Shuning uchun agent SANA ORALIG'I bo'yicha ishlaydi: `diagnoseCategorize`
+    // faqat kategoriyasizlarni (categoryId = null) oladi va har biri uchun
+    // SABABNI qaytaradi. Butun tarixni qayta hisoblash kerak bo'lsa — eski
+    // "Kategoriyalash" tugmasi joyida turibdi.
+    try {
+      await bosqichYoz('qoidalar', await this.qoidalarBosqichi(opts.dateFrom, opts.dateTo, dryRun, opts.userId || null));
+    } catch (e: any) {
+      await bosqichYoz('qoidalar', { ok: false, error: String(e?.message || e).slice(0, 500) });
     }
     if (this.toxtatish) return this.yakunla(runId, stages, 'stopped');
 
@@ -303,15 +310,66 @@ export class KategoriyaAgentService {
     }).catch(() => undefined);
   }
 
-  /** runAll fonda ishlaydi — tugashini kutadi. Natija: kutilgan sekundlar. */
-  private async runAllKut(): Promise<number> {
-    const bosh = Date.now();
-    while (Date.now() - bosh < KategoriyaAgentService.RUNALL_KUTISH_MS) {
-      await new Promise((r) => setTimeout(r, 2000));
-      if (!this.cat.getStatus().running) break;
-      if (this.toxtatish) break;
+  /**
+   * 1-bosqich: sana oralig'idagi KATEGORIYASIZ to'lovlarga qoidalarni qo'llaydi.
+   *
+   * `diagnoseCategorize` sahifama-sahifa chaqiriladi (bir chaqiruv 2000 tagacha).
+   * U kategoriyalagan qator `categoryId = null` shartidan chiqadi, shuning uchun
+   * keyingi chaqiruv o'z-o'zidan qolganlarni oladi. Ilgarilash to'xtasa
+   * (hech biri kategoriyalanmasa) — qolganlari qoidaga tushmaydi, chiqamiz.
+   */
+  private async qoidalarBosqichi(
+    dateFrom: string, dateTo: string | undefined, dryRun: boolean, userId: string | null,
+  ): Promise<any> {
+    const where = {
+      categoryId: null,
+      txnDate: {
+        gte: new Date(`${dateFrom}T00:00:00+05:00`),
+        ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999+05:00`) } : {}),
+      },
+    };
+    const boshida = await this.prisma.transaction.count({ where });
+
+    if (dryRun) {
+      // Sinovda yozmaymiz — diagnoseCategorize DB'ga yozadi.
+      return {
+        ok: true, dryRun: true, kategoriyasiz: boshida,
+        izoh: "sinov — qoidalar qo'llanmadi, haqiqiy yurishda qo'llanadi",
+      };
     }
-    return Math.round((Date.now() - bosh) / 1000);
+
+    let qoyildi = 0;
+    let korildi = 0;
+    const sabablar = new Map<string, number>();
+
+    for (let sahifa = 0; sahifa < KategoriyaAgentService.QOIDA_MAX_SAHIFA; sahifa++) {
+      if (this.toxtatish) break;
+      const r = await this.cat.diagnoseCategorize({
+        dateFrom, dateTo, limit: KategoriyaAgentService.QOIDA_SAHIFA, actorId: userId || undefined,
+      });
+      korildi += r.total;
+      qoyildi += r.categorized;
+      for (const row of r.rows || []) {
+        if (row.categoryCode) continue;
+        const k = String(row.reason || "sabab yo'q").slice(0, 120);
+        sabablar.set(k, (sabablar.get(k) || 0) + 1);
+      }
+      // Ilgarilash yo'q yoki hammasi ko'rildi — to'xtaymiz.
+      if (r.total === 0 || r.categorized === 0) break;
+    }
+
+    const qolgan = await this.prisma.transaction.count({ where });
+    return {
+      ok: true,
+      kategoriyasiz: boshida,
+      korildi,
+      qoyildi,
+      qolgan,
+      reasons: Array.from(sabablar.entries())
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+    };
   }
 
   // ───────────────────────────── AI bosqichi ─────────────────────────────

@@ -467,11 +467,13 @@ function BosqichNatija({ kalit, natija }: { kalit: string; natija: any }) {
   const q = (l: string, v: any) => { if (v !== undefined && v !== null) juft.push([l, v]); };
 
   if (kalit === 'qoidalar') {
-    q('ko‘rildi', natija?.progress?.total);
-    q('mos', natija?.progress?.matched);
-    q('xato', natija?.progress?.errors);
-    q('kutildi', natija?.kutildi !== undefined ? `${natija.kutildi}s` : undefined);
-    if (natija?.message) q('holat', natija.message);
+    // Sana oralig'i bo'yicha ishlaydi (butun tarix emas) — pastdagi
+    // "qolgan" eng muhim raqam: qoidaga tushmay qolganlari AI ga boradi.
+    q('kategoriyasiz', natija?.kategoriyasiz);
+    q('ko‘rildi', natija?.korildi);
+    q('qo‘yildi', natija?.qoyildi);
+    q('qolgan', natija?.qolgan);
+    if (natija?.izoh) q('holat', natija.izoh);
   } else if (kalit === 'schotchik') {
     q('ko‘rildi', natija?.stats?.scanned);
     q('o‘zgardi', natija?.stats?.matched);
@@ -506,6 +508,16 @@ function BosqichNatija({ kalit, natija }: { kalit: string; natija: any }) {
           {l}: <b className="font-semibold">{typeof v === 'number' ? v.toLocaleString('ru-RU') : String(v)}</b>
         </span>
       ))}
+      {natija?.lastError && (
+        <span className="w-full text-[10.5px] text-rose-700 dark:text-rose-300 leading-snug">
+          xato: {String(natija.lastError)}
+        </span>
+      )}
+      {Array.isArray(natija?.reasons) && natija.reasons.length > 0 && (
+        <span className="w-full text-[10.5px] text-slate-500 dark:text-slate-400 leading-snug">
+          {natija.reasons.map((r: any) => `${r.reason} — ${r.count}`).join(' · ')}
+        </span>
+      )}
       {natija?.chegara && (
         <span className="w-full text-[10.5px] text-amber-700 dark:text-amber-300 leading-snug">
           {String(natija.chegara)}
