@@ -30,6 +30,8 @@ type AnalyzeResult = {
   ok: boolean;
   extracted: {
     fromContractNo: string | null; fromClient: string | null; fromFound: boolean; objectName: string | null; fromBalance: number | null;
+    /** CRM payment_histories yig'indisi; CRM javob bermasa null */
+    fromBalanceCrm?: number | null;
     totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean; balance: number | null }>;
     /** Arizada topilgan barcha summalar — roli bilan (bosib almashtirish uchun) */
     amountsFound?: Array<{ amount: number; role: string; quote?: string | null }>;
@@ -161,6 +163,8 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   // Tahrirlanadigan forma
   const [fromCn, setFromCn] = useState('');
   const [fromBalance, setFromBalance] = useState<number | null>(null);
+  // CRM bo'yicha to'langan jami — ОплатыКв bilan farq qilsa, sync kechikkan degani.
+  const [fromBalanceCrm, setFromBalanceCrm] = useState<number | null>(null);
   const [fromFound, setFromFound] = useState<boolean | null>(null);
   const [fromMeta, setFromMeta] = useState<{ client: string | null; object: string | null }>({ client: null, object: null });
   const [date, setDate] = useState('');
@@ -188,6 +192,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
       const e = r.extracted;
       setFromCn(e.fromContractNo || '');
       setFromBalance(e.fromBalance);
+      setFromBalanceCrm(e.fromBalanceCrm ?? null);
       setFromFound(e.fromFound);
       setFromMeta({ client: e.fromClient, object: e.objectName });
       setDate(e.date || new Date().toISOString().slice(0, 10));
@@ -219,7 +224,17 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   };
 
   const destTotal = useMemo(() => dests.reduce((s, d) => s + num(d.amount), 0), [dests]);
-  const balanceShort = fromBalance != null && destTotal > fromBalance + 0.01;
+  // Eng katta qoldiq — ОплатыКв kechikkan bo'lsa CRM'niki haqiqatga yaqin.
+  const engQoldiq = useMemo(() => {
+    const v = [fromBalance, fromBalanceCrm].filter((x): x is number => x != null);
+    return v.length ? Math.max(...v) : null;
+  }, [fromBalance, fromBalanceCrm]);
+  const balanceShort = engQoldiq != null && destTotal > engQoldiq + 0.01;
+  /** Ikki manba farq qiladi — ОплатыКв to'liq emas bo'lishi mumkin. */
+  const qoldiqFarqi = fromBalance != null && fromBalanceCrm != null
+    && Math.abs(fromBalance - fromBalanceCrm) > 1
+    ? fromBalanceCrm - fromBalance
+    : null;
 
   const createMut = useMutation({
     mutationFn: () => {
@@ -454,10 +469,17 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                       <div className="font-mono font-semibold text-slate-800 dark:text-slate-100">{fromCn || '—'} <span className="text-[9px] text-slate-400 font-sans">MANBA</span></div>
                       <div className="text-[10px] text-slate-400 truncate">{fromMeta.client || ''}{fromMeta.object ? ` · ${fromMeta.object}` : ''}</div>
                     </td>
-                    <td className="px-2 py-2 text-right font-mono">{fromBalance != null ? formatMoney(fromBalance) : '—'}</td>
+                    <td className="px-2 py-2 text-right font-mono">
+                      {fromBalance != null ? formatMoney(fromBalance) : '—'}
+                      {qoldiqFarqi != null && (
+                        <div className="text-[10px] font-sans text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                          CRM: {formatMoney(fromBalanceCrm as number)}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right font-mono text-rose-600">−{formatMoney(destTotal)}</td>
                     <td className={cn('px-4 py-2 text-right font-mono font-semibold', balanceShort ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100')}>
-                      {fromBalance != null ? formatMoney(fromBalance - destTotal) : '—'}
+                      {engQoldiq != null ? formatMoney(engQoldiq - destTotal) : '—'}
                     </td>
                   </tr>
                   {/* Maqsadlar */}
@@ -500,13 +522,37 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
+          {/* ОплатыКв va CRM farq qilsa — ogohlantirish (blok emas) */}
+          {qoldiqFarqi != null && !balanceShort && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 p-3.5 flex items-start gap-2.5">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="text-[12.5px] text-amber-800 dark:text-amber-200">
+                <b>Qoldiq ikki joyda har xil.</b>
+                <div className="mt-0.5">
+                  ОплатыКв <b>{formatMoney(fromBalance as number)}</b>, CRM <b>{formatMoney(fromBalanceCrm as number)}</b>
+                  {' '}(farq {qoldiqFarqi > 0 ? '+' : ''}{formatMoney(qoldiqFarqi)}).{' '}
+                  {qoldiqFarqi > 0
+                    ? "ОплатыКв to'liq emas — to'lov sync bo'lmagan yoki XATO ro'yxatida turgan bo'lishi mumkin. Tekshirish uchun CRM raqamiga tayandik."
+                    : "CRM'da kamroq ko'rinyapti — tekshirib ko'ring."}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Qoldiq yetmasa — blok */}
           {balanceShort && (
             <div className="rounded-xl bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900 p-3.5 flex items-start gap-2.5">
               <Ban className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
               <div className="text-[12.5px] text-rose-700 dark:text-rose-300">
                 <b>Manba qoldig'i yetarli emas — переброска qilib bo'lmaydi.</b>
-                <div className="mt-0.5">Qoldiq <b>{formatMoney(fromBalance || 0)}</b>, o'tkazma <b>{formatMoney(destTotal)}</b> (yetmayapti: {formatMoney(destTotal - (fromBalance || 0))}). Summani kamaytiring yoki arizani tekshiring.</div>
+                <div className="mt-0.5">
+                  Qoldiq <b>{formatMoney(engQoldiq || 0)}</b>, o'tkazma <b>{formatMoney(destTotal)}</b>
+                  {' '}(yetmayapti: {formatMoney(destTotal - (engQoldiq || 0))}). Summani kamaytiring yoki arizani tekshiring.
+                </div>
+                <div className="mt-1 text-[11px] opacity-80">
+                  ОплатыКв: {fromBalance != null ? formatMoney(fromBalance) : '—'}
+                  {' · '}CRM: {fromBalanceCrm != null ? formatMoney(fromBalanceCrm) : "javob bermadi"}
+                </div>
               </div>
             </div>
           )}
