@@ -32,6 +32,15 @@ type AnalyzeResult = {
     fromContractNo: string | null; fromClient: string | null; fromFound: boolean; objectName: string | null; fromBalance: number | null;
     /** CRM payment_histories yig'indisi; CRM javob bermasa null */
     fromBalanceCrm?: number | null;
+    /** CRM da bor, ОплатыКв da yo'q to'lovlar — farqning sababi */
+    missingPayments?: Array<{
+      sana: string; summa: number;
+      usul: string; usulNomi: string;
+      kategoriya: string; kategoriyaNomi: string;
+      turi: string; status: string;
+    }>;
+    /** O'sha farqning odam tilidagi izohi */
+    missingReason?: string | null;
     totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean; balance: number | null }>;
     /** Arizada topilgan barcha summalar — roli bilan (bosib almashtirish uchun) */
     amountsFound?: Array<{ amount: number; role: string; quote?: string | null }>;
@@ -165,6 +174,8 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   const [fromBalance, setFromBalance] = useState<number | null>(null);
   // CRM bo'yicha to'langan jami — ОплатыКв bilan farq qilsa, sync kechikkan degani.
   const [fromBalanceCrm, setFromBalanceCrm] = useState<number | null>(null);
+  const [missing, setMissing] = useState<NonNullable<AnalyzeResult['extracted']['missingPayments']>>([]);
+  const [missingReason, setMissingReason] = useState<string | null>(null);
   const [fromFound, setFromFound] = useState<boolean | null>(null);
   const [fromMeta, setFromMeta] = useState<{ client: string | null; object: string | null }>({ client: null, object: null });
   const [date, setDate] = useState('');
@@ -193,6 +204,8 @@ function WorkTab({ onDone }: { onDone: () => void }) {
       setFromCn(e.fromContractNo || '');
       setFromBalance(e.fromBalance);
       setFromBalanceCrm(e.fromBalanceCrm ?? null);
+      setMissing(e.missingPayments ?? []);
+      setMissingReason(e.missingReason ?? null);
       setFromFound(e.fromFound);
       setFromMeta({ client: e.fromClient, object: e.objectName });
       setDate(e.date || new Date().toISOString().slice(0, 10));
@@ -224,12 +237,10 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   };
 
   const destTotal = useMemo(() => dests.reduce((s, d) => s + num(d.amount), 0), [dests]);
-  // Eng katta qoldiq — ОплатыКв kechikkan bo'lsa CRM'niki haqiqatga yaqin.
-  const engQoldiq = useMemo(() => {
-    const v = [fromBalance, fromBalanceCrm].filter((x): x is number => x != null);
-    return v.length ? Math.max(...v) : null;
-  }, [fromBalance, fromBalanceCrm]);
-  const balanceShort = engQoldiq != null && destTotal > engQoldiq + 0.01;
+  // Blok FAQAT ОплатыКв bo'yicha: o'tkazma shu jadvalga yoziladi,
+  // pul u yerda bo'lmasa manba qoldig'i minusga tushadi. CRM raqami faqat
+  // SABABINI ko'rsatish uchun — qarorga ta'sir qilmaydi.
+  const balanceShort = fromBalance != null && destTotal > fromBalance + 0.01;
   /** Ikki manba farq qiladi — ОплатыКв to'liq emas bo'lishi mumkin. */
   const qoldiqFarqi = fromBalance != null && fromBalanceCrm != null
     && Math.abs(fromBalance - fromBalanceCrm) > 1
@@ -479,7 +490,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                     </td>
                     <td className="px-2 py-2 text-right font-mono text-rose-600">−{formatMoney(destTotal)}</td>
                     <td className={cn('px-4 py-2 text-right font-mono font-semibold', balanceShort ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100')}>
-                      {engQoldiq != null ? formatMoney(engQoldiq - destTotal) : '—'}
+                      {fromBalance != null ? formatMoney(fromBalance - destTotal) : '—'}
                     </td>
                   </tr>
                   {/* Maqsadlar */}
@@ -532,7 +543,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                   ОплатыКв <b>{formatMoney(fromBalance as number)}</b>, CRM <b>{formatMoney(fromBalanceCrm as number)}</b>
                   {' '}(farq {qoldiqFarqi > 0 ? '+' : ''}{formatMoney(qoldiqFarqi)}).{' '}
                   {qoldiqFarqi > 0
-                    ? "ОплатыКв to'liq emas — to'lov sync bo'lmagan yoki XATO ro'yxatida turgan bo'lishi mumkin. Tekshirish uchun CRM raqamiga tayandik."
+                    ? (missingReason || "ОплатыКв to'liq emas — tekshirish uchun CRM raqamiga tayandik.")
                     : "CRM'da kamroq ko'rinyapti — tekshirib ko'ring."}
                 </div>
               </div>
@@ -546,13 +557,52 @@ function WorkTab({ onDone }: { onDone: () => void }) {
               <div className="text-[12.5px] text-rose-700 dark:text-rose-300">
                 <b>Manba qoldig'i yetarli emas — переброска qilib bo'lmaydi.</b>
                 <div className="mt-0.5">
-                  Qoldiq <b>{formatMoney(engQoldiq || 0)}</b>, o'tkazma <b>{formatMoney(destTotal)}</b>
-                  {' '}(yetmayapti: {formatMoney(destTotal - (engQoldiq || 0))}). Summani kamaytiring yoki arizani tekshiring.
+                  Qoldiq <b>{formatMoney(fromBalance || 0)}</b>, o'tkazma <b>{formatMoney(destTotal)}</b>
+                  {' '}(yetmayapti: {formatMoney(destTotal - (fromBalance || 0))}).
                 </div>
-                <div className="mt-1 text-[11px] opacity-80">
-                  ОплатыКв: {fromBalance != null ? formatMoney(fromBalance) : '—'}
-                  {' · '}CRM: {fromBalanceCrm != null ? formatMoney(fromBalanceCrm) : "javob bermadi"}
-                </div>
+                {/* NEGA kam — sabab shu yerda, har safar so'rab o'tirmaslik uchun */}
+                {qoldiqFarqi != null && qoldiqFarqi > 0 ? (
+                  <div className="mt-2 rounded-lg bg-white/70 dark:bg-slate-900/40 ring-1 ring-rose-200/70 dark:ring-rose-900/60 p-2.5 space-y-1.5">
+                    <div className="text-[12px] font-semibold">
+                      Nega kam: CRM&apos;da {formatMoney(fromBalanceCrm as number)} ko&apos;rinadi —
+                      {' '}{formatMoney(qoldiqFarqi)} hali bizga yetib kelmagan
+                    </div>
+                    {missingReason && (
+                      <div className="text-[11.5px] opacity-90 leading-relaxed">{missingReason}</div>
+                    )}
+                    {missing.length > 0 && (
+                      <div>
+                        <div className="text-[10.5px] uppercase tracking-wider opacity-60 mb-1">
+                          Yetishmayotgan to&apos;lovlar ({missing.length} ta)
+                        </div>
+                        <div className="space-y-0.5">
+                          {missing.map((m, i) => (
+                            <div key={i} className="flex items-center gap-2 text-[11.5px]">
+                              <span className="tabular-nums opacity-70 w-[76px] shrink-0">{m.sana}</span>
+                              <span className="tabular-nums font-semibold w-[104px] text-right shrink-0">
+                                {formatMoney(m.summa)}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/50 text-[10px] font-semibold shrink-0">
+                                {m.usulNomi || m.usul || '—'}
+                              </span>
+                              <span className="truncate opacity-70">{m.kategoriyaNomi || ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-[11.5px] font-medium pt-0.5">
+                      Nima qilish kerak: pul bankka tushib, ОплатыКв ga yozilgandan keyin
+                      qayta urinib ko&apos;ring. Yoki o&apos;tkazma summasini {formatMoney(fromBalance || 0)} gacha kamaytiring.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-[11px] opacity-80">
+                    ОплатыКв: {fromBalance != null ? formatMoney(fromBalance) : '—'}
+                    {' · '}CRM: {fromBalanceCrm != null ? formatMoney(fromBalanceCrm) : "javob bermadi"}
+                    {' '}— summani kamaytiring yoki arizani tekshiring.
+                  </div>
+                )}
               </div>
             </div>
           )}

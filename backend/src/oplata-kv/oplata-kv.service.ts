@@ -5180,7 +5180,15 @@ export class OplataKvService {
    *
    * @returns jami summa, yoki CRM javob bermasa `null` (noma'lum, 0 emas)
    */
-  private async crmTolangan(contractNo: string): Promise<number | null> {
+  private async crmTolovlar(contractNo: string): Promise<{
+    jami: number;
+    tolovlar: Array<{
+      sana: string; summa: number;
+      usul: string; usulNomi: string;
+      kategoriya: string; kategoriyaNomi: string;
+      turi: string; status: string;
+    }>;
+  } | null> {
     const cn = String(contractNo || '').trim();
     if (!cn) return null;
     try {
@@ -5188,10 +5196,90 @@ export class OplataKvService {
       const detail: any = resp?.detail;
       if (!detail) return null;
       const histories: any[] = Array.isArray(detail.payment_histories) ? detail.payment_histories : [];
-      return histories.reduce((sum, h) => sum + Number(h?.amount || 0), 0);
+      const nom = (v: any) => String(v?.value?.uz || v?.value?.ru || v?.key || '').trim();
+      return {
+        jami: histories.reduce((sum, h) => sum + Number(h?.amount || 0), 0),
+        tolovlar: histories.map((h) => ({
+          sana: String(h?.date_paid || '').slice(0, 10),
+          summa: Number(h?.amount || 0),
+          usul: String(h?.method?.key || ''),
+          usulNomi: nom(h?.method),
+          kategoriya: String(h?.category?.key || ''),
+          kategoriyaNomi: nom(h?.category),
+          turi: String(h?.type?.key || ''),
+          status: String(h?.status?.key || ''),
+        })),
+      };
     } catch {
       return null; // CRM yetib bormadi — bu "0 to'langan" degani EMAS
     }
+  }
+
+  /** Faqat jami kerak bo'lganda (qisqa yo'l). */
+  private async crmTolangan(contractNo: string): Promise<number | null> {
+    const r = await this.crmTolovlar(contractNo);
+    return r ? r.jami : null;
+  }
+
+  /**
+   * CRM'da bor, ОплатыКв da YO'Q to'lovlar — sana+summa juftligi bo'yicha.
+   *
+   * Farqning SABABINI aytish uchun kerak: foydalanuvchi "qoldiq yetarli emas"
+   * xabarini ko'rganda nega kamligini shu yerdan biladi (masalan XonPay
+   * to'lovi hali bankka tushmagan).
+   */
+  private async crmdaBorBizdaYoq(contractNo: string, crm: Awaited<ReturnType<typeof this.crmTolovlar>>) {
+    if (!crm) return [];
+    const bizRows = await this.prisma.oplataKv.findMany({
+      where: { contractNo: contractNo.trim() },
+      select: { date: true, paymentAmount: true },
+    });
+    const kalit = (sana: string, summa: number) => `${sana}|${Math.round(summa)}`;
+    const biz = new Map<string, number>();
+    for (const r of bizRows) {
+      const d = r.date ? new Date(r.date).toISOString().slice(0, 10) : '';
+      const k = kalit(d, Number(r.paymentAmount || 0));
+      biz.set(k, (biz.get(k) || 0) + 1);
+    }
+    const yoq: typeof crm.tolovlar = [];
+    for (const t of crm.tolovlar) {
+      const k = kalit(t.sana, t.summa);
+      const bor = biz.get(k) || 0;
+      if (bor > 0) biz.set(k, bor - 1);
+      else yoq.push(t);
+    }
+    return yoq;
+  }
+
+  /** Yetishmayotgan to'lovlardan odam tilidagi sabab. */
+  private farqSababi(yoq: Array<{ usul: string; usulNomi: string; kategoriya: string; status: string }>): string | null {
+    if (yoq.length === 0) return null;
+    const hammasiXonpay = yoq.every((t) => t.usul === 'xonpay');
+    const turargoh = yoq.some((t) => t.kategoriya === 'client_parking');
+    const tasdiqlanmagan = yoq.some((t) => t.status && t.status !== 'paid');
+
+    const qism: string[] = [];
+    if (hammasiXonpay) {
+      qism.push(
+        "Bu to'lovlar XonPay ilovasi orqali qilingan. XonPay'da pul CRM'ga darhol " +
+        "yoziladi, bank hisobiga esa keyinroq, boshqa to'lovlar bilan jamlanib tushadi — " +
+        "shuning uchun bizda hali yo'q. Bu nosozlik emas, kechikish.",
+      );
+    } else if (yoq.some((t) => t.usul === 'xonpay')) {
+      qism.push("Bir qismi XonPay orqali to'langan — bank puli kechikib tushadi.");
+    } else {
+      qism.push(
+        "To'lovlar bank orqali ko'rinadi, lekin bizning vipiskamizda yo'q — " +
+        "sync kechikkan yoki to'lov XATO ro'yxatida shartnomasiz turgan bo'lishi mumkin.",
+      );
+    }
+    if (turargoh) {
+      qism.push("Diqqat: orasida AVTOTURARGOH to'lovi bor — u kvartira to'lovi emas.");
+    }
+    if (tasdiqlanmagan) {
+      qism.push("Diqqat: ba'zisining holati 'to'langan' emas.");
+    }
+    return qism.join(' ');
   }
 
   async contractBalance(contractNo: string) {
@@ -5306,16 +5394,18 @@ export class OplataKvService {
       throw new BadRequestException(`Manba shartnoma obyekti aniqlanmadi: ${fromCn}`);
     }
 
-    // Source qoldig'i tekshirish — IKKI manbadan (ОплатыКв va CRM).
-    // Faqat ОплатыКв ga tayansak, sync kechikkanda yoki to'lov XATO ro'yxatida
-    // qolib ketganda asosli переброска to'silib qolardi.
-    const crmTolangan = await this.crmTolangan(fromCn);
-    const engQoldiq = Math.max(balance.totalPaid, crmTolangan ?? 0);
-    if (engQoldiq < input.amount - 0.01) {
-      const crmQism = crmTolangan == null ? "CRM javob bermadi" : `CRM ${crmTolangan.toFixed(2)}`;
+    // Source qoldig'i — ОплатыКв bo'yicha (o'tkazma shu jadvalga yoziladi,
+    // pul bu yerda bo'lmasa manba minusga ketadi). CRM raqami faqat xabarda:
+    // nega kam ekanini aytib turish uchun.
+    if (balance.totalPaid < input.amount - 0.01) {
+      const crmTolangan = await this.crmTolangan(fromCn);
+      const crmQism = crmTolangan == null
+        ? ''
+        : crmTolangan > balance.totalPaid
+          ? ` — CRM'da ${crmTolangan.toFixed(2)} ko'rinadi, demak ${(crmTolangan - balance.totalPaid).toFixed(2)} hali bizga yetib kelmagan`
+          : '';
       throw new BadRequestException(
-        `Manba qoldig'i yetarli emas: ${engQoldiq.toFixed(2)} < ${input.amount.toFixed(2)} ` +
-        `(ОплатыКв ${balance.totalPaid.toFixed(2)}, ${crmQism})`,
+        `Manba qoldig'i yetarli emas: ${balance.totalPaid.toFixed(2)} < ${input.amount.toFixed(2)}${crmQism}`,
       );
     }
 
@@ -5745,24 +5835,37 @@ export class OplataKvService {
     // ── QOLDIQ: IKKI MANBADAN ──
     // Bizning ОплатыКв (fromInfo.totalPaid) va CRM (crmTolangan). Ikkisi farq
     // qilsa — ОплатыКв to'liq emas degani, shartnomada pul CRM bo'yicha bor.
-    const crmQoldiq = fromCn ? await this.crmTolangan(fromCn) : null;
+    const crmMa = fromCn ? await this.crmTolovlar(fromCn) : null;
+    const crmQoldiq = crmMa ? crmMa.jami : null;
     const bizQoldiq = fromInfo ? Number(fromInfo.totalPaid) : null;
     const yetarlimi = (v: number | null) => v != null && v >= totalAmount - 0.01;
 
+    // Farq bo'lsa — QAYSI to'lovlar yetishmayotganini va NEGA ekanini aniqlaymiz.
+    // Shu ma'lumot panelda ko'rinadi, foydalanuvchi har safar so'rab o'tirmasin.
+    let yoqTolovlar: Array<any> = [];
+    let farqSabab: string | null = null;
     if (totalAmount > 0 && bizQoldiq != null && crmQoldiq != null && Math.abs(bizQoldiq - crmQoldiq) > 1) {
       const farq = crmQoldiq - bizQoldiq;
+      if (farq > 0 && fromCn) {
+        yoqTolovlar = await this.crmdaBorBizdaYoq(fromCn, crmMa);
+        farqSabab = this.farqSababi(yoqTolovlar);
+      }
       warnings.push(
         `Qoldiq ikki joyda har xil: ОплатыКв ${bizQoldiq.toLocaleString('ru-RU')} / CRM ${crmQoldiq.toLocaleString('ru-RU')} ` +
-        `(farq ${farq > 0 ? '+' : ''}${farq.toLocaleString('ru-RU')}) — ` +
-        `${farq > 0 ? "ОплатыКв to'liq emas, sync tekshirilsin" : "CRM'da kamroq ko'rinyapti"}`,
+        `(farq ${farq > 0 ? '+' : ''}${farq.toLocaleString('ru-RU')})` +
+        (farqSabab ? ` — ${farqSabab}` : ''),
       );
     }
 
-    // Yetarli emas deb FAQAT ikkala manba ham kam ko'rsatsa aytamiz.
-    if (totalAmount > 0 && (bizQoldiq != null || crmQoldiq != null)
-        && !yetarlimi(bizQoldiq) && !yetarlimi(crmQoldiq)) {
-      const eng = Math.max(bizQoldiq ?? 0, crmQoldiq ?? 0);
-      warnings.push(`Manba qoldig'i yetarli emas: ${eng.toLocaleString('ru-RU')} < ${totalAmount.toLocaleString('ru-RU')}`);
+    // Qoldiq yetarliligi — FAQAT bizning ОплатыКв bo'yicha.
+    //
+    // ⚠️ CRM raqami bu yerda hisobga OLINMAYDI va olinmasligi kerak:
+    // переброска ОплатыКв ga yozuv qo'yadi (manbadan minus, maqsadga plus).
+    // Agar pul ОплатыКв da hali yo'q bo'lsa, uni chiqarsak manba MINUSGA
+    // ketadi. Shuning uchun pul bizga yetib kelmaguncha o'tkazma qilinmaydi.
+    // CRM raqami faqat SABABINI tushuntirish uchun ko'rsatiladi.
+    if (totalAmount > 0 && bizQoldiq != null && !yetarlimi(bizQoldiq)) {
+      warnings.push(`Manba qoldig'i yetarli emas: ${bizQoldiq.toLocaleString('ru-RU')} < ${totalAmount.toLocaleString('ru-RU')}`);
     }
 
     // Maqsadlar tekshiruvi
@@ -5856,10 +5959,8 @@ export class OplataKvService {
       : warnings.join('; ');
 
     const fromBalance = bizQoldiq;
-    // Bittasi yetsa yetarli — ОплатыКв kechikkani uchun asosli переброска to'silmasin.
-    const balanceEnough = totalAmount <= 0
-      ? true
-      : (bizQoldiq == null && crmQoldiq == null ? true : (yetarlimi(bizQoldiq) || yetarlimi(crmQoldiq)));
+    // Faqat ОплатыКв: pul bizda bo'lmasa o'tkazma manba qoldig'ini minusga tushiradi.
+    const balanceEnough = totalAmount <= 0 || bizQoldiq == null ? true : yetarlimi(bizQoldiq);
 
     return {
       ok: true,
@@ -5871,6 +5972,10 @@ export class OplataKvService {
         fromBalance,
         /** CRM payment_histories yig'indisi; CRM javob bermasa null */
         fromBalanceCrm: crmQoldiq,
+        /** CRM'da bor, ОплатыКв da yo'q to'lovlar (farq sababi) */
+        missingPayments: yoqTolovlar,
+        /** O'sha farqning odam tilidagi izohi */
+        missingReason: farqSabab,
         totalAmount,
         destinations: destResolved,
         /** Arizada topilgan barcha summalar (rol + iqtibos) — UI'da almashtirish uchun */
