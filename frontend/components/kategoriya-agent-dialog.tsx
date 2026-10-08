@@ -343,6 +343,40 @@ export function KategoriyaAgentDialog({
         </DialogHeader>
 
         <div className="px-7 py-6 space-y-6 bg-white dark:bg-slate-950">
+          {/* ══════════════ XULOSA ══════════════ */}
+          {run?.stages?.xulosa?.matn && (
+            <div className="rounded-2xl ring-1 ring-slate-200 dark:ring-slate-800 bg-gradient-to-r from-violet-50/70 to-transparent dark:from-violet-950/25 px-4 py-3.5">
+              <div className="text-[10px] font-bold uppercase tracking-[.12em] text-slate-400 mb-1">
+                Xulosa
+              </div>
+              <div className="text-[13px] leading-relaxed text-slate-800 dark:text-slate-100">
+                {run.stages.xulosa.matn}
+              </div>
+            </div>
+          )}
+
+          {/* Uzilib qolgan yurish — davom ettirish taklifi */}
+          {run?.status === 'error' && !ishlayapti && (
+            <div className="rounded-2xl ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/70 dark:bg-amber-950/25 px-4 py-3.5 flex items-start gap-3">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] text-amber-900 dark:text-amber-200 leading-snug">
+                  Bu yurish oxirigacha yetmagan. Qilingan ishlar saqlanib qolgan —
+                  davom ettirsangiz qolganidan boshlaydi, boshidan qaytarmaydi.
+                </div>
+                <Button
+                  onClick={() => boshla.mutate()}
+                  disabled={boshla.isPending}
+                  size="sm"
+                  className="mt-2 gap-1.5 h-8 rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {boshla.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                  Davom ettirish
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* ══════════════ BOSHQARUV ══════════════ */}
           <div className="rounded-2xl ring-1 ring-slate-200 dark:ring-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-4 space-y-3.5">
             <div className="flex items-end gap-3 flex-wrap">
@@ -759,6 +793,7 @@ function QadamNatija({ kalit, natija }: { kalit: BosqichKalit; natija: any }) {
     q('topilmadi', natija?.notFound);
   } else if (kalit === 'ai') {
     q('navbatda', natija?.qoldiq);
+    if (natija?.tugamagan) q('holat', 'tugamagan');
     q('kategoriyasiz', natija?.kategoriyasiz);
     q('moddasiz', natija?.moddasiz);
     q('so‘raldi', natija?.soralgan);

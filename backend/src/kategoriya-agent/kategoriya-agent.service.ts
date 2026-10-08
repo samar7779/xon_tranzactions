@@ -338,14 +338,76 @@ export class KategoriyaAgentService implements OnModuleInit {
       await bosqichYoz('ai', { ok: true, otkazildi: "so'rovda o'chirilgan" });
     } else {
       try {
-        const r5 = await this.aiBosqich(runId, opts.dateFrom, opts.dateTo, dryRun, opts.userId || null);
+        const r5 = await this.aiBosqich(
+          runId, opts.dateFrom, opts.dateTo, dryRun, opts.userId || null,
+          // Har paketdan keyin oraliq natija yoziladi: yurish uzilib qolsa ham
+          // nima qilinganini ko'rsatadi (ilgari "kutilmoqda" bo'lib qolardi).
+          (oraliq) => bosqichYoz('ai', oraliq),
+        );
         await bosqichYoz('ai', r5);
       } catch (e: any) {
         await bosqichYoz('ai', { ok: false, error: String(e?.message || e).slice(0, 500) });
       }
     }
 
+    // ── XULOSA ── oddiy tilda: nima qilindi va nima qoldi
+    try {
+      stages.xulosa = await this.xulosaYoz(stages, opts.dateFrom, opts.dateTo, dryRun);
+    } catch { /* xulosa chiqmasa yurish baribir tugaydi */ }
+
     await this.yakunla(runId, stages, 'ok');
+  }
+
+  /**
+   * Yurish natijasini bitta-ikkita jumlaga yig'adi.
+   *
+   * Nega kerak: bosqichlardagi raqamlar texnik — "scanned 28 631, matched 21".
+   * Foydalanuvchiga esa boshqa narsa kerak: nima yaxshilandi va nima qoldi.
+   */
+  private async xulosaYoz(
+    stages: Record<string, any>, dateFrom: string, dateTo: string | undefined, dryRun: boolean,
+  ): Promise<{ matn: string; moddasizQolgan: number; kategoriyasizQolgan: number }> {
+    const sanaOraliq = {
+      gte: new Date(`${dateFrom}T00:00:00+05:00`),
+      ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999+05:00`) } : {}),
+    };
+    const [kategoriyasizQolgan, moddasizQolgan] = await Promise.all([
+      this.prisma.transaction.count({
+        where: { txnDate: sanaOraliq, direction: 'OUT', categoryId: null },
+      }),
+      this.prisma.transaction.count({
+        where: {
+          txnDate: sanaOraliq, direction: 'OUT', erpArticle: null,
+          category: { code: { in: KategoriyaAgentService.MODDA_KUTADIGAN } },
+        },
+      }),
+    ]);
+
+    const n = (v: any) => Number(v || 0);
+    const qoida = n(stages.qoidalar?.qoyildi);
+    const schot = n(stages.schotchik?.stats?.matched);
+    const minfin = n(stages.minfin?.changed);
+    const erp = n(stages.taminot?.matched);
+    const agent = n(stages.ai?.qoyilgan);
+    const son = (v: number) => v.toLocaleString('ru-RU');
+
+    const qilindi: string[] = [];
+    if (qoida) qilindi.push(`${son(qoida)} ta to'lovga qoida bo'yicha kategoriya`);
+    if (schot) qilindi.push(`${son(schot)} ta schotchik to'lovi oylikka`);
+    if (minfin) qilindi.push(`${son(minfin)} ta xato soliq belgisi tozalandi`);
+    if (erp) qilindi.push(`${son(erp)} ta to'lovga ta'minotdan xarajat moddasi`);
+    if (agent) qilindi.push(`${son(agent)} ta qiyin holatni agent hal qildi`);
+
+    const bosh = dryRun ? 'Sinov natijasi (hech narsa yozilmadi)' : 'Bajarildi';
+    const matn =
+      (qilindi.length
+        ? `${bosh}: ${qilindi.join(', ')}.`
+        : `${bosh}: yangi o'zgarish topilmadi — hammasi allaqachon joyida.`)
+      + ` Shu sanadan keyin hali ${son(kategoriyasizQolgan)} ta chiqim to'lovi kategoriyasiz`
+      + `, ${son(moddasizQolgan)} tasida xarajat moddasi yo'q.`
+      + (stages.ai?.chegara ? ` Agent kunlik chegarasiga yetdi — qolgani ertaga ko'riladi.` : '');
+
+    return { matn, moddasizQolgan, kategoriyasizQolgan };
   }
 
   /** Natija obyektidan sonli maydonlarni xulosaga ko'chiradi (jadval juda uzun bo'lmasin). */
@@ -449,6 +511,7 @@ export class KategoriyaAgentService implements OnModuleInit {
    */
   private async aiBosqich(
     runId: string, dateFrom: string, dateTo: string | undefined, dryRun: boolean, userId: string | null,
+    oraliqYoz?: (natija: any) => Promise<void>,
   ) {
     const bilim = this.bilimOqi();
     if (!bilim.trim()) {
@@ -611,6 +674,18 @@ export class KategoriyaAgentService implements OnModuleInit {
         where: { id: runId },
         data: { aiSoralgan: soralgan, aiQoyilgan: qoyilgan, aiChaqiriq: chaqiriq },
       }).catch(() => undefined);
+
+      // Oraliq natija — uzilib qolsa ham ko'rinib tursin
+      if (oraliqYoz) {
+        await oraliqYoz({
+          ok: true, tugamagan: true,
+          qoldiq: qoldiq.length,
+          kategoriyasiz: kategoriyasiz.length,
+          moddasiz: moddasiz.length,
+          soralgan, qoyilgan, past, chaqiriq,
+          kunlik: `${ishlatilgan + chaqiriq}/${KategoriyaAgentService.AI_KUNLIK_CAP}`,
+        }).catch(() => undefined);
+      }
     }
 
     // Chaqiriq soni oxirida ham yoziladi — paket xato bo'lib yuqoridagi
