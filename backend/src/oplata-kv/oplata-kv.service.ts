@@ -5251,6 +5251,34 @@ export class OplataKvService {
     return yoq;
   }
 
+  /**
+   * Shartnoma topilmasa — bazadagi O'XSHASH raqamlar.
+   *
+   * Agent arizadagi qo'lyozmani o'qiyotganda oxirgi harfni adashtirishi mumkin
+   * (1VDYP246P → 1VDYP246R, K4 → EA). Shunda "topilmadi" deb to'xtab qolmay,
+   * to'g'ri variantni taklif qilamiz.
+   */
+  private async oxshashShartnoma(contractNo: string): Promise<string[]> {
+    const t = String(contractNo || '').trim().toUpperCase();
+    if (t.length < 5) return [];
+    const bosh = t.slice(0, -1); // oxirgi belgisiz
+    const [kv, crm] = await Promise.all([
+      this.prisma.oplataKv.findMany({
+        where: { contractNo: { startsWith: bosh, mode: 'insensitive' } },
+        select: { contractNo: true }, distinct: ['contractNo'], take: 5,
+      }).catch(() => []),
+      this.prisma.crmContract.findMany({
+        where: { contractNumber: { startsWith: bosh, mode: 'insensitive' } },
+        select: { contractNumber: true }, distinct: ['contractNumber'], take: 5,
+      }).catch(() => []),
+    ]);
+    const chiq = new Set<string>();
+    for (const r of kv) if (r.contractNo) chiq.add(r.contractNo.toUpperCase());
+    for (const r of crm) if (r.contractNumber) chiq.add(r.contractNumber.toUpperCase());
+    chiq.delete(t);
+    return Array.from(chiq).slice(0, 5);
+  }
+
   /** Yetishmayotgan to'lovlardan odam tilidagi sabab. */
   private farqSababi(yoq: Array<{ usul: string; usulNomi: string; kategoriya: string; status: string }>): string | null {
     if (yoq.length === 0) return null;
@@ -5814,9 +5842,17 @@ export class OplataKvService {
     // Manba tekshiruvi
     let fromInfo: any = null;
     let objectName: string | null = null;
+    /** Shartnoma topilmasa — o'xshash raqamlar (agent oxirgi harfni adashtirgan bo'lishi mumkin) */
+    let oxshashlar: string[] = [];
     if (fromCn) {
       fromInfo = await this.contractBalance(fromCn).catch(() => null);
-      if (!fromInfo?.foundInCrm) warnings.push(`Manba shartnoma topilmadi (CRM/tarix): ${fromCn}`);
+      if (!fromInfo?.foundInCrm) {
+        oxshashlar = await this.oxshashShartnoma(fromCn);
+        warnings.push(
+          `Manba shartnoma topilmadi (CRM/tarix): ${fromCn}`
+          + (oxshashlar.length ? ` — bazada o'xshashi bor: ${oxshashlar.join(', ')}` : ''),
+        );
+      }
       objectName = fromInfo?.objectName || null;
     }
 
@@ -5958,6 +5994,40 @@ export class OplataKvService {
       ? 'Hujjat forma bilan mos, qoidalar bajarildi'
       : warnings.join('; ');
 
+    // ── XULOSA ──
+    // Bitta oddiy jumla: nima bo'ldi va nima qilish kerak. Texnik atamasiz,
+    // foydalanuvchi qizil-sariq quticharni o'qib yurmasin.
+    const pul = (v: number | null | undefined) =>
+      v == null ? '—' : `${Number(v).toLocaleString('ru-RU')} so'm`;
+    const xulosaQism: string[] = [];
+
+    if (fromCn && !fromInfo?.foundInCrm) {
+      xulosaQism.push(`Manba shartnoma «${fromCn}» topilmadi.`);
+      xulosaQism.push(
+        oxshashlar.length
+          ? `Agent arizadagi raqamni noto'g'ri o'qigan bo'lishi mumkin — bazada o'xshashi bor: ${oxshashlar.join(', ')}. To'g'risini tanlab qayta tekshiring.`
+          : `Raqamni arizadan solishtirib, qo'lda to'g'irlang.`,
+      );
+    } else if (totalAmount > 0 && bizQoldiq != null && !yetarlimi(bizQoldiq)) {
+      const kamomad = totalAmount - bizQoldiq;
+      xulosaQism.push(
+        `Shartnoma topildi, lekin to'lov yetmayapti: ariza ${pul(totalAmount)} so'rayapti, bizda esa ${pul(bizQoldiq)} bor (${pul(kamomad)} kam).`,
+      );
+      if (farqSabab) {
+        xulosaQism.push(`Tekshirdim — ${farqSabab}`);
+        xulosaQism.push(`Pul bankka tushib ОплатыКв ga yozilgandan keyin qayta urinib ko'ring.`);
+      } else if (crmQoldiq != null && crmQoldiq > bizQoldiq) {
+        xulosaQism.push(`CRM'da ${pul(crmQoldiq)} ko'rinadi — farqi hali bizga yetib kelmagan.`);
+      } else {
+        xulosaQism.push(`CRM'da ham shuncha — arizadagi summani tekshiring yoki o'tkazmani ${pul(bizQoldiq)} gacha kamaytiring.`);
+      }
+    } else if (warnings.length === 0) {
+      xulosaQism.push(`Hammasi joyida — tekshirib tasdiqlashingiz mumkin.`);
+    } else {
+      xulosaQism.push(`Shartnoma va summa joyida, lekin tekshirish kerak bo'lgan joylar bor (pastda).`);
+    }
+    const xulosa = xulosaQism.join(' ');
+
     const fromBalance = bizQoldiq;
     // Faqat ОплатыКв: pul bizda bo'lmasa o'tkazma manba qoldig'ini minusga tushiradi.
     const balanceEnough = totalAmount <= 0 || bizQoldiq == null ? true : yetarlimi(bizQoldiq);
@@ -5976,6 +6046,8 @@ export class OplataKvService {
         missingPayments: yoqTolovlar,
         /** O'sha farqning odam tilidagi izohi */
         missingReason: farqSabab,
+        /** Shartnoma topilmasa — bazadagi o'xshash raqamlar (bir bosishda almashtirish uchun) */
+        similarContracts: oxshashlar,
         totalAmount,
         destinations: destResolved,
         /** Arizada topilgan barcha summalar (rol + iqtibos) — UI'da almashtirish uchun */
@@ -5991,6 +6063,8 @@ export class OplataKvService {
         date: new Date().toISOString().slice(0, 10),
       },
       balanceEnough,
+      /** Bitta oddiy jumla: nima bo'ldi va nima qilish kerak */
+      xulosa,
       duplicates,
       agentState,
       agentReason,

@@ -41,6 +41,8 @@ type AnalyzeResult = {
     }>;
     /** O'sha farqning odam tilidagi izohi */
     missingReason?: string | null;
+    /** Shartnoma topilmasa — bazadagi o'xshash raqamlar */
+    similarContracts?: string[];
     totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean; balance: number | null }>;
     /** Arizada topilgan barcha summalar — roli bilan (bosib almashtirish uchun) */
     amountsFound?: Array<{ amount: number; role: string; quote?: string | null }>;
@@ -53,6 +55,8 @@ type AnalyzeResult = {
   duplicates?: Array<{ date: string | null; amount: number }>;
   agentState: 'verified' | 'needs_review';
   agentReason: string;
+  /** Bitta oddiy jumla: nima bo'ldi va nima qilish kerak */
+  xulosa?: string;
   warnings: string[];
 };
 
@@ -224,9 +228,11 @@ function WorkTab({ onDone }: { onDone: () => void }) {
       return await api.get<{ foundInCrm: boolean; customerName: string | null; objectName: string | null; totalPaid: number }>(`/oplata-kv/contract-balance?contractNo=${encodeURIComponent(cn)}`);
     } catch { return null; }
   };
-  const verifyFrom = async () => {
-    if (!fromCn.trim()) { setFromFound(null); return; }
-    const r = await lookupContract(fromCn);
+  /** @param cn tashqaridan berilgan raqam (taklif tugmasi) — bo'lmasa maydondagi */
+  const verifyFrom = async (cn?: string) => {
+    const nomer = (cn ?? fromCn).trim();
+    if (!nomer) { setFromFound(null); return; }
+    const r = await lookupContract(nomer);
     if (r) { setFromFound(r.foundInCrm); setFromBalance(Number(r.totalPaid)); setFromMeta({ client: r.customerName, object: r.objectName }); }
     else setFromFound(false);
   };
@@ -370,6 +376,32 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 ? <><ShieldCheck className="h-5 w-5 text-emerald-600" /> <span className="text-emerald-700 dark:text-emerald-300">Agent: hujjat mos</span></>
                 : <><ShieldAlert className="h-5 w-5 text-amber-600" /> <span className="text-amber-700 dark:text-amber-300">Agent: tekshirish kerak</span></>}
             </div>
+            {/* XULOSA — eng muhim qator: oddiy tilda nima bo'ldi va nima qilish kerak */}
+            {result.xulosa && (
+              <div className="mt-2.5 rounded-xl bg-white/80 dark:bg-slate-900/60 ring-1 ring-slate-200 dark:ring-slate-700 px-3.5 py-3">
+                <div className="text-[10px] font-bold uppercase tracking-[.1em] text-slate-400 mb-1">
+                  Xulosa
+                </div>
+                <div className="text-[13px] leading-relaxed text-slate-800 dark:text-slate-100">
+                  {result.xulosa}
+                </div>
+                {(result.extracted.similarContracts?.length ?? 0) > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500">Shuni qo&apos;yib ko&apos;ring:</span>
+                    {result.extracted.similarContracts!.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => { setFromCn(c); verifyFrom(c); }}
+                        className="px-2 py-0.5 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-[11.5px] font-mono font-semibold hover:opacity-80 transition-opacity"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {result.warnings.length > 0 && (
               <ul className="mt-2 space-y-1">
                 {result.warnings.map((w, i) => (
@@ -613,7 +645,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[11px] font-medium text-slate-500">Manba shartnoma</label>
-                <input value={fromCn} onChange={(e) => { setFromCn(e.target.value.toUpperCase()); setFromFound(null); }} onBlur={verifyFrom}
+                <input value={fromCn} onChange={(e) => { setFromCn(e.target.value.toUpperCase()); setFromFound(null); }} onBlur={() => verifyFrom()}
                   className={cn('mt-1 w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] font-mono', fromFound === false ? 'ring-rose-400 dark:ring-rose-600' : 'ring-slate-200 dark:ring-slate-700')} />
                 {fromFound === false
                   ? <div className="text-[11px] text-rose-500 mt-0.5">Topilmadi (CRM/tarixда yo'q)</div>
