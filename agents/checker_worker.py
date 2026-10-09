@@ -323,14 +323,80 @@ def _check_db() -> Tuple[str, str, Optional[dict]]:
     return st, "%s SELECT 1: %d ms" % (C.DB_NOMI, slow), details
 
 
+# Disk to'lsa — nima egallayotgani (2026-10-09): serverga kirmasdan sabab ko'rinsin. Soatiga ko'pi bilan bir marta.
+_DISK_KESH_S = 3600
+_DISK_DU_TIMEOUT_S = 20
+_disk_kesh: Dict[str, Any] = {"ts": 0.0, "papkalar": [], "jadvallar": [], "db_gb": None}
+
+
+def _disk_nomzodlar() -> List[Tuple[str, str]]:
+    r = config.REPO
+    return [
+        ("tizim jurnali (journald)", "/var/log/journal"), ("/var/log", "/var/log"),
+        ("PostgreSQL ma'lumotlari", "/var/lib/postgresql"), ("frontend .next/cache", str(r / "frontend/.next/cache")),
+        ("frontend .next", str(r / "frontend/.next")), ("frontend node_modules", str(r / "frontend/node_modules")),
+        ("backend node_modules", str(r / "backend/node_modules")),
+        ("panel yuklangan fayllar", os.environ.get("UPLOADS_DIR") or str(r.parent / "uploads")),
+        ("bot fayllari (tg_uploads)", str(config.UPLOADS_DIR)), ("npm keshi", os.path.expanduser("~/.npm")),
+        ("/tmp", "/tmp"), ("apt keshi", "/var/cache/apt"), ("docker", "/var/lib/docker"), ("swap fayli", "/swapfile"),
+    ]
+
+
+def _du_mb(path: str) -> Optional[float]:
+    """Papka/fayl hajmi MB (du -sxm, bitta fayl tizimi). Yo'q yoki xato -> None."""
+    if not os.path.exists(path):
+        return None
+    if os.path.isfile(path):
+        return os.path.getsize(path) / (1024 ** 2)
+    try:
+        out = subprocess.run(["du", "-sxm", "--", path], capture_output=True, text=True, timeout=_DISK_DU_TIMEOUT_S)
+        return float(out.stdout.split()[0]) if out.stdout.strip() else None
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+
+
+def _disk_kattalar() -> Dict[str, Any]:
+    """Eng katta papkalar va DB jadvallari (soatlik kesh). Faqat disk warn/error bo'lganda chaqiriladi."""
+    if time.time() - float(_disk_kesh["ts"]) < _DISK_KESH_S and _disk_kesh["papkalar"]:
+        return _disk_kesh
+    papkalar = []
+    for nom, yol in _disk_nomzodlar():
+        mb = _du_mb(yol)
+        if mb is not None and mb >= 100:
+            papkalar.append({"nom": nom, "yol": yol, "gb": round(mb / 1024, 2)})
+    papkalar.sort(key=lambda x: -x["gb"])
+    jadvallar: List[Dict[str, Any]] = []
+    db_gb = None
+    try:
+        r = db.fetchall("SELECT pg_database_size(current_database()) AS b", readonly=True, timeout_ms=10000)
+        db_gb = round(int(r[0]["b"]) / (1024 ** 3), 2) if r else None
+        rows = db.fetchall(
+            "SELECT schemaname || '.' || relname AS nom, pg_total_relation_size(relid) AS b"
+            " FROM pg_catalog.pg_statio_user_tables ORDER BY 2 DESC LIMIT 6", readonly=True, timeout_ms=10000)
+        jadvallar = [{"nom": x["nom"], "gb": round(int(x["b"]) / (1024 ** 3), 2)} for x in rows]
+    except Exception:  # noqa: BLE001 - DB o'qilmasa ham papkalar ko'rinadi
+        log.warning("disk: DB jadval o'lchami o'qilmadi")
+    _disk_kesh.update({"ts": time.time(), "papkalar": papkalar[:8], "jadvallar": jadvallar, "db_gb": db_gb})
+    return _disk_kesh
+
+
 def _check_disk() -> Tuple[str, str, Optional[dict]]:
     u = shutil.disk_usage("/")
     pct = u.used * 100.0 / u.total if u.total else 0.0
     free_gb = u.free / (1024 ** 3)
     st = "error" if pct >= _DISK_ERROR else "warn" if pct >= _DISK_WARN else "ok"
-    return st, "disk / %.1f%% band, bo'sh %.1f GB, chegara %d%% (xato %d%%)" % (
-        pct, free_gb, _DISK_WARN, _DISK_ERROR), {
-        "foiz": round(pct, 1), "bosh_gb": round(free_gb, 1)}
+    msg = "disk / %.1f%% band, bo'sh %.1f GB, chegara %d%% (xato %d%%)" % (pct, free_gb, _DISK_WARN, _DISK_ERROR)
+    detail: Dict[str, Any] = {"foiz": round(pct, 1), "bosh_gb": round(free_gb, 1)}
+    if st != "ok":
+        k = _disk_kattalar()
+        if k["papkalar"]:
+            msg += "; eng kattalari: " + ", ".join("%s %.1f GB" % (p["nom"], p["gb"]) for p in k["papkalar"][:6])
+        if k["jadvallar"]:
+            msg += "; DB %s GB, katta jadvallar: %s" % (
+                k["db_gb"] if k["db_gb"] is not None else "?",
+                ", ".join("%s %.1f GB" % (j["nom"], j["gb"]) for j in k["jadvallar"][:4]))
+        detail.update({"papkalar": k["papkalar"], "jadvallar": k["jadvallar"], "db_gb": k["db_gb"]})
+    return st, msg, detail
 
 
 def _check_facts() -> Tuple[str, str, Optional[dict]]:

@@ -51,6 +51,10 @@ mkdir -p "$(dirname "$LOCK")" 2>/dev/null || true
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { printf '%s [deploy] %s\n' "$(ts)" "$*" >> "$LOG"; }
+# Deploy logi cheksiz o'smasin (2026-10-09, disk 85%): 20 MB dan oshsa oxirgi 5000 qator qoladi
+if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 20971520 ]; then
+  tail -n 5000 "$LOG" > "$LOG.tmp" 2>/dev/null && mv "$LOG.tmp" "$LOG"
+fi
 
 # Stale lock cleanup — agar lock fayli bor lekin uni hech qaysi jarayon ushlab turmagan bo'lsa, olib tashlaymiz.
 # Avval flock -n bilan tezda olishga harakat qilamiz. Olmasak, lockfile'ni
@@ -293,9 +297,16 @@ if [ "$need_fe" = "1" ]; then
     # Eski temp build qoldiqlarini tozalash
     rm -rf .next-build .next-old
     # Optimizatsiya: oldingi .next/cache'ni yangi build'ga ko'chiramiz — incremental build (2-3 marta tezroq)
+    # .next/cache har deployda ko'chirilib cheksiz o'sardi (disk 85%, 2026-10-09): 1 GB dan katta bo'lsa
+    # ko'chirilmaydi — yangi build bo'sh keshdan boshlaydi (bir marta sekinroq), eski kesh .next-old bilan o'chadi.
     if [ -d ".next/cache" ]; then
-      mkdir -p .next-build
-      cp -r .next/cache .next-build/cache 2>/dev/null && log "✓ .next/cache ko'chirildi (incremental build)"
+      cache_mb=$(du -sm .next/cache 2>/dev/null | awk '{print $1}')
+      if [ "${cache_mb:-0}" -gt 1024 ]; then
+        log "ℹ .next/cache ${cache_mb} MB (>1 GB) — ko'chirilmadi, yangidan (eski kesh o'chiriladi)"
+      else
+        mkdir -p .next-build
+        cp -r .next/cache .next-build/cache 2>/dev/null && log "✓ .next/cache ko'chirildi (${cache_mb:-?} MB, incremental build)"
+      fi
     fi
     # Temp papkaga build — eski .next tegilmaydi
     if ! run "frontend build (→ .next-build)" env NEXT_DIST_DIR=.next-build npm run build; then
