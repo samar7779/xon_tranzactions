@@ -168,7 +168,7 @@ export class CrmService {
   async getPaymentHistoryAll(page = 1, limit = 5000, timeoutMs = 60_000) {
     return this.callClient(
       '/payment-history/excel',
-      { page, limit, is_trashed: 1, trashed_status: 1, with_trashed: 1 },
+      { page, limit, trashed_status: 1, with_trashed: 1 },
       timeoutMs,
     );
   }
@@ -673,7 +673,6 @@ export class CrmService {
     const r = await this.call('/index', {
       contract: target,
       'per-page': 10,
-      is_trashed: 1,
       trashed_status: 1,
       with_trashed: 1,
     });
@@ -721,7 +720,6 @@ export class CrmService {
     const r = await this.call('/index', {
       contract: q,
       'per-page': perPage,
-      is_trashed: 1,
       trashed_status: 1,
       with_trashed: 1,
     });
@@ -809,11 +807,10 @@ export class CrmService {
       contract: contractNumber.trim(),
       'per-page': perPage,
       cancelled: 1,  // bekor qilinganlar ham
-      is_trashed: 1, // XonSaroy CRM Laravel SoftDelete: withTrashed = active + trashed
       trashed_status: 1,
       with_trashed: 1,
     });
-    this.log.log(`CRM /search → /index (contract=${contractNumber}, is_trashed=1, status=${(r as any).ok ? 'OK' : (r as any).status || 'err'})`);
+    this.log.log(`CRM /search → /index (contract=${contractNumber}, status=${(r as any).ok ? 'OK' : (r as any).status || 'err'})`);
     if (!r.ok) return r;
     const items: any[] = r.data?.data || [];
     this.log.log(`  → ${items.length} ta item topildi`);
@@ -982,7 +979,7 @@ export class CrmService {
         let detail: any = picked;
         // To'liq, kanonik detail — id bo'yicha /show (id aniq, dublikatsiz)
         if (picked.id != null) {
-          const full: any = await this.call('/show', { id: picked.id, is_trashed: 1, trashed_status: 1, with_trashed: 1 });
+          const full: any = await this.call('/show', { id: picked.id, trashed_status: 1, with_trashed: 1 });
           const fd = full.ok ? (full.data?.data || null) : null;
           if (fd) detail = fd;
         }
@@ -1002,14 +999,19 @@ export class CrmService {
     //   if (!empty($data['trashed_status']) && $service->is_soft_delete()) {
     //     case -1: onlyTrashed; case 1: withTrashed; default: activeOnly;
     //   }
-    // To'g'ri param nomi: trashed_status=1 (with trashed)
-    // XonSaroy CRM aniqlangan param: is_trashed=1 (active + trashed birga)
-    // Aniq URL misol: app.xonsaroy.uz/contracts?limit=20&is_trashed=1
-    // MINIMAL param to'plami — searchContracts (qo'lда qidiruv, ishlaydi) bilan bir xil.
-    // Ilgari status:'all' / cancelled:1 kabi ortiqcha paramlar CRM query'sini buzib
-    // (WHERE status='all' → 0 natija) ba'zi contractlarni topilmas qilardi.
-    // is_trashed=1 active + trashed ikkalasini birga qaytaradi.
-    body.is_trashed = 1;
+    // To'g'ri param nomi: trashed_status=1 (with trashed), with_trashed=1 bilan birga.
+    //
+    // ⚠️ 09.10.2026 — `is_trashed=1` OLIB TASHLANDI. Eski hostda (app-api.xonsaroy.uz)
+    // u "active + trashed birga" degani edi. Yangi hostda (crm-api.xonapps.uz) u
+    // FILTR bo'lib qoldi va HECH NARSA qaytarmaydi — tekshirilgan:
+    //   contract=150VTN23CV                  → topildi 1
+    //   contract=150VTN23CV + is_trashed=1   → topildi 0
+    //   is_trashed=1 (filtrsiz)              → []
+    // Shu sabab shartnoma qidiruvi (XATO biriktirish, avto lookup, sverka)
+    // jimgina bo'sh qaytarardi. Bu paramni qayta qo'shmang.
+    //
+    // MINIMAL param to'plami — searchContracts bilan bir xil. Ilgari status:'all' /
+    // cancelled:1 kabi ortiqcha paramlar ham CRM query'sini buzgan edi.
     body.trashed_status = 1;
     body.with_trashed = 1;
     const r = await this.call('/show', body);
@@ -1023,11 +1025,11 @@ export class CrmService {
         // MINIMAL param to'plami. Ilgari qo'shilgan status:'all' / cancelled:1 kabi
         // ortiqcha paramlar CRM query'sini buzib (masalan WHERE status='all' → 0 natija,
         // yoki faqat bekor qilinganlarni qaytarib) avto lookup'ни topilmas qilardi.
-        // is_trashed=1 allaqachon active + trashed contractlarni birga qaytaradi.
+        // trashed_status=1 + with_trashed=1 — Laravel SoftDelete "withTrashed".
+        // is_trashed=1 YO'Q: yangi CRM'da u hamma natijani kesib tashlaydi.
         const idxRes = await this.call('/index', {
           contract: contractNo,
           'per-page': 50,
-          is_trashed: 1,
           trashed_status: 1,
           with_trashed: 1,
         });
@@ -1046,7 +1048,7 @@ export class CrmService {
             // (ular faqat /show'da). id bo'yicha TO'LIQ detail'ni qayta olamiz (payerHint yo'li kabi),
             // aks holda "to'lov 0" (paid/grafik ko'rinmaydi) bo'lib qolardi.
             if (hit.id != null) {
-              const full: any = await this.call('/show', { id: hit.id, is_trashed: 1, trashed_status: 1, with_trashed: 1 });
+              const full: any = await this.call('/show', { id: hit.id, trashed_status: 1, with_trashed: 1 });
               const fd = full.ok ? (full.data?.data || null) : null;
               if (fd) detail = fd;
             }
@@ -1144,7 +1146,7 @@ export class CrmService {
   private async pickContractByName(contractNo: string, hint: string): Promise<any | null> {
     try {
       const idxRes: any = await this.call('/index', {
-        contract: contractNo, 'per-page': 50, is_trashed: 1, trashed_status: 1, with_trashed: 1,
+        contract: contractNo, 'per-page': 50, trashed_status: 1, with_trashed: 1,
       });
       if (!idxRes.ok) return null;
       const items: any[] = idxRes.data?.data || [];
@@ -1206,11 +1208,10 @@ export class CrmService {
     //   plan_images[]  = [{ id, name, image (presigned S3 URL), path }]
     //   plan_drawings[] = [{ ... }]
     // /show'da bu maydonlar YO'Q — shuning uchun /index ishlatamiz.
-    // is_trashed=1 — bekor/o'chirilgan shartnoma bo'lsa ham topamiz.
+    // trashed_status=1 + with_trashed=1 — bekor/o'chirilgan shartnoma ham topilsin.
     const r: any = await this.call('/index', {
       contract,
       'per-page': 20,
-      is_trashed: 1,
       trashed_status: 1,
       with_trashed: 1,
     }).catch(() => null);
@@ -1362,7 +1363,7 @@ export class CrmService {
     items: Array<{ contract: string; branchName: string; propertyType: 'parking' | 'apartment' | null }>;
     totalPage: number;
   }> {
-    const r = await this.call('/index', { page, 'per-page': perPage, is_trashed: 1, trashed_status: 1, with_trashed: 1 });
+    const r = await this.call('/index', { page, 'per-page': perPage, trashed_status: 1, with_trashed: 1 });
     if (!r.ok) return { ok: false, items: [], totalPage: 0 };
     const items = ((r.data?.data as any[]) || []).map((it) => {
       const tk = it.type?.key ? String(it.type.key).toLowerCase() : null; // CRM turi (ishonchli)
@@ -1391,7 +1392,7 @@ export class CrmService {
       if (!target) continue;
       try {
         const r: any = await this.call('/index', {
-          contract: target, 'per-page': 5, is_trashed: 1, trashed_status: 1, with_trashed: 1,
+          contract: target, 'per-page': 5, trashed_status: 1, with_trashed: 1,
         });
         const items: any[] = r?.data?.data || [];
         const it = items.find((x) => norm(x.contract) === norm(target)) || null; // FAQAT aniq moslik

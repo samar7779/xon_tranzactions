@@ -388,6 +388,8 @@ export default function XatoListPage() {
   const [selected, setSelected] = useState<XatoRow | null>(null);
   const [cq, setCq] = useState('');
   const [crmItems, setCrmItems] = useState<any[]>([]);
+  /** CRM qidiruvi xatosi — ilgari jim yutilardi */
+  const [crmError, setCrmError] = useState('');
   const [crmLoading, setCrmLoading] = useState(false);
   const [chosen, setChosen] = useState('');
   const [arizaFile, setArizaFile] = useState<File | null>(null);
@@ -454,14 +456,22 @@ export default function XatoListPage() {
 
   // CRM shartnoma qidirish (modal ochiq bo'lsa, debounce)
   useEffect(() => {
-    if (!selected || cq.trim().length < 2) { setCrmItems([]); return; }
+    if (!selected || cq.trim().length < 2) { setCrmItems([]); setCrmError(''); return; }
+    setCrmError('');
     setCrmLoading(true);
     const t = setTimeout(() => {
       const req = tgAuth
         ? fetch(`${API_URL}/agent/tg/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth: tgAuth, q: cq.trim() }) })
         : fetch(`${API_URL}/agent/crm-search?key=${encodeURIComponent(key)}&q=${encodeURIComponent(cq.trim())}`);
-      req.then((r) => r.json()).then((d) => setCrmItems(d?.items || [])).catch(() => setCrmItems([]))
-        .finally(() => setCrmLoading(false));
+      req.then((r) => r.json()).then((d) => {
+        setCrmItems(d?.items || []);
+        // CRM javob bermasa panel ilgari JIM qolardi — ro'yxat bo'sh ko'rinib,
+        // foydalanuvchi "qidiruv ishlamayapti" deb o'ylardi. Endi sabab ko'rinadi.
+        setCrmError(d?.ok === false ? (d?.error || 'CRM javob bermadi') : '');
+      }).catch((e) => {
+        setCrmItems([]);
+        setCrmError(e?.message || "So'rov yuborilmadi");
+      }).finally(() => setCrmLoading(false));
     }, 350);
     return () => clearTimeout(t);
   }, [cq, selected, key, tgAuth]);
@@ -951,6 +961,17 @@ export default function XatoListPage() {
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{it.clientFullName || it.client_full_name || it.customerName || it.client || it.object || ''}</div>
                       </button>
                     ))}
+                  </div>
+                )}
+                {crmError && (
+                  <div className="flex items-start gap-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900/50 px-2.5 py-2 text-[11.5px] text-rose-700 dark:text-rose-300">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>CRM qidiruvi ishlamadi: {crmError}</span>
+                  </div>
+                )}
+                {!crmError && !crmLoading && cq.trim().length >= 2 && crmItems.length === 0 && (
+                  <div className="text-[11.5px] text-slate-500 dark:text-slate-400 px-0.5">
+                    CRM&apos;da bunday shartnoma topilmadi. Raqamni tekshiring — oxirgi 1-2 harf adashgan bo&apos;lishi mumkin.
                   </div>
                 )}
                 {chosen && (
