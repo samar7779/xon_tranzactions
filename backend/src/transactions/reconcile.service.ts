@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
 import { SyncService } from '../sync/sync.service';
+import { tashkentKun } from '../common/tashkent';
 
 const DAY_MS = 86_400_000;
 const MAX_DAYS = 92;
@@ -808,7 +809,7 @@ export class ReconcileService {
           // Sverka txnDate bo'yicha guruhlaydi — shuni ko'rsatamiz ("sana tuzatish"
           // tugmasi ham txnDate'ni yangilaydi, ikkisi mos bo'lsin).
           existsOnDate: offDateMatch
-            ? offDateMatch.txnDate.toISOString().slice(0, 10)
+            ? tashkentKun(offDateMatch.txnDate)
             : undefined,
           existingTxId: offDateMatch?.id,
         });
@@ -1066,7 +1067,7 @@ export class ReconcileService {
     });
     if (!tx) throw new NotFoundException('Tx topilmadi');
 
-    const oldDate = tx.txnDate.toISOString().slice(0, 10);
+    const oldDate = tashkentKun(tx.txnDate);
     if (oldDate === newDate) {
       return { ok: true, updated: false, oldDate, newDate };
     }
@@ -1139,7 +1140,7 @@ export class ReconcileService {
           errors++;
           continue;
         }
-        const oldDate = tx.txnDate.toISOString().slice(0, 10);
+        const oldDate = tashkentKun(tx.txnDate);
         if (oldDate === it.newDate) {
           results.push({ txId: it.txId, updated: false, oldDate, newDate: it.newDate, externalId: tx.externalId });
           skipped++;
@@ -1458,7 +1459,7 @@ export class ReconcileService {
           transactionId: found?.id || null,
           externalId: found?.externalId || composite,
           existingDate: !inserted && found?.txnDate
-            ? found.txnDate.toISOString().slice(0, 10)
+            ? tashkentKun(found.txnDate)
             : undefined,
         });
         okCount++;

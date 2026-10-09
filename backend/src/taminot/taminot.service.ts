@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { tashkentKun } from '../common/tashkent';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
@@ -557,7 +558,7 @@ export class TaminotService {
         tally.set(label, (tally.get(label) || 0) + 1);
         if (samples.length < 25) {
           samples.push({
-            date: tx.txnDate.toISOString().slice(0, 10),
+            date: tashkentKun(tx.txnDate),
             amount: String(tx.amount),
             bankName: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 30) || '',
             supplier: String(c.taminotchi || '').slice(0, 28),
@@ -619,7 +620,7 @@ export class TaminotService {
               .sort((a: any, b: any) => a.dd - b.dd)[0];
             if (yaqin) {
               nomFarqi.push({
-                date: tx.txnDate.toISOString().slice(0, 10),
+                date: tashkentKun(tx.txnDate),
                 amount: String(amt),
                 kunFarq: yaqin.dd,
                 bankNom: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 40) || '',
@@ -638,7 +639,7 @@ export class TaminotService {
         reasons.set(sabab, (reasons.get(sabab) || 0) + 1);
         if (eng && nearMiss.length < 15) {
           nearMiss.push({
-            date: tx.txnDate.toISOString().slice(0, 10),
+            date: tashkentKun(tx.txnDate),
             amount: String(amt),
             bankName: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 26) || '',
             erpDate: eng.c.sana.toISOString().slice(0, 10),
@@ -713,7 +714,7 @@ export class TaminotService {
         reasons.set(s, (reasons.get(s) || 0) + 1);
         if (shiftOshdi.length < 20) {
           shiftOshdi.push({
-            date: tx.txnDate.toISOString().slice(0, 10),
+            date: tashkentKun(tx.txnDate),
             amount: String(amt),
             bankName: (tx.direction === 'IN' ? tx.fromName : tx.toName)?.slice(0, 30) || '',
             contract: String(c.dogno || '').slice(0, 30),

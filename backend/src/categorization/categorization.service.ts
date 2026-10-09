@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmContractCacheService } from './crm-contract-cache.service';
 import { extractContractNumber, extractContractCandidates } from './contract-parser';
+import { tashkentKun } from '../common/tashkent';
 
 /**
  * Tranzaksiya kategoriyalash xizmati.
@@ -365,7 +366,7 @@ export class CategorizationService {
       rows.push({
         id: t.id,
         externalId: t.externalId ?? null,
-        date: t.txnDate ? t.txnDate.toISOString().slice(0, 10) : null,
+        date: t.txnDate ? tashkentKun(t.txnDate) : null,
         amount: Number(t.amount),
         direction: t.direction,
         party: t.direction === 'IN' ? (t.fromName || null) : (t.toName || null),
@@ -2289,7 +2290,7 @@ export class CategorizationService {
     // ── Namuna (10 ta) ──
     const samples = needsUpdate.slice(0, 10).map((tx) => ({
       id: tx.id,
-      date: tx.txnDate.toISOString().slice(0, 10),
+      date: tashkentKun(tx.txnDate),
       amount: Number(tx.amount),
       direction: tx.direction,
       description: (tx.description || '').slice(0, 120),

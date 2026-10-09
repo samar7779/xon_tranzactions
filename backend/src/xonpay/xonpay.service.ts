@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
+import { tashkentKun } from '../common/tashkent';
 
 /**
  * Cron interval (daqiqada) → cron expression.
@@ -1239,7 +1240,7 @@ export class XonpayService implements OnModuleInit {
       row.getCell(9).value = ha(x.isMatched);
       row.getCell(10).value = ha(x.isReceivedFromBank);
       row.getCell(11).value = ha(x.isProblematic);
-      row.getCell(12).value = x.matchedTx?.txnDate ? x.matchedTx.txnDate.toISOString().slice(0, 10) : null;
+      row.getCell(12).value = x.matchedTx?.txnDate ? tashkentKun(x.matchedTx.txnDate) : null;
       if (x.matchedTx?.amount != null) {
         row.getCell(13).value = Number(x.matchedTx.amount);
         row.getCell(13).numFmt = MONEY;

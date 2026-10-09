@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { TaminotService } from '../taminot/taminot.service';
 import { KategoriyaAiService } from './kategoriya-ai.service';
+import { tashkentKun } from '../common/tashkent';
 
 /** Bosqich nomlari — DB'da ham, web'da ham shu satrlar ishlatiladi. */
 export const BOSQICHLAR = ['qoidalar', 'schotchik', 'minfin', 'taminot', 'ai'] as const;
@@ -592,7 +593,7 @@ export class KategoriyaAgentService implements OnModuleInit {
         bilim,
         paket.map((t) => ({
           id: t.id,
-          sana: t.txnDate.toISOString().slice(0, 10),
+          sana: tashkentKun(t.txnDate),
           summa: String(t.amount),
           yonalish: t.direction,
           kontragent: (t.direction === 'IN' ? t.fromName : t.toName) || '',
@@ -656,7 +657,7 @@ export class KategoriyaAgentService implements OnModuleInit {
             transactionId: tx.id,
             bosqich: 'ai',
             summa: tx.amount,
-            sana: tx.txnDate.toISOString().slice(0, 10),
+            sana: tashkentKun(tx.txnDate),
             kontragent: ((tx.direction === 'IN' ? tx.fromName : tx.toName) || '').slice(0, 255),
             categoryCode: q.categoryCode,
             modda: q.modda,

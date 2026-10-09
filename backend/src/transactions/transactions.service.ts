@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { SyncService } from '../sync/sync.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
+import { tashkentKun } from '../common/tashkent';
 
 // YYYY-MM-DD ko'rinishidagi sana — Tashkent kunining boshi/oxiri (UTC+5)
 // Filtrlash bu yerda bo'lishi shart, aks holda foydalanuvchi tanlagan sana
@@ -1702,7 +1703,7 @@ export class TransactionsService {
       totalOut += outflow;
       running += inflow - outflow;
       return {
-        date: o.txnDate.toISOString().slice(0, 10),
+        date: tashkentKun(o.txnDate),
         docNumber: o.docNumber || null,
         inflow, outflow, running,
         description: (o.description || '').slice(0, 120),

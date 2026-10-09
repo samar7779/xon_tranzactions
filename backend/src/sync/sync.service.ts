@@ -12,6 +12,7 @@ import { CategorizationService } from '../categorization/categorization.service'
 import { SettingsService } from './settings.service';
 import { TxnDirection, TxnStatus, TxnType, Prisma } from '@prisma/client';
 import { format, parse, subDays } from 'date-fns';
+import { tashkentKun } from '../common/tashkent';
 
 // Bank javobining ma'lum (mapped) fieldlari — Python kodingiz bilan moslangan.
 // Bu set'da bo'lmagan har qanday field rawExtra JSON'iga tushadi.
@@ -876,7 +877,7 @@ export class SyncService implements OnModuleInit {
           });
           this.logger.log(
             `Date-shift: tx ${existing.id} yangilandi — ` +
-            `sana ${existing.txnDate.toISOString().slice(0, 10)} → ${txnDate.toISOString().slice(0, 10)}, ` +
+            `sana ${tashkentKun(existing.txnDate)} → ${tashkentKun(txnDate)}, ` +
             `composite ID yangi`,
           );
           // Hamkor karta to'lovi sanasi settlement→haqiqiy kunga ko'chdi — bog'langan
@@ -926,8 +927,8 @@ export class SyncService implements OnModuleInit {
                   accountId: existing.accountId,
                   changeType: 'EDITED',
                   fieldsChanged: ['txnDate'],
-                  oldData: { txnDate: { old: existing.txnDate.toISOString().slice(0, 10), new: txnDate.toISOString().slice(0, 10) } } as any,
-                  newData: { txnDate: txnDate.toISOString().slice(0, 10) } as any,
+                  oldData: { txnDate: { old: tashkentKun(existing.txnDate), new: tashkentKun(txnDate) } } as any,
+                  newData: { txnDate: tashkentKun(txnDate) } as any,
                   txnDate,
                   amount: existing.amount,
                   direction: existing.direction,
