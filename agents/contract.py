@@ -1081,8 +1081,11 @@ TARIX_KOPRIK_HOLAT = "/api/agent-bridge/tarix/holat"
 TARIX_QADAM_S = 20            # holatni tekshirish oralig'i
 TARIX_TOXTADI_S = 300         # shuncha vaqt siljimasa — to'xtab qoldi
 TARIX_KUTISH_S = 3600         # bot kuzatadigan eng ko'p vaqt (keyin fonda davom etadi)
+TARIX_HOLAT_ESKI_S = 86400    # /tarix holat: shundan eski yuklash ko'rsatilmaydi
+KV_TARIX_OXIRGI = "tarix_oxirgi"   # oxirgi bot yuklashi (bot qayta ishga tushsa ham /tarix holat uchun)
 MSG_TARIX_FOYDALANISH = ("Foydalanish: /tarix <dan> [gacha] [bank nomi yoki hisob raqam]. Masalan: /tarix 01.10.2026"
-                         " 05.10.2026 Kapitalbank. Bank va hisobsiz — barcha hisoblar; ko'pi bilan 62 kun.")
+                         " 05.10.2026 Kapitalbank. Bank va hisobsiz — barcha hisoblar; ko'pi bilan 62 kun."
+                         " Jarayon: /tarix holat.")
 # AI Perebroska (egasi qarori 2026-10-05): perebroska arizasi fayli -> panel agenti tahlili -> tasdiq -> yaratish
 PEREBROSKA_RE = re.compile(r"(?im)^\s*PEREBROSKA:[ \t]*(.*)$")
 PEREBROSKA_KOPRIK_TAHLIL = "/api/agent-bridge/perebroska/tahlil"

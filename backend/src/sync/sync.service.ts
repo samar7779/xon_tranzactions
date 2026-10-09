@@ -32,6 +32,9 @@ export class SyncService implements OnModuleInit {
   private readonly daysBack: number;
   // FIX (B#4): bir hisobga bir vaqtda bitta syncAccount — parallel (cron ustma-ust) ishga tushishni oldini oladi
   private readonly syncingAccounts = new Set<string>();
+  // Backfill: hisob shu payt boshqa sync bilan band bo'lsa (syncAccount jim o'tkazadi) — kutib qayta urinish
+  backfillBandKutishMs = 15_000;
+  backfillBandUrinish = 8;
 
   // Becfil-exclusion kesh (accountId → oraliqlar), 30s TTL — upsertOne har item uchun DB so'ramasin.
   private exclusionCache = new Map<string, { ranges: Array<{ from: string; to: string }>; at: number }>();
@@ -507,12 +510,38 @@ export class SyncService implements OnModuleInit {
     this.logger.log(`Backfill boshlandi: ${accounts.length} hisob × ${dates.length} kun`);
     for (const acc of accounts) {
       try {
-        await this.syncAccount(acc.credentialId, acc.id, { dates });
+        let r: any = await this.syncAccount(acc.credentialId, acc.id, { dates });
+        // Hisob shu payt avto-sync bilan band bo'lsa syncAccount JIM o'tkazib yuboradi (log yo'q) — backfill shu hisob
+        // sanalarini olmay qolardi va jarayon "tugamadi" bo'lib ko'rinardi. Kutib qayta urinamiz; baribir band — FAILED log.
+        for (let i = 0; r?.skipped && i < this.backfillBandUrinish; i++) {
+          await new Promise((res) => setTimeout(res, this.backfillBandKutishMs));
+          r = await this.syncAccount(acc.credentialId, acc.id, { dates });
+        }
+        if (r?.skipped) await this.backfillBandLog(acc.id, dates);
       } catch (e: any) {
         this.logger.warn(`Backfill xato (${acc.id}): ${e?.message?.slice(0, 150)}`);
       }
     }
     this.logger.log(`Backfill tugadi: ${accounts.length} hisob × ${dates.length} kun`);
+  }
+
+  /** Backfill: hisob band bo'lib qolgani uchun olinmagani — panel va bot jarayonida ko'rinsin (FAILED log). */
+  private async backfillBandLog(accountId: string, dates: string[]) {
+    try {
+      const acc = await this.prisma.bankAccount.findUnique({ where: { id: accountId }, select: { accountNo: true, ownerName: true } });
+      const bankSana = (s: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); return m ? `${m[3]}.${m[2]}.${m[1]}` : s; };
+      await this.prisma.syncLog.create({
+        data: {
+          source: `${acc?.accountNo || accountId}${acc?.ownerName ? ' · ' + acc.ownerName : ''} · backfill ${
+            bankSana(dates[0])}–${bankSana(dates[dates.length - 1])}`.slice(0, 255),
+          accountId, status: 'FAILED', errorMessage: "Hisob boshqa sync bilan band edi — shu hisob uchun qayta yuklang",
+          finishedAt: new Date(),
+        },
+      });
+      this.logger.warn(`Backfill: ${acc?.accountNo || accountId} band — o'tkazib yuborildi`);
+    } catch (e: any) {
+      this.logger.warn(`backfillBandLog xato: ${e?.message?.slice(0, 150)}`);
+    }
   }
 
   /**

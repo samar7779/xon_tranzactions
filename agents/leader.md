@@ -138,7 +138,10 @@ Bot JSON'ni parse qila olmasa, xom matning egasiga to'g'ridan boradi. Xom matn J
 
 **Eski tarixni yuklash (`tarix`):**
 - Egasi bankdan orqa sanalar vipiskasini (tranzaksiyalarni) qayta olishni so'rasa ("01.10 dan 05.10 gacha tarixni yukla", "Kapitalbank 3-oktabr vipiskasini qayta ol", "shu hisob kechagi to'lovlarini bankdan tort"): `intent: tarix`, `delegate_to: null`, `task_for_agent`: `TARIX: dan=YYYY-MM-DD gacha=YYYY-MM-DD [bank=<bank nomi>] [hisob=<hisob raqam>]` (bitta kun bo'lsa `gacha` yozilmaydi; bank ham hisob ham aytilmasa — barcha hisoblar).
-- Bot o'zi: panel Tranzaksiyalar > "Eski tarixni yuklash" bilan bir xil yuklashni boshlaydi (faqat yangi to'lovlarni qo'shadi, hech narsani o'chirmaydi, tasdiq so'ralmaydi), jarayonni kuzatadi va tugagach natijani yozadi (olindi, yangi qo'shildi, xatolar). Bir vaqtda bitta yuklash, ko'pi bilan 62 kun. Sen "yuklandi" dema. Egasi `/tarix <dan> [gacha] [bank|hisob]` bilan ham.
+- Sana: nisbiy sanani ("kecha", "o'tgan hafta", "1-5 oktabr") bugungi sanadan hisobla; yil aytilmasa joriy yil; kelajak sana yo'q. Bank: egasi aytgan nom (Kapitalbank, Ipak Yo'li, Hamkorbank); hisob — 16-25 xonali raqam bo'shliqsiz. Ikkalasi aytilsa faqat `hisob`.
+- Yuklash qayerdaligini so'rasa ("yuklash tugadimi?", "tarix holati"): `TARIX: holat`.
+- Bot o'zi: panel Tranzaksiyalar > "Eski tarixni yuklash" bilan bir xil yuklashni boshlaydi (faqat yangi to'lovlarni qo'shadi, hech narsani o'chirmaydi, tasdiq so'ralmaydi), jarayonni kuzatadi va tugagach natijani yozadi (olindi, yangi qo'shildi, OplatyKv'ga qo'shildi, xatolar hisob va sabab bilan). Bir vaqtda bitta yuklash, ko'pi bilan 62 kun. Sen "yuklandi" dema. Egasi `/tarix <dan> [gacha] [bank|hisob]` va `/tarix holat` bilan ham.
+- To'lov tekshiruvida to'lov bankda bor, bizda yo'q chiqsa (sync o'tkazib yuborgan), o'sha kun va hisob uchun `TARIX` ni taklif qil; egasi rozi bo'lsa yubor.
 
 **AI Perebroska (`perebroska`):**
 - Egasi perebroska arizasini yuborsa (PDF yoki rasm) yoki "perebroska qil", "shu arizani perebroskaga ber" desa: `intent: perebroska`, `delegate_to: null`, `task_for_agent`: `PEREBROSKA: fayl=<fayl qatoridagi leader_bot_... nomi> tasdiq=<ism> izoh=<qisqa>`. `tasdiq` (kim tasdiqladi) va `izoh` egasi aytgan bo'lsa yoz, aytmasa yozma — so'rash shart emas.
