@@ -65,6 +65,7 @@ _TOLOV_CMD_RE = re.compile(r"^\s*/tolov(?:@\S+)?\s*", re.I)
 _TUZAT_CMD_RE = re.compile(r"^\s*/tuzat(?:@\S+)?\s*", re.I)  # /tuzat <to'lov ID> [kalit=qiymat ...]
 _HISOB_CMD_RE = re.compile(r"^\s*/hisob(?:@\S+)?\s*", re.I)   # /hisob <hisob raqam>
 _XATO_CMD_RE = re.compile(r"^\s*/xato(?:@\S+)?\s*", re.I)     # /xato [filtr] — XATO ro'yxati fayli
+_TARIX_CMD_RE = re.compile(r"^\s*/tarix(?:@\S+)?\s*", re.I)   # /tarix <dan> [gacha] [bank|hisob] — eski tarix
 _EKSPORT_CMD_RE = re.compile(r"^\s*/eksport(?:@\S+)?\s*", re.I)  # /eksport [sheet nomi]  # /tolov yoki /tolov@bot_nomi
 _JAVOB_TURLARI = frozenset({"sticker", "video", "animation", "document", "location", "contact",
                             "venue", "poll", "dice", "story"})
@@ -969,6 +970,14 @@ async def _leader_turn(msg: Message, text: str, is_fwd: bool, image_paths: List[
     # 6b. To'lovni tuzatish (TR Support): TUZATISH qatori bo'lsa bot o'zi so'raydi / tekshiradi / [Ha] so'raydi.
     #     Leader'ning delegatsiyasi va human_reply o'rniga (tahrirni faqat bot, egasi tasdig'i bilan qiladi).
     tz_matn = "\n".join(str(x) for x in (data.get("task_for_agent"), data.get("human_reply")) if x)
+    if C.TARIX_RE.search(tz_matn):
+        tr = _mod("tarix")
+        if tr is None:
+            await _say(_MSG_MODUL_YOQ_TPL.format(modul="tarix"), escape=True, reply_to=reply_to)
+            return
+        state["react"] = emoji
+        await tr.handle(tz_matn, _outbox(), reply_to=reply_to)
+        return
     if C.PEREBROSKA_RE.search(tz_matn):
         pb = _mod("perebroska")
         if pb is None:
@@ -1493,6 +1502,22 @@ async def cmd_hisob(msg: Message) -> None:
     await _cmd_malumot(msg, _HISOB_CMD_RE, "hisob", "HISOB: ")
 
 
+async def cmd_tarix(msg: Message) -> None:
+    """/tarix <dan> [gacha] [bank|hisob]: eski tarixni bankdan yuklash (panel "Eski tarixni yuklash" bilan bir xil)."""
+    if not _is_owner_private(msg):
+        return
+    if _is_forwarded(msg):
+        await on_text(msg)
+        return
+    arg = _TARIX_CMD_RE.sub("", _mask_secrets(getattr(msg, "text", None) or ""), count=1).strip()
+    await _hist(C.ROLE_OWNER, ("/tarix " + C.short(arg, 60)).strip())
+    tr = _mod("tarix")
+    if tr is None:
+        await _say(_MSG_MODUL_YOQ_TPL.format(modul="tarix"), escape=True)
+        return
+    await tr.handle("TARIX: " + arg, _outbox(), reply_to=msg.message_id)
+
+
 async def cmd_xato(msg: Message) -> None:
     """/xato [filtr]: XATO to'lovlar ro'yxati Excel fayl (xato-list bilan bir xil)."""
     await _cmd_malumot(msg, _XATO_CMD_RE, "xato", "XATO_FAYL: ")
@@ -1746,6 +1771,7 @@ def _register(dp: Dispatcher) -> None:
     dp.message.register(cmd_eksport, Command("eksport"), ~F.forward_origin)
     dp.message.register(cmd_hisob, Command("hisob"), ~F.forward_origin)
     dp.message.register(cmd_xato, Command("xato"), ~F.forward_origin)
+    dp.message.register(cmd_tarix, Command("tarix"), ~F.forward_origin)
     dp.message.register(cmd_reset, Command("reset"), ~F.forward_origin)
     dp.message.register(on_text)
     dp.callback_query.register(on_callback)

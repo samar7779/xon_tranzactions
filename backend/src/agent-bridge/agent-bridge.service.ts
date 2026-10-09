@@ -9,6 +9,7 @@ import { TrSupportService } from '../tr-support/tr-support.service';
 import { TrArizaService } from '../tr-support/tr-ariza.service';
 import { TrMalumotService } from '../tr-support/tr-malumot.service';
 import { PerebroskaYarat, TrPerebroskaService } from '../tr-support/tr-perebroska.service';
+import { TrTarixService } from '../tr-support/tr-tarix.service';
 import { GoogleExportService } from '../google-export/google-export.service';
 import { AGENT_BRIDGE_KEY_ENV, isKeyConfigured } from './agent-bridge.guard';
 import { parseSheetIds } from './agent-bridge.validation';
@@ -56,7 +57,17 @@ export class AgentBridgeService implements OnModuleInit {
     private readonly trAriza: TrArizaService,
     private readonly trMalumot: TrMalumotService,
     private readonly trPerebroska: TrPerebroskaService,
+    private readonly trTarix: TrTarixService,
   ) {}
+
+  // ───────────────────────── Eski tarixni yuklash ─────────────────────────
+  tarixYukla(b: { dan: string; gacha: string; bank: string | null; hisob: string | null }) {
+    return this.trTarix.boshla(b);
+  }
+
+  tarixHolat(since: string) {
+    return this.trTarix.holat(since);
+  }
 
   // ───────────────────────── AI Переброска ─────────────────────────
   perebroskaTahlil(fayl: string) {

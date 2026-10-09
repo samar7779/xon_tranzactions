@@ -35,6 +35,8 @@ describe('AgentBridgeController (HTTP)', () => {
     xatoRoyxat: jest.fn(async () => ({ ok: true, filename: 'x.xlsx', base64: '' })),
     perebroskaTahlil: jest.fn(async () => ({ ok: true, extracted: {}, warnings: [] })),
     perebroskaYarat: jest.fn(async () => ({ ok: true, groupId: 'g1', amount: 1, qatorlar: [] })),
+    tarixYukla: jest.fn(async () => ({ ok: true, startedAt: 'x', hisoblar: 1, kunlar: 1 })),
+    tarixHolat: jest.fn(async () => ({ ok: true, boshlangan: 0, tugagan: 0 })),
   };
   const auditMock = { record: jest.fn() };
 
@@ -214,6 +216,19 @@ describe('AgentBridgeController (HTTP)', () => {
       expect((await http().post('/api/agent-bridge/perebroska/yarat').set(H, KEY).send(bad)).status).toBe(400);
     }
     expect(svcMock.perebroskaYarat).toHaveBeenCalledTimes(1);
+  });
+
+  it('tarix: yukla POST (audit), holat GET; yaroqsiz 400, kalitsiz 403', async () => {
+    const body = { dan: '2026-10-01', gacha: '2026-10-05', bank: 'Kapitalbank' };
+    expect((await http().post('/api/agent-bridge/tarix/yukla').send(body)).status).toBe(403);
+    expect((await http().post('/api/agent-bridge/tarix/yukla').set(H, KEY).send(body)).status).toBe(200);
+    expect(svcMock.tarixYukla).toHaveBeenCalledWith({ dan: '2026-10-01', gacha: '2026-10-05', bank: 'Kapitalbank', hisob: null });
+    expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'Agent: eski tarix yuklash boshlandi (TR Support)' }));
+    for (const bad of [{ ...body, dan: '01.10.2026' }, { ...body, hisob: '123' }, { gacha: '2026-10-05' }]) {
+      expect((await http().post('/api/agent-bridge/tarix/yukla').set(H, KEY).send(bad)).status).toBe(400);
+    }
+    expect((await http().get('/api/agent-bridge/tarix/holat?since=2026-10-09T05:00:00.000Z').set(H, KEY)).status).toBe(200);
+    expect((await http().get('/api/agent-bridge/tarix/holat?since=bugun').set(H, KEY)).status).toBe(400);
   });
 
   it('POST run → 200 va audit (actor: agent-bridge) yoziladi', async () => {

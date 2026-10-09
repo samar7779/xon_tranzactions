@@ -5,7 +5,8 @@ import { AgentBridgeGuard } from './agent-bridge.guard';
 import { AgentBridgeService } from './agent-bridge.service';
 import {
   assertExportId, parseArizaFind, parseArizaId, parseArizaSubmit, parseChekFind, parseContracts, parseCrmLookup,
-  parseFiltr, parseHisob, parsePerebroskaFayl, parsePerebroskaYarat, parseTxApply, parseTxChoice, parseTxRef,
+  parseFiltr, parseHisob, parsePerebroskaFayl, parsePerebroskaYarat, parseSince, parseTarixYukla, parseTxApply,
+  parseTxChoice, parseTxRef,
 } from './agent-bridge.validation';
 
 /**
@@ -24,6 +25,8 @@ import {
  *   GET  /api/agent-bridge/xato-royxat[?filtr=]                         — FAQAT O'QISH (XATO ro'yxati .xlsx, base64)
  *   POST /api/agent-bridge/perebroska/tahlil                             — AI Переброска arizani o'qiydi (DB'ga yozmaydi)
  *   POST /api/agent-bridge/perebroska/yarat                              — Переброска YARATADI (egasi tasdig'idan keyin)
+ *   POST /api/agent-bridge/tarix/yukla                                   — Eski tarixni bankdan yuklash (fonda, faqat qo'shadi)
+ *   GET  /api/agent-bridge/tarix/holat?since=                            — FAQAT O'QISH (yuklash jarayoni)
  *   POST /api/agent-bridge/exports/:id/run                              — Google Sheets'ga YOZADI
  *        (bot faqat egasi Telegram'da [Ha] bosgandan keyin chaqiradi)
  *
@@ -52,6 +55,20 @@ export class AgentBridgeController {
   crmLookup(@Query('id') id: any, @Query('date') date?: any, @Query('amount') amount?: any) {
     const q = parseCrmLookup(id, date, amount);
     return this.svc.crmLookup(q.id, q.date, q.amount);
+  }
+
+  // Eski tarixni yuklash: panel Tranzaksiyalar > "Eski tarixni yuklash" bilan bir xil (backfill, fonda).
+  @Post('tarix/yukla')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 2, ttl: 60_000 } })
+  tarixYukla(@Body() body: any) {
+    return this.svc.tarixYukla(parseTarixYukla(body));
+  }
+
+  @Get('tarix/holat')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  tarixHolat(@Query('since') since: any) {
+    return this.svc.tarixHolat(parseSince(since));
   }
 
   // AI Переброска: panel "AI Переброска" bilan bir xil tahlil (AI chaqiradi — POST, kam limit).

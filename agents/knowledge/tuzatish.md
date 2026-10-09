@@ -51,6 +51,11 @@ Aniq variantlar ro'yxati bazadan olinadi (`categories`), bot har safar ko'rsatad
 - `contract-parser.ts::extractContractCandidates`: asosiy raqamdan keyin darrov yopishgan "ОТ/от/OT" kesilgan nomzod (`stripGluedOt`, ortidan sana yopishsa ham): `2118MSO252POT` -> `2118MSO252P`. Kategoriyalash nomzodlarni tartib bilan CRM'da sinaydi: to'liq raqam topilmasa kesilgani; ikkalasi ham yo'q — asosiy (XATO, avvalgidek). Bot nusxasi `payment_check._ot_kes` (`_izoh_mos`).
 - Eski XATO to'lovlar: Admin > Sync loglar > "Qayta tekshirish" (`POST /oplata-kv/reverify-contracts`: XATO qatorlarni izohdan qayta kategoriyalaydi).
 
+## Eski tarixni yuklash bot orqali (2026-10-09)
+- `TARIX: dan= [gacha=] [bank=] [hisob=]` yoki `/tarix 01.10.2026 05.10.2026 [bank|hisob]` -> `agents/tarix.py`.
+- `POST /api/agent-bridge/tarix/yukla` (2/daq, audit "Agent: eski tarix yuklash boshlandi"): `TrTarixService.boshla` -> panel bilan bir xil `SyncService.resolveBackfillTargets` + `runBackfill` (fonda). Backfill faqat qo'shadi (`!isBackfill`: o'chirish/o'zgartirish aniqlash va qoldiq yo'q) — tasdiq so'ralmaydi. Qamrov: hisob (bizning `bank_accounts`, sync holatidan qat'i nazar) > bank (kod yoki nom, sync yoqilgan hisoblar) > hammasi. Himoya: oraliq <= 62 kun, kelajak yo'q, bir vaqtda bitta (oxirgi 3 soatda RUNNING backfill log bo'lsa 409), sync chegarasi (`syncMinDate`) panel kabi kesadi.
+- `GET /api/agent-bridge/tarix/holat?since=` (panel /sync/backfill/status manbasi): boshlangan/tugagan hisoblar, olindi, yangi, xatolar (hisob, sabab). Bot har 20 s kuzatadi; hammasi tugasa natija, 5 daqiqa siljimasa "to'xtab qoldi" (deploy restarti), 60 daqiqadan keyin "fonda davom etyapti".
+
 ## AI Perebroska bot orqali (2026-10-05)
 - `PEREBROSKA: fayl=<leader_bot_...> [tasdiq=] [izoh=]` -> `agents/perebroska.py`. Fayl: `fayl=` yoki shu xabardagi fayl (faqat PDF/rasm; Word — rad).
 - `POST /api/agent-bridge/perebroska/tahlil` (`TrPerebroskaService.tahlil`, 5/daq): `TrArizaService.readFile` (bot fayli) -> `OplataKvService.analyzePerereboskaAriza` (panel AI Perebroska bilan bir xil: Claude vision, summa roli tekshiruvi, ism, takror).

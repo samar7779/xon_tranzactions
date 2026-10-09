@@ -41,8 +41,10 @@ INTENT_EKSPORT = "eksport"  # Google Sheets eksportini qayta ishga tushirish: bo
 INTENT_HISOB = "hisob"  # hisob raqam ma'lumoti: bot HISOB qatorini bajaradi (faqat o'qish)
 INTENT_XATO_FAYL = "xato_fayl"  # XATO to'lovlar ro'yxati Excel fayl: bot XATO_FAYL qatorini bajaradi
 INTENT_PEREBROSKA = "perebroska"  # AI Perebroska: bot PEREBROSKA qatorini bajaradi (tahlil -> tasdiq -> yaratish)
+INTENT_TARIX = "tarix"  # eski tarixni bankdan yuklash (backfill): bot TARIX qatorini bajaradi
 INTENTS: Tuple[str, ...] = ("diagnose", "fix", "check", "remember", "just_answer", INTENT_TOLOV, INTENT_TUZATISH,
-                            INTENT_ARIZA, INTENT_EKSPORT, INTENT_HISOB, INTENT_XATO_FAYL, INTENT_PEREBROSKA)
+                            INTENT_ARIZA, INTENT_EKSPORT, INTENT_HISOB, INTENT_XATO_FAYL, INTENT_PEREBROSKA,
+                            INTENT_TARIX)
 JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.S | re.I)
 
 DELEG_HUMAN_REPLY = "Qabul qildim."
@@ -402,7 +404,7 @@ SEZGIR_PREFIKSLAR: Tuple[str, ...] = (
     "agents/reja.py", "agents/config.py", "agents/contract.py", "agents/db.py",
     "agents/db_migrations.py", "agents/history.py", "agents/memory_blocks.py", "agents/notify.py",
     "agents/support_facts.py", "agents/checker_worker.py", "agents/teacher_daily.py", "agents/payment_check.py", "agents/tuzatish.py",
-    "agents/ariza.py", "agents/eksport.py", "agents/malumot.py", "agents/perebroska.py",
+    "agents/ariza.py", "agents/eksport.py", "agents/malumot.py", "agents/perebroska.py", "agents/tarix.py",
     "agents/bin", "agents/deploy", "agents/requirements.txt", "agents/.gitignore", ".gitignore",
     "scripts/deploy.sh", "scripts/systemd", "scripts/nginx", "backend/src/auth", "backend/src/agent-bridge",
     "backend/src/tr-support",
@@ -1072,6 +1074,15 @@ MSG_TASDIQ_QAYSI = ("Bir nechta tasdiq kutilmoqda. Qaysi biri ekanini aytish uch
 EKSPORT_RE = re.compile(r"(?im)^\s*EKSPORT:[ \t]*(.*)$")
 # Ma'lumot (TR Support, faqat o'qish; egasi qarori 2026-10-05): hisob raqam ma'lumoti va XATO ro'yxati fayli
 HISOB_RE = re.compile(r"(?im)^\s*HISOB:[ \t]*(.*)$")
+# Eski tarixni yuklash (egasi qarori 2026-10-09): panel "Eski tarixni yuklash" (backfill) bot orqali
+TARIX_RE = re.compile(r"(?im)^\s*TARIX:[ \t]*(.*)$")
+TARIX_KOPRIK_YUKLA = "/api/agent-bridge/tarix/yukla"
+TARIX_KOPRIK_HOLAT = "/api/agent-bridge/tarix/holat"
+TARIX_QADAM_S = 20            # holatni tekshirish oralig'i
+TARIX_TOXTADI_S = 300         # shuncha vaqt siljimasa — to'xtab qoldi
+TARIX_KUTISH_S = 3600         # bot kuzatadigan eng ko'p vaqt (keyin fonda davom etadi)
+MSG_TARIX_FOYDALANISH = ("Foydalanish: /tarix <dan> [gacha] [bank nomi yoki hisob raqam]. Masalan: /tarix 01.10.2026"
+                         " 05.10.2026 Kapitalbank. Bank va hisobsiz — barcha hisoblar; ko'pi bilan 62 kun.")
 # AI Perebroska (egasi qarori 2026-10-05): perebroska arizasi fayli -> panel agenti tahlili -> tasdiq -> yaratish
 PEREBROSKA_RE = re.compile(r"(?im)^\s*PEREBROSKA:[ \t]*(.*)$")
 PEREBROSKA_KOPRIK_TAHLIL = "/api/agent-bridge/perebroska/tahlil"

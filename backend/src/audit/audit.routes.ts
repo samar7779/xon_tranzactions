@@ -52,6 +52,7 @@ const KNOWN: Record<string, string> = {
   'POST agent-bridge/xato-ariza/submit': "Agent: XATO to'lovga ariza yuborildi (TR Support)",
   'POST agent-bridge/perebroska/tahlil': 'Agent: переброска arizasi tahlil qilindi (TR Support)',
   'POST agent-bridge/perebroska/yarat': 'Agent: переброска yaratildi (TR Support)',
+  'POST agent-bridge/tarix/yukla': 'Agent: eski tarix yuklash boshlandi (TR Support)',
   'POST tr-support/edits/:id/rollback': 'TR Support: tahrir ortga qaytarildi',
   'POST tr-support/unlock': 'TR Support: kod bilan kirish',
 };

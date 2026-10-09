@@ -234,6 +234,37 @@ export function parsePerebroskaYarat(body: unknown): {
   };
 }
 
+// ── Eski tarixni yuklash (TR Support, backfill) ──
+const TARIX_MSG = "tarix: dan, gacha YYYY-MM-DD; bank 60 belgigacha; hisob 16-25 xona";
+export function parseTarixYukla(body: unknown): { dan: string; gacha: string; bank: string | null; hisob: string | null } {
+  const b = (body && typeof body === 'object' ? body : null) as Record<string, unknown> | null;
+  const kun = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+  const dan = kun(b?.dan);
+  const gacha = kun(b?.gacha);
+  if (!dan || !gacha) throw new BadRequestException(TARIX_MSG);
+  let bank: string | null = null;
+  if (b?.bank !== undefined && b?.bank !== null && b?.bank !== '') {
+    if (typeof b.bank !== 'string' || b.bank.trim().length < 2 || b.bank.length > 60 || CTRL_RE.test(b.bank)) {
+      throw new BadRequestException(TARIX_MSG);
+    }
+    bank = b.bank.trim();
+  }
+  let hisob: string | null = null;
+  if (b?.hisob !== undefined && b?.hisob !== null && b?.hisob !== '') {
+    const h = typeof b.hisob === 'string' ? b.hisob.replace(/\s+/g, '') : '';
+    if (!/^\d{16,25}$/.test(h)) throw new BadRequestException(TARIX_MSG);
+    hisob = h;
+  }
+  return { dan, gacha, bank, hisob };
+}
+
+export function parseSince(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length > 40 || Number.isNaN(Date.parse(raw))) {
+    throw new BadRequestException('since: ISO vaqt');
+  }
+  return raw;
+}
+
 // ── hisob / xato-royxat (TR Support: faqat o'qish) ──
 const HISOB_MSG = 'hisob: 16-25 xonali hisob raqam (bo\'shliqlar mumkin)';
 export function parseHisob(raw: unknown): string {
