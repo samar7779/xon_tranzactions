@@ -18,6 +18,9 @@ describe('CrmService — o\'chirilgan ("Удалено") shartnomalar (yangi CRM
     { external_id: 'e2', contract: '1689ZUR24NU', amount: -113087000, date_paid: '2026-10-09', full_name: '',
       object_name: { name: { ru: 'ЗУРСАН' } }, order_id: 4321 },
     { external_id: 'e3', contract: '1689ZUR24NU1', amount: 1, full_name: 'Boshqa', order_id: 1 },   // LIKE shovqini
+    // Noto'g'ri ajratilgan raqam bilan yozilgan bank to'lovi (shartnoma emas) — 10.10 haqiqiy holat
+    { external_id: 'b1', contract: '667308ZUR23ES', amount: 4670000, full_name: 'NBU-Milliy', object_name: null, order_id: null },
+    { external_id: 'b2', contract: '555ZUR23XX', amount: 1, full_name: 'NBU-Milliy', object_name: { name: { ru: 'ЗУРСАН' } }, order_id: 9 },
   ];
 
   beforeEach(() => {
@@ -87,6 +90,12 @@ describe('CrmService — o\'chirilgan ("Удалено") shartnomalar (yangi CRM
     const rows = await svc.paymentsByContract('1689ZUR24NU');
     expect(rows.map((p: any) => p.external_id)).toEqual(['e1', 'e2']);
     expect(callClientGet).not.toHaveBeenCalled();
+  });
+
+  it('to\'lov bor, lekin shartnoma belgilari yo\'q (bank nomi, obyektsiz/order_id yo\'q) — TOPILMAYDI', async () => {
+    expect((await svc.searchContracts('667308ZUR23ES')).items).toEqual([]);
+    expect((await svc.searchContracts('555ZUR23XX')).items).toEqual([]);   // obyekt bor, lekin mijoz = bank
+    expect(await svc.getContractMeta('667308ZUR23ES')).toMatchObject({ ok: true, found: false });
   });
 
   it('hech qayerda yo\'q — bo\'sh natija (xato emas)', async () => {

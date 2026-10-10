@@ -505,8 +505,53 @@ export class CrmContractCacheService {
     }
   }
 
+  /**
+   * 10.10.2026 10:11–tuzatishgacha to'lovlar tarixi fallback'i noto'g'ri raqamli bank to'lovlarini
+   * ham "o'chirilgan shartnoma" deb qabul qilgan ("667308ZUR23ES", mijoz "NBU-Milliy"). Shunday
+   * keshlangan ("o'chirilgan (crm)") qatorlarni BIR MARTA, fonda, qat'iy qoida bilan qayta
+   * tekshiramiz: haqiqiysi found=true qoladi, soxtasi found=false (XATO) bo'ladi.
+   */
+  private deletedRecheckStarted = false;
+  private static readonly DELETED_RECHECK_MARKER = '__DELETED_FALLBACK_RECHECK_V2__';
+  private async recheckDeletedFallbackOnce(): Promise<void> {
+    if (this.deletedRecheckStarted) return;
+    this.deletedRecheckStarted = true;
+    try {
+      const marker = await this.prisma.crmContract.findUnique({
+        where: { contractNumber: CrmContractCacheService.DELETED_RECHECK_MARKER },
+      });
+      if (marker) return;
+      const rows = await this.prisma.crmContract.findMany({
+        where: { found: true, status: "o'chirilgan (crm)" },
+        select: { contractNumber: true },
+        take: 1000,
+      });
+      let fixed = 0;
+      for (const r of rows) {
+        const res = await this.fetchFromCrmAndCache(r.contractNumber).catch(() => null);
+        if (!res?.found) {
+          await this.prisma.crmContract.updateMany({
+            where: { contractNumber: r.contractNumber },
+            data: { found: false, lastError: "Topilmadi (to'lov bor, shartnoma belgilari yo'q)", lastVerifiedAt: new Date() },
+          });
+          fixed++;
+        }
+      }
+      await this.prisma.crmContract.upsert({
+        where: { contractNumber: CrmContractCacheService.DELETED_RECHECK_MARKER },
+        create: { contractNumber: CrmContractCacheService.DELETED_RECHECK_MARKER, found: false },
+        update: {},
+      });
+      this.log.log(`CRM kesh: "o'chirilgan (crm)" ${rows.length} ta qayta tekshirildi, ${fixed} tasi soxta — XATO'ga qaytdi`);
+    } catch (e: any) {
+      this.deletedRecheckStarted = false;
+      this.log.warn(`recheckDeletedFallbackOnce xato: ${e?.message}`);
+    }
+  }
+
   private async doLookup(key: string, payerHint?: string): Promise<CachedContract | null> {
     await this.recheckNotFoundOnce();
+    this.recheckDeletedFallbackOnce().catch(() => { /* fonda */ });
     // 1) Keshda bormi — variantlar bilan
     const variants = contractVariants(key).slice(0, 16); // xavfsizlik chegarasi
     const cached = await this.prisma.crmContract.findFirst({

@@ -112,6 +112,23 @@ console.log('\nD) /payment-history/excel (POST) — XonPay sync / sverka / XATO 
 for (const [k, p] of Object.entries(PV)) line(`${DELETED} ${k}`, await post(CLIENT, '/payment-history/excel', { page: 1, limit: 500, contract: DELETED, ...p }));
 for (const [k, p] of Object.entries(PV)) line(`kun ${DAY} ${k}`, await post(CLIENT, '/payment-history/excel', { page: 1, limit: 5000, date_from: DAY, date_to: DAY, ...p }));
 
+// F) To'lov qatorlarining asosiy maydonlari — "o'chirilgan shartnoma" qat'iy qoidasini tekshirish
+// (order_id, obyekt, mijoz nomi bank emasmi). 5-argument: vergul bilan qo'shimcha raqamlar.
+console.log('\nF) /payment-history/excel qatorlari — order_id / obyekt / nom (shartnoma belgilari)');
+const EXTRA = (process.argv[5] || '667308ZUR23ES').split(',').map((s) => s.trim()).filter(Boolean);
+const objText = (o) => (typeof o === 'string' ? o : (o?.name?.ru || o?.name?.uz || o?.name || '')) || '';
+for (const c of [DELETED, ...EXTRA]) {
+  const r = await post(CLIENT, '/payment-history/excel', { page: 1, limit: 500, contract: c });
+  const raw = r.j?.data;
+  const rows = (Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []))
+    .filter((p) => String(p.contract || '').replace(/[\s\-_./]/g, '').toUpperCase() === c.replace(/[\s\-_./]/g, '').toUpperCase());
+  const ids = [...new Set(rows.map((p) => p.order_id ?? 'YOQ'))].slice(0, 5);
+  const names = [...new Set(rows.map((p) => p.full_name || p.client_full_name || '-'))].slice(0, 3);
+  const objs = [...new Set(rows.map((p) => objText(p.object_name ?? p.object) || '-'))].slice(0, 3);
+  console.log(`  ${c}: ${rows.length} ta | order_id: ${ids.join(', ')} | obyekt: ${objs.join(', ')} | nom: ${names.join(' / ')}`);
+  if (rows[0]) console.log(`     maydonlar: ${Object.keys(rows[0]).slice(0, 30).join(', ')}`);
+}
+
 console.log('\nE) MySQL (XONAPP_MYSQL_*) — mijoz qo\'shimcha ma\'lumoti manbai');
 if (!env.XONAPP_MYSQL_USER || !env.XONAPP_MYSQL_PASSWORD) {
   console.log('  MySQL sozlanmagan (XONAPP_MYSQL_USER/PASSWORD yo\'q) — fetchClientExtras ishlamaydi');

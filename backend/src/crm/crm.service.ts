@@ -706,16 +706,26 @@ export class CrmService {
     if (!c) return null;
     const r: any = await this.callClient('/payment-history/excel', { page: 1, limit: 500, contract: c }, 60_000);
     const norm = (s: any) => String(s || '').replace(/[\s\-_./]/g, '').toUpperCase();
-    const rows = this.excelRows(r).filter((p: any) => norm(p.contract) === norm(c));
-    if (!rows.length) return null;
-    const p0: any = rows.find((p: any) => p.full_name || p.client_full_name) || rows[0];
-    const obj = p0.object_name ?? p0.object ?? null;
-    const objectName = typeof obj === 'string' ? obj : (this.asText(obj?.name) || this.asText(obj) || null);
+    // 10.10.2026: to'lov BOR ekani shartnoma bor degani EMAS — CRM tarixida noto'g'ri ajratilgan
+    // raqam bilan yozilgan bank to'lovlari ham bor ("667308ZUR23ES", mijoz o'rnida "NBU-Milliy",
+    // obyektsiz). Faqat HAQIQIY shartnoma belgilari bo'lsa qabul qilamiz: CRM buyurtmasiga
+    // bog'langan (order_id), obyekti bor va mijoz nomi bank/to'lov tizimi emas.
+    const BANKISH = /(nbu|milliy|uzcard|humo|payme|click|paynet|apelsin|uzum|bank|visa|master|xonpay|kapital|hamkor|ipoteka|aloqa|tbc|anor|asaka|infin|trast|turon|octo|oson|upay|munis|terminal|kassa)/i;
+    const nameOf = (p: any) => String(p.full_name || p.client_full_name || '').trim();
+    const objOf = (p: any) => {
+      const o = p.object_name ?? p.object ?? null;
+      return typeof o === 'string' ? o.trim() : (this.asText(o?.name) || this.asText(o) || '');
+    };
+    const rows = this.excelRows(r).filter((p: any) =>
+      norm(p.contract) === norm(c) && p.order_id != null && String(p.order_id) !== '' && !!objOf(p));
+    const p0: any = rows.find((p: any) => nameOf(p) && !BANKISH.test(nameOf(p)));
+    if (!p0) return null;
+    const objectName = objOf(p0) || null;
     return {
       id: p0.order_id ?? null,
       order_id: p0.order_id ?? null,
       contract: String(p0.contract || c).trim(),
-      client_full_name: p0.full_name || p0.client_full_name || null,
+      client_full_name: nameOf(p0) || null,
       object: objectName,
       number: p0.apartment_number ?? p0.number ?? null,
       status: { type: 'deleted', name: { uz: "O'chirilgan (CRM)", ru: 'Удалено (CRM)' } },
