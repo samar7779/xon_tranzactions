@@ -12,6 +12,7 @@ Agent topshiriq olsa, avval `agents/memory/INDEX.md` xaritasidan mos faylni topa
 - `db_schema.md` — yagona `xon_tranzactions` baza: jadvallar, ustunlar, Prisma model va SQL jadval nomlari, adashtiriladigan nomlar. SQL yozishdan oldin majburiy tekshiruv.
 - `qoidalar.md` — egasi bilan ishlash, kod qoidalari (TypeScript, `tsc`, lokal `npm run build`), biznes qoidalar, taqiqlar.
 - `CHANGELOG.md` — modul bo'yicha o'zgarishlar tarixi, egasi qarorlari va rad etilganlar, takrorlangan xatolar.
+- `tizim.md` — butun tizim xaritasi (2026-10-10, butun repo o'qib yozilgan): A platforma va server, B banklar va tranzaksiyalar, C OplatyKv va CRM, D XATO va agent backendlari, E web panel (har sahifa), F agentlar boti, G atamalar, H ochiq xavflar. Katta fayl: "Qayerda nima" jadvalidan bo'limni top, faqat o'sha `^### ` ni o'qi. Modul fayli bilan zid kelsa, modul fayli to'g'ri.
 - `platforma.md` — web ilova asosi: route'lar, login va rollar, audit, deploy, systemd servislar, `.env` kalit nomlari.
 
 ### Modul fayllari
