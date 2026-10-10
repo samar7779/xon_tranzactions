@@ -1904,6 +1904,25 @@ function ColumnFilterPopover({
     onChange(next);
   };
 
+  // ── Hammasini belgilash ──
+  // Ro'yxat server tomondan qidiruv bo'yicha filtrlanadi, shuning uchun bu
+  // tugma AYNAN HOZIR ko'rinib turgan qiymatlarga ta'sir qiladi (qidiruv
+  // yoqilgan bo'lsa — topilganlariga). Qisman belgilangan holat uchun
+  // checkbox "indeterminate" ko'rinishga o'tadi.
+  const hammasiRef = useRef<HTMLInputElement>(null);
+  const hammasiBelgilangan = values.length > 0 && values.every((v) => selected.has(v.id));
+  const qismanBelgilangan = !hammasiBelgilangan && values.some((v) => selected.has(v.id));
+  useEffect(() => {
+    if (hammasiRef.current) hammasiRef.current.indeterminate = qismanBelgilangan;
+  }, [qismanBelgilangan]);
+
+  const hammasiniAlmashtir = () => {
+    const next = new Set(selected);
+    if (hammasiBelgilangan) for (const v of values) next.delete(v.id);
+    else for (const v of values) next.add(v.id);
+    onChange(next);
+  };
+
   // Position calculation — viewport ichida sig'sin
   const popoverWidth = 300;
   const popoverMaxHeight = 420; // approximate
@@ -1947,7 +1966,23 @@ function ColumnFilterPopover({
             {t('valueNotFound')}
           </div>
         ) : (
-          [...tanlangan, ...qolgan].map((v) => (
+          <>
+          <label
+            className="flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md cursor-pointer bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <input
+              ref={hammasiRef}
+              type="checkbox"
+              checked={hammasiBelgilangan}
+              onChange={hammasiniAlmashtir}
+              className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+            />
+            <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300 flex-1">
+              {hammasiBelgilangan ? t('deselectAll') : t('selectAll')}
+            </span>
+            <span className="text-[11px] text-slate-400 tabular-nums">{values.length}</span>
+          </label>
+          {[...tanlangan, ...qolgan].map((v) => (
             <label
               key={v.id}
               className={cn(
@@ -1965,7 +2000,8 @@ function ColumnFilterPopover({
                 {v.name}
               </span>
             </label>
-          ))
+          ))}
+          </>
         )}
       </div>
       <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 gap-2">

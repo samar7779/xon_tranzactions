@@ -2184,7 +2184,9 @@
     "footerOverBalance": "⚠ Summa qoldiqdan oshib ketdi",
     "footerReady": "✓ Saqlashga tayyor",
     "saving": "Saqlanmoqda...",
-    "confirmAndSave": "Tasdiqlash va saqlash"
+    "confirmAndSave": "Tasdiqlash va saqlash",
+    "selectAll": "Hammasini belgilash",
+    "deselectAll": "Hammasini olib tashlash"
   },
   "drilldown": {
     "checkError": "Tekshirish xatosi",

@@ -2184,7 +2184,9 @@
     "footerOverBalance": "⚠ Amount exceeds the balance",
     "footerReady": "✓ Ready to save",
     "saving": "Saving...",
-    "confirmAndSave": "Confirm and save"
+    "confirmAndSave": "Confirm and save",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all"
   },
   "drilldown": {
     "checkError": "Check error",
