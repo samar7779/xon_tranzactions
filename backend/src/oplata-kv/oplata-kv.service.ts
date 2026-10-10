@@ -2204,7 +2204,7 @@ export class OplataKvService {
     const contractNos = Array.from(new Set(txList.map((t) => t.contractNumber).filter((c): c is string => !!c)));
     const crmContracts = await this.prisma.crmContract.findMany({
       where: { contractNumber: { in: contractNos } },
-      select: { contractNumber: true, customerName: true, objectName: true },
+      select: { contractNumber: true, customerName: true, objectName: true, found: true },
     });
     const crmByContract = new Map(crmContracts.map((c) => [c.contractNumber, c]));
 
@@ -2272,8 +2272,20 @@ export class OplataKvService {
       // shuning uchun toTashkentDateOnly orqali to'g'ri kalendar sanasini olamiz)
       const tashkentDate = this.toTashkentDateOnly(tx.txnDate!);
 
+      // ── EGASI QOIDASI (10.10.2026) ──
+      // Shartnoma CRM'da TOPILMAGAN bo'lsa, izohdan ajratib olingan raqam
+      // SHARTNOMA RAQAMI EMAS — u oddiy matn parchasi (masalan "006AFSCOH",
+      // "сонли" so'zi yutilgan). Bunday soxta raqam bazada turmasligi kerak:
+      // uning o'rniga 'XATO' yoziladi va to'lov XATO ro'yxatida ko'rinadi.
+      //
+      // MUHIM: faqat kesh ANIQ "topilmadi" degandagina (found === false).
+      // Shartnoma hali umuman tekshirilmagan bo'lsa (keshda yo'q) raqam
+      // saqlanadi — keyinroq tasdiqlanishi mumkin, erta o'chirib yubormaymiz.
+      const crmTopilmadi = crm !== undefined && crm.found === false;
+      const yoziladiganShartnoma = crmTopilmadi ? 'XATO' : tx.contractNumber!;
+
       const baseData = {
-        contractNo: tx.contractNumber!,
+        contractNo: yoziladiganShartnoma,
         date: tashkentDate,
         paymentAmount: amount,
         purpose: tx.description || null,
@@ -5410,6 +5422,59 @@ export class OplataKvService {
       qism.push("Diqqat: ba'zisining holati 'to'langan' emas.");
     }
     return qism.join(' ');
+  }
+
+  /**
+   * Soxta shartnoma raqamlarini 'XATO' ga almashtirish (mavjud qatorlar uchun).
+   *
+   * Egasi qoidasi: shartnoma CRM'da topilmasa, izohdan olingan raqam SHARTNOMA
+   * RAQAMI EMAS — bazada turmasligi kerak. Yangi qatorlar uchun bu sync
+   * paytida qo'llanadi; bu metod ESKI qatorlarni tozalaydi.
+   *
+   * Shart aynan `buildXatoFilter()` bilan bir xil: tx-manbali + CRM'da
+   * found=true EMAS + qo'lda/ariza bilan biriktirilmagan. Ya'ni odam qo'lda
+   * qo'ygan shartnomaga TEGILMAYDI.
+   *
+   * Raqam yo'qolmaydi: u `transactions.contract_number` da va to'lov izohida
+   * qoladi, kerak bo'lsa qayta o'qish mumkin.
+   *
+   * dryRun (standart true) — faqat sanaydi.
+   */
+  async xatoShartnomalarniTozala(opts?: { dryRun?: boolean }): Promise<{
+    ok: true; dryRun: boolean; jami: number;
+    namunalar: Array<{ contractNo: string; qator: number }>;
+  }> {
+    const dryRun = opts?.dryRun !== false;
+    const xatoFilter = await this.buildXatoFilter();
+    const where: Prisma.OplataKvWhereInput = {
+      ...(xatoFilter as Prisma.OplataKvWhereInput),
+      NOT: { contractNo: 'XATO' },
+    };
+
+    const guruh = await this.prisma.oplataKv.groupBy({
+      by: ['contractNo'],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { contractNo: 'desc' } },
+      take: 30,
+    }).catch(() => [] as any[]);
+
+    const jami = await this.prisma.oplataKv.count({ where });
+
+    if (!dryRun && jami > 0) {
+      await this.prisma.oplataKv.updateMany({ where, data: { contractNo: 'XATO' } });
+      this.log.log(`xatoShartnomalarniTozala: ${jami} qator 'XATO' ga o'tkazildi`);
+    }
+
+    return {
+      ok: true,
+      dryRun,
+      jami,
+      namunalar: guruh.map((g: any) => ({
+        contractNo: String(g.contractNo),
+        qator: Number(g._count?._all || 0),
+      })),
+    };
   }
 
   async contractBalance(contractNo: string) {

@@ -643,6 +643,19 @@ export class OplataKvController {
     return this.svc.splitInstallments({ limit: body?.limit, contractNo: body?.contractNo, force: body?.force, actor: actorFrom(user) });
   }
 
+  @Post('cleanup-xato-contracts')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({
+    summary: "CRM'da topilmagan shartnoma raqamlarini 'XATO' ga almashtirish",
+    description:
+      "Egasi qoidasi: shartnoma CRM'da bo'lmasa, izohdan olingan raqam shartnoma " +
+      "raqami emas — bazada 'XATO' turishi kerak. Qo'lda yoki ariza bilan " +
+      "biriktirilgan shartnomalarga TEGILMAYDI. dryRun standart true — faqat sanaydi.",
+  })
+  cleanupXatoContracts(@Body() body: { dryRun?: boolean }) {
+    return this.svc.xatoShartnomalarniTozala({ dryRun: body?.dryRun !== false });
+  }
+
   @Post('cleanup-xato-splits')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "XATO shartnomalardan 1-vznos/oylik split qiymatlarini darhol tozalash" })

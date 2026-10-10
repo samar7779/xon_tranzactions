@@ -65,7 +65,27 @@ export function ReparseContractsDialog({
     onError: (e: any) => toast.error(e?.message || 'Xatolik'),
   });
 
-  const close = () => { setRes(null); run.reset(); onOpenChange(false); };
+  // ── 2-qadam: CRM'da topilmagan raqamlarni 'XATO' ga almashtirish ──
+  // Egasi qoidasi: shartnoma CRM'da bo'lmasa, izohdan olingan raqam shartnoma
+  // raqami EMAS — bazada 'XATO' turishi kerak.
+  const [xatoRes, setXatoRes] = useState<{ jami: number; dryRun: boolean; namunalar: Array<{ contractNo: string; qator: number }> } | null>(null);
+  const xato = useMutation({
+    mutationFn: (dryRun: boolean) =>
+      api.post<{ ok: boolean; dryRun: boolean; jami: number; namunalar: Array<{ contractNo: string; qator: number }> }>(
+        '/oplata-kv/cleanup-xato-contracts', { dryRun }, { timeout: 300_000 },
+      ),
+    onSuccess: (r) => {
+      setXatoRes(r);
+      if (r.dryRun) toast.info(`${r.jami} ta qator 'XATO' ga o'tadi`);
+      else {
+        toast.success(`${r.jami} ta qator 'XATO' qilindi`);
+        qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xatolik'),
+  });
+
+  const close = () => { setRes(null); setXatoRes(null); run.reset(); xato.reset(); onOpenChange(false); };
   const yozilsinmi = !!res?.dryRun && res.scanned > 0;
 
   return (
@@ -201,6 +221,52 @@ export function ReparseContractsDialog({
             )}
           </div>
         )}
+        {/* ═══ 2-QADAM ═══ */}
+        <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 p-3.5 space-y-2.5">
+          <div className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-100">
+            2-qadam · CRM&apos;da topilmagan raqamlarni XATO qilish
+          </div>
+          <div className="text-[11.5px] text-slate-600 dark:text-slate-300 leading-relaxed">
+            Shartnoma CRM&apos;da bo&apos;lmasa, izohdan olingan raqam <b>shartnoma raqami emas</b> —
+            bazada <b>XATO</b> turishi kerak. Qo&apos;lda yoki ariza bilan biriktirilgan
+            shartnomalarga tegilmaydi. Raqam yo&apos;qolmaydi: tranzaksiyada va to&apos;lov
+            izohida qoladi.
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => xato.mutate(true)} disabled={xato.isPending} className="gap-2">
+              {xato.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+              Sinov
+            </Button>
+            {xatoRes?.dryRun && xatoRes.jami > 0 && (
+              <Button size="sm" onClick={() => xato.mutate(false)} disabled={xato.isPending}
+                className="gap-2 bg-rose-600 hover:bg-rose-700 text-white">
+                <Check className="h-3.5 w-3.5" />
+                {xatoRes.jami} ta qatorni XATO qilish
+              </Button>
+            )}
+          </div>
+          {xatoRes && (
+            <div className="text-[11.5px] text-slate-600 dark:text-slate-300">
+              {xatoRes.jami === 0 ? (
+                <span className="text-emerald-700 dark:text-emerald-300">Tozalanadigan qator yo&apos;q.</span>
+              ) : (
+                <>
+                  <b className="tabular-nums">{xatoRes.jami}</b> ta qator
+                  {xatoRes.dryRun ? " 'XATO' ga o'tadi" : " 'XATO' qilindi"}.
+                  {xatoRes.namunalar.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {xatoRes.namunalar.slice(0, 12).map((n) => (
+                        <span key={n.contractNo} className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10.5px] font-mono">
+                          {n.contractNo} <b>{n.qator}</b>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
