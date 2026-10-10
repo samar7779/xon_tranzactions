@@ -663,6 +663,44 @@ export class CrmService {
   }
 
   /**
+   * /index — shartnoma bo'yicha FAOL + O'CHIRILGAN ("Удалено") qidiruv.
+   *
+   * 10.10.2026: yangi CRM'da (crm-api.xonapps.uz) `is_trashed=1` = FAQAT o'chirilganlar —
+   * CRM'ning o'z "Список договоров" sahifasi "Удалено" tabida aynan shuni yuboradi
+   * (crm.xonapps.uz JS: {name:"tab_status.deleted", status:"is_trashed"} → query[status]=1).
+   * `trashed_status` / `with_trashed` shartnoma ro'yxatiga ta'sir qilmaydi. Shuning uchun:
+   * 09.10 gacha is_trashed=1 har so'rovda edi → faqat o'chirilganlar qidirilib, faollar
+   * topilmasdi; 09.10 da olib tashlandi → endi o'chirilganlar topilmay qoldi
+   * (1689ZUR24NU — qaytarilgan pul "CRM da topilmadi"). To'g'risi: avval oddiy, topilmasa
+   * is_trashed=1 bilan. O'chirilgan natijalar `is_trashed: 1` belgisi bilan qaytadi.
+   */
+  private async indexWithDeleted(params: Record<string, any>): Promise<any> {
+    const r: any = await this.call('/index', { ...params, trashed_status: 1, with_trashed: 1 });
+    const items: any[] = r?.ok ? (r.data?.data || []) : [];
+    if (items.length > 0) return r;
+    // Ikkinchi so'rovda faqat minimal filtr (cancelled kabi qo'shimchalar CRM query'sini buzgan)
+    const tp: Record<string, any> = { is_trashed: 1 };
+    for (const k of ['contract', 'per-page', 'page']) if (params[k] != null) tp[k] = params[k];
+    const t: any = await this.call('/index', tp);
+    const titems: any[] = t?.ok ? (t.data?.data || []) : [];
+    if (titems.length > 0) {
+      for (const it of titems) if (it && it.is_trashed == null) it.is_trashed = 1;
+      this.log.log(`CRM /index: ${params.contract || ''} o'chirilganlar ("Удалено") ichida topildi — ${titems.length} ta`);
+      return t;
+    }
+    return r;
+  }
+
+  /** /show id bo'yicha — o'chirilgan shartnoma bo'lsa is_trashed=1 bilan qayta (indexWithDeleted kabi). */
+  private async showByIdWithDeleted(id: any): Promise<any | null> {
+    const full: any = await this.call('/show', { id, trashed_status: 1, with_trashed: 1 });
+    const fd = full?.ok ? (full.data?.data || null) : null;
+    if (fd) return fd;
+    const t: any = await this.call('/show', { id, is_trashed: 1 });
+    return t?.ok ? (t.data?.data || null) : null;
+  }
+
+  /**
    * Chek sahifasi uchun — shartnoma bo'yicha menejer / sotuv ofisi / obyekt.
    * Bu maydonlar FAQAT /order/index javobida keladi (created_by, branch),
    * /order/show da yo'q. Shu sabab bu yerda /index ishlatiladi.
@@ -670,12 +708,7 @@ export class CrmService {
   async getContractMeta(contract: string) {
     if (!contract?.trim()) return { ok: false, error: 'contract kerak' };
     const target = contract.trim();
-    const r = await this.call('/index', {
-      contract: target,
-      'per-page': 10,
-      trashed_status: 1,
-      with_trashed: 1,
-    });
+    const r = await this.indexWithDeleted({ contract: target, 'per-page': 10 });
     if (!r.ok) return r;
     const items: any[] = r.data?.data || [];
     if (items.length === 0) return { ok: true, found: false };
@@ -717,12 +750,7 @@ export class CrmService {
   async searchContracts(contract: string, perPage = 8) {
     const q = contract?.trim();
     if (!q) return { ok: true, items: [] };
-    const r = await this.call('/index', {
-      contract: q,
-      'per-page': perPage,
-      trashed_status: 1,
-      with_trashed: 1,
-    });
+    const r = await this.indexWithDeleted({ contract: q, 'per-page': perPage });
     if (!r.ok) return r;
     const items = (r.data?.data || []).map((it: any) => {
       const cb = it.created_by || {};
@@ -803,12 +831,10 @@ export class CrmService {
    */
   async search(contractNumber: string, perPage = 20) {
     if (!contractNumber?.trim()) return { ok: false, error: 'contract kerak' };
-    const r = await this.call('/index', {
+    const r = await this.indexWithDeleted({
       contract: contractNumber.trim(),
       'per-page': perPage,
       cancelled: 1,  // bekor qilinganlar ham
-      trashed_status: 1,
-      with_trashed: 1,
     });
     this.log.log(`CRM /search → /index (contract=${contractNumber}, status=${(r as any).ok ? 'OK' : (r as any).status || 'err'})`);
     if (!r.ok) return r;
@@ -979,8 +1005,7 @@ export class CrmService {
         let detail: any = picked;
         // To'liq, kanonik detail — id bo'yicha /show (id aniq, dublikatsiz)
         if (picked.id != null) {
-          const full: any = await this.call('/show', { id: picked.id, trashed_status: 1, with_trashed: 1 });
-          const fd = full.ok ? (full.data?.data || null) : null;
+          const fd = await this.showByIdWithDeleted(picked.id);
           if (fd) detail = fd;
         }
         const cn = String(detail.contract || contractInput).trim();
@@ -1001,14 +1026,11 @@ export class CrmService {
     //   }
     // To'g'ri param nomi: trashed_status=1 (with trashed), with_trashed=1 bilan birga.
     //
-    // ⚠️ 09.10.2026 — `is_trashed=1` OLIB TASHLANDI. Eski hostda (app-api.xonsaroy.uz)
-    // u "active + trashed birga" degani edi. Yangi hostda (crm-api.xonapps.uz) u
-    // FILTR bo'lib qoldi va HECH NARSA qaytarmaydi — tekshirilgan:
-    //   contract=150VTN23CV                  → topildi 1
-    //   contract=150VTN23CV + is_trashed=1   → topildi 0
-    //   is_trashed=1 (filtrsiz)              → []
-    // Shu sabab shartnoma qidiruvi (XATO biriktirish, avto lookup, sverka)
-    // jimgina bo'sh qaytarardi. Bu paramni qayta qo'shmang.
+    // ⚠️ `is_trashed=1` yangi CRM'da (crm-api.xonapps.uz) = FAQAT o'chirilganlar ("Удалено"
+    // tabi). Faol shartnoma bilan birga yuborilsa topilmaydi (150VTN23CV + is_trashed=1 → 0),
+    // yubormasa o'chirilgan topilmaydi (10.10.2026: 1689ZUR24NU). Shu sabab bu yerda
+    // yuborilmaydi; o'chirilganlar pastdagi fallback'da indexWithDeleted / showByIdWithDeleted
+    // orqali ALOHIDA so'rov bilan olinadi. Har so'rovga birga qo'shmang.
     //
     // MINIMAL param to'plami — searchContracts bilan bir xil. Ilgari status:'all' /
     // cancelled:1 kabi ortiqcha paramlar ham CRM query'sini buzgan edi.
@@ -1025,14 +1047,8 @@ export class CrmService {
         // MINIMAL param to'plami. Ilgari qo'shilgan status:'all' / cancelled:1 kabi
         // ortiqcha paramlar CRM query'sini buzib (masalan WHERE status='all' → 0 natija,
         // yoki faqat bekor qilinganlarni qaytarib) avto lookup'ни topilmas qilardi.
-        // trashed_status=1 + with_trashed=1 — Laravel SoftDelete "withTrashed".
-        // is_trashed=1 YO'Q: yangi CRM'da u hamma natijani kesib tashlaydi.
-        const idxRes = await this.call('/index', {
-          contract: contractNo,
-          'per-page': 50,
-          trashed_status: 1,
-          with_trashed: 1,
-        });
+        // indexWithDeleted: avval faol, topilmasa is_trashed=1 ("Удалено") bilan.
+        const idxRes = await this.indexWithDeleted({ contract: contractNo, 'per-page': 50 });
         if (idxRes.ok) {
           const items: any[] = idxRes.data?.data || [];
           this.log.log(`CRM /index fallback: ${contractNo} uchun ${items.length} ta item topildi`);
@@ -1048,8 +1064,7 @@ export class CrmService {
             // (ular faqat /show'da). id bo'yicha TO'LIQ detail'ni qayta olamiz (payerHint yo'li kabi),
             // aks holda "to'lov 0" (paid/grafik ko'rinmaydi) bo'lib qolardi.
             if (hit.id != null) {
-              const full: any = await this.call('/show', { id: hit.id, trashed_status: 1, with_trashed: 1 });
-              const fd = full.ok ? (full.data?.data || null) : null;
+              const fd = await this.showByIdWithDeleted(hit.id);
               if (fd) detail = fd;
             }
             this.log.log(`  → match: ${hit.contract} (status=${hit.status || '-'}${hit.id != null ? `, id=${hit.id} to'liq` : ''})`);
@@ -1145,9 +1160,7 @@ export class CrmService {
    */
   private async pickContractByName(contractNo: string, hint: string): Promise<any | null> {
     try {
-      const idxRes: any = await this.call('/index', {
-        contract: contractNo, 'per-page': 50, trashed_status: 1, with_trashed: 1,
-      });
+      const idxRes: any = await this.indexWithDeleted({ contract: contractNo, 'per-page': 50 });
       if (!idxRes.ok) return null;
       const items: any[] = idxRes.data?.data || [];
       if (!items.length) return null;
@@ -1208,13 +1221,8 @@ export class CrmService {
     //   plan_images[]  = [{ id, name, image (presigned S3 URL), path }]
     //   plan_drawings[] = [{ ... }]
     // /show'da bu maydonlar YO'Q — shuning uchun /index ishlatamiz.
-    // trashed_status=1 + with_trashed=1 — bekor/o'chirilgan shartnoma ham topilsin.
-    const r: any = await this.call('/index', {
-      contract,
-      'per-page': 20,
-      trashed_status: 1,
-      with_trashed: 1,
-    }).catch(() => null);
+    // indexWithDeleted — faol, topilmasa o'chirilgan ("Удалено") shartnoma ham topilsin.
+    const r: any = await this.indexWithDeleted({ contract, 'per-page': 20 }).catch(() => null);
     const items: any[] = r?.ok ? (r.data?.data || []) : [];
 
     const norm = (s: any) => String(s || '').replace(/[\s\-_]/g, '').toUpperCase();
@@ -1391,9 +1399,7 @@ export class CrmService {
       const target = (c || '').trim();
       if (!target) continue;
       try {
-        const r: any = await this.call('/index', {
-          contract: target, 'per-page': 5, trashed_status: 1, with_trashed: 1,
-        });
+        const r: any = await this.indexWithDeleted({ contract: target, 'per-page': 5 });
         const items: any[] = r?.data?.data || [];
         const it = items.find((x) => norm(x.contract) === norm(target)) || null; // FAQAT aniq moslik
         const cb = it?.created_by || null;
