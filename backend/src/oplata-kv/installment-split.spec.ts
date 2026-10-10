@@ -1,4 +1,4 @@
-import { buildSchedule, allocatePayment, categoryOf, ScheduleBucket } from './installment-split';
+import { buildSchedule, allocatePayment, categoryOf, ScheduleBucket, allocateRefundNoSchedule } from './installment-split';
 
 // Haqiqiy misol — shartnoma 8755MSO264N:
 //   Boshlang'ich (initial): 05.07 = 89 499 000, 06.10 = 11 188 000, 06.01 = 11 186 600
@@ -80,5 +80,63 @@ describe('allocatePayment — waterfall (8755MSO264N: 9 to\'lov)', () => {
     const empty: ScheduleBucket[] = [];
     const r = allocatePayment(empty, 0, 5000000);
     expect(r).toEqual({ firstInstallment: 0, monthlyAmount: 5000000 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// QAYTARIM — grafiksiz (bekor qilingan shartnoma). Egasi qoidasi 10.10.2026:
+//   avval OYLIK nolga tushadi, qolgani BOSHLANG'ICHdan.
+// ─────────────────────────────────────────────────────────────────────────
+describe('allocateRefundNoSchedule', () => {
+  it('kichik qaytarim faqat oylikdan yechiladi', () => {
+    const r = allocateRefundNoSchedule(324_200_360, 363_886_640, -65_000_000);
+    expect(r.monthlyAmount).toBe(-65_000_000);
+    expect(r.firstInstallment).toBe(0);
+  });
+
+  it('oylik tugagach boshlangichga otadi', () => {
+    const r = allocateRefundNoSchedule(59_200_360, 363_886_640, -60_000_000);
+    expect(r.monthlyAmount).toBe(-59_200_360);
+    expect(r.firstInstallment).toBe(-799_640);
+  });
+
+  it('oylik 0 bolsa hammasi boshlangichdan', () => {
+    const r = allocateRefundNoSchedule(0, 313_086_640, -100_000_000);
+    expect(r.monthlyAmount).toBe(0);
+    expect(r.firstInstallment).toBe(-100_000_000);
+  });
+
+  it('ikkalasidan oshsa ortigi oylikka', () => {
+    const r = allocateRefundNoSchedule(10_000, 5_000, -20_000);
+    expect(r.firstInstallment).toBe(-5_000);
+    expect(r.monthlyAmount).toBe(-15_000); // 10 000 oylik + 5 000 ortiqcha
+  });
+
+  it('musbat summa bu qoidaga tushmaydi', () => {
+    expect(allocateRefundNoSchedule(100, 100, 50)).toEqual({ firstInstallment: 0, monthlyAmount: 0 });
+  });
+
+  // Haqiqiy holat: 1689ZUR24NU — 8 ta qaytarim, jami 688 087 000,
+  // yozilgan boshlangich 363 886 640 + oylik 324 200 360 = aynan shuncha.
+  it('1689ZUR24NU: 8 qaytarim hisobni NOLGA tushiradi', () => {
+    let oylik = 324_200_360;
+    let bosh = 363_886_640;
+    const qaytarimlar = [
+      -65_000_000, -100_000_000, -100_000_000, -60_000_000,
+      -50_000_000, -100_000_000, -100_000_000, -113_087_000,
+    ];
+    let jamiBosh = 0;
+    let jamiOylik = 0;
+    for (const q of qaytarimlar) {
+      const r = allocateRefundNoSchedule(oylik, bosh, q);
+      oylik += r.monthlyAmount;
+      bosh += r.firstInstallment;
+      jamiBosh += r.firstInstallment;
+      jamiOylik += r.monthlyAmount;
+    }
+    expect(jamiOylik).toBe(-324_200_360);
+    expect(jamiBosh).toBe(-363_886_640);
+    expect(oylik).toBe(0);
+    expect(bosh).toBe(0);
   });
 });

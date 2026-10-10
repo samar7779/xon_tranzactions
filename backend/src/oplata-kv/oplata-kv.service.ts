@@ -10,7 +10,7 @@ import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
-import { buildSchedule, allocatePayment, categoryOf } from './installment-split';
+import { buildSchedule, allocatePayment, categoryOf, allocateRefundNoSchedule } from './installment-split';
 import { CrmContractCacheService, ReverifyStatus } from '../categorization/crm-contract-cache.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { SettingsService } from '../sync/settings.service';
@@ -2816,6 +2816,8 @@ export class OplataKvService {
                payment_category  = NULL
          WHERE source_tx_id IS NOT NULL
            AND contract_no = ${contractNo}
+           -- Qaytarim taqsimoti grafiksiz ham to'g'ri — tozalashga tushmaydi
+           AND payment_amount >= 0
            AND (first_installment IS NOT NULL OR monthly_amount IS NOT NULL OR payment_category IS NOT NULL)
            AND NOT EXISTS (
              SELECT 1 FROM crm_contracts c
@@ -2830,6 +2832,8 @@ export class OplataKvService {
                monthly_amount    = NULL,
                payment_category  = NULL
          WHERE source_tx_id IS NOT NULL
+           -- Qaytarim taqsimoti grafiksiz ham to'g'ri — tozalashga tushmaydi
+           AND payment_amount >= 0
            AND (first_installment IS NOT NULL OR monthly_amount IS NOT NULL OR payment_category IS NOT NULL)
            AND NOT EXISTS (
              SELECT 1 FROM crm_contracts c
@@ -3076,10 +3080,16 @@ export class OplataKvService {
          WHERE source_tx_id IS NOT NULL
            AND payment_amount IS NOT NULL
            ${forceClause}
-           AND EXISTS (
-             SELECT 1 FROM crm_contracts c
-             WHERE c.contract_number = oplata_kv.contract_no
-               AND c.found = true
+           AND (
+             EXISTS (
+               SELECT 1 FROM crm_contracts c
+               WHERE c.contract_number = oplata_kv.contract_no
+                 AND c.found = true
+             )
+             -- QAYTARIM: bekor qilingan (CRM'da yo'q) shartnomada ham taqsimlanadi.
+             -- Grafik kerak emas — o'z yozuvimizdan yechiladi (avval oylik, keyin
+             -- boshlang'ich). Ilgari bunday qatorlar navbatga umuman tushmasdi.
+             OR payment_amount < 0
            )
          ORDER BY date ASC
          LIMIT $1
@@ -3145,9 +3155,62 @@ export class OplataKvService {
           const resp: any = await this.crmService.show({ contract: contractNo }).catch(() => null);
           const detail = resp?.ok ? resp.detail : null;
           if (!detail) {
-            // CRM da topilmadi — bu XATO shartnoma. Split mumkin emas.
-            // Mavjud qiymatlar (agar bo'lsa) cleanupSplitsForXatoContracts() da tozalangan.
-            notFound += items.length;
+            // ── CRM'da shartnoma YO'Q (odatda BEKOR QILINGAN va o'chirilgan) ──
+            //
+            // Grafik yo'q, shuning uchun MUSBAT to'lovni taqsimlab bo'lmaydi —
+            // qaysi qism boshlang'ich, qaysisi oylik ekani noma'lum.
+            //
+            // Lekin QAYTARIM uchun grafik kerak emas (egasi qoidasi, 10.10.2026):
+            //   avval OYLIK nolga tushiriladi, qolgani BOSHLANG'ICHdan.
+            // Hisob o'z yozuvimizdan olinadi. Shu sabab bekor qilingan
+            // shartnomalarning qaytarimlari endi jim "bo'linmagan" bo'lib
+            // qolmaydi (1,95 mlrd shunday yotgan edi).
+            const qaytarimlar = items.filter((i) => Number(i.paymentAmount) < 0);
+            if (qaytarimlar.length === 0) {
+              notFound += items.length;
+              return;
+            }
+
+            const jami = await this.prisma.oplataKv.aggregate({
+              where: { contractNo },
+              _sum: { firstInstallment: true, monthlyAmount: true },
+            });
+            let qOylik = Number(jami._sum.monthlyAmount || 0);
+            let qBosh = Number(jami._sum.firstInstallment || 0);
+
+            // Bu shartnomada hech qachon split yozilmagan bo'lsa — yechadigan
+            // narsa yo'q. Odatda bu shartnoma RAQAMI noto'g'ri degani (masalan
+            // "сонли" yutilgan soxta raqam). To'qib chiqarmaymiz.
+            if (qOylik <= 0 && qBosh <= 0) {
+              notFound += items.length;
+              return;
+            }
+
+            qaytarimlar.sort((a, b) => {
+              const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+              return d !== 0 ? d : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+            });
+
+            const refUpdates: any[] = [];
+            for (const item of qaytarimlar) {
+              const amount = Number(item.paymentAmount);
+              if (item.sourceTxId && schetchikSourceIds.has(item.sourceTxId)) continue;
+              const { firstInstallment, monthlyAmount } =
+                allocateRefundNoSchedule(qOylik, qBosh, amount);
+              qOylik += monthlyAmount;   // manfiy — kamayadi
+              qBosh  += firstInstallment;
+              refUpdates.push(this.prisma.oplataKv.update({
+                where: { id: item.id },
+                data: {
+                  firstInstallment: firstInstallment !== 0 ? new Prisma.Decimal(firstInstallment) : null,
+                  monthlyAmount:    monthlyAmount    !== 0 ? new Prisma.Decimal(monthlyAmount)    : null,
+                  paymentCategory:  categoryOf(firstInstallment, monthlyAmount) as OplataKvCategory,
+                },
+              }));
+            }
+            if (refUpdates.length) await this.prisma.$transaction(refUpdates);
+            filled += refUpdates.length;
+            notFound += items.length - refUpdates.length;
             return;
           }
           // CRM to'lov grafigi — SANA tartibida boshlang'ich+oylik qadamlar (ARALASH).

@@ -74,3 +74,43 @@ export function categoryOf(first: number, monthly: number): 'FIRST' | 'MONTHLY' 
   if (first === 0 && monthly === 0) return 'MONTHLY';
   return Math.abs(monthly) > Math.abs(first) ? 'MONTHLY' : 'FIRST';
 }
+
+/**
+ * QAYTARIM — grafiksiz taqsimlash (bekor qilingan shartnoma uchun).
+ *
+ * Shartnoma CRM'da bekor qilinib o'chirilsa, to'lov grafigi yo'qoladi va
+ * waterfall ishlamaydi. Lekin qaytarim uchun grafik KERAK EMAS — egasi
+ * qoidasi (10.10.2026):
+ *
+ *     avval OYLIK nolga tushiriladi, qolgani BOSHLANG'ICHdan yechiladi.
+ *
+ * Hisob bizning o'z yozuvimizdan olinadi: shu shartnomada shu paytgacha
+ * yozilgan jami boshlang'ich va oylik.
+ *
+ * @param qolganOylik       shu shartnomada hozir yozilgan oylik jami (musbat)
+ * @param qolganBoshlangich shu shartnomada hozir yozilgan boshlang'ich jami (musbat)
+ * @param amount            qaytarim summasi (MANFIY)
+ *
+ * Qaytarim ikkalasidan ham oshib ketsa — ortig'i oylikka yoziladi (waterfall
+ * dagi "grafikdan tashqari → oylik" qoidasi bilan bir xil).
+ */
+export function allocateRefundNoSchedule(
+  qolganOylik: number,
+  qolganBoshlangich: number,
+  amount: number,
+): { firstInstallment: number; monthlyAmount: number } {
+  if (amount >= 0) return { firstInstallment: 0, monthlyAmount: 0 };
+  const miqdor = Math.abs(amount);
+
+  const oylikdan = Math.min(miqdor, Math.max(0, qolganOylik));
+  const qolgan1 = miqdor - oylikdan;
+  const boshdan = Math.min(qolgan1, Math.max(0, qolganBoshlangich));
+  const ortiqcha = qolgan1 - boshdan;
+
+  // `|| 0` — JS manfiy nolini (-0) oddiy nolga keltiradi, aks holda u
+  // natijalarda va testlarda chalg'itadi.
+  return {
+    firstInstallment: -boshdan || 0,
+    monthlyAmount: -(oylikdan + ortiqcha) || 0,
+  };
+}
