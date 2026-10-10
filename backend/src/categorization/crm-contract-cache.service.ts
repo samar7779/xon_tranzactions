@@ -472,7 +472,41 @@ export class CrmContractCacheService {
     return cached;
   }
 
+  /**
+   * 10.10.2026: o'chirilgan ("Удалено") shartnomalar endi to'lovlar tarixidan topiladi
+   * (CrmService.indexWithDeleted). Avval ular "Topilmadi" (found=false) bo'lib keshlangan va
+   * 4 soatgacha XATO ko'rinib turardi. BIR MARTA (abadiy, marker bilan) shunday qatorlarni
+   * "eskirgan" deb belgilaymiz — keyingi murojaatda qayta tekshiriladi. O'chirilmaydi;
+   * '__...__' marker qatorlariga tegilmaydi.
+   */
+  private notFoundResetDone = false;
+  private static readonly NOTFOUND_RESET_MARKER = '__NOTFOUND_RECHECK_DELETED_V1__';
+  private async recheckNotFoundOnce(): Promise<void> {
+    if (this.notFoundResetDone) return;
+    this.notFoundResetDone = true;
+    try {
+      const marker = await this.prisma.crmContract.findUnique({
+        where: { contractNumber: CrmContractCacheService.NOTFOUND_RESET_MARKER },
+      });
+      if (marker) return;
+      const r = await this.prisma.crmContract.updateMany({
+        where: { found: false, NOT: { contractNumber: { startsWith: '__' } } },
+        data: { lastVerifiedAt: new Date(0) },
+      });
+      await this.prisma.crmContract.upsert({
+        where: { contractNumber: CrmContractCacheService.NOTFOUND_RESET_MARKER },
+        create: { contractNumber: CrmContractCacheService.NOTFOUND_RESET_MARKER, found: false },
+        update: {},
+      });
+      this.log.log(`CRM kesh: ${r.count} ta "Topilmadi" qatori qayta tekshirishga belgilandi (o'chirilgan shartnomalar fix, bir marta)`);
+    } catch (e: any) {
+      this.notFoundResetDone = false;   // keyingi murojaatda yana urinadi
+      this.log.warn(`recheckNotFoundOnce xato: ${e?.message}`);
+    }
+  }
+
   private async doLookup(key: string, payerHint?: string): Promise<CachedContract | null> {
+    await this.recheckNotFoundOnce();
     // 1) Keshda bormi — variantlar bilan
     const variants = contractVariants(key).slice(0, 16); // xavfsizlik chegarasi
     const cached = await this.prisma.crmContract.findFirst({
@@ -555,9 +589,10 @@ export class CrmContractCacheService {
             }
             return null;
           };
-          // deleted_at to'ldirilgan bo'lsa — bekor qilingan deb hisoblaymiz
+          // deleted_at to'ldirilgan yoki "Удалено"dan kelgan (is_trashed, indexWithDeleted belgisi)
+          // bo'lsa — bekor qilingan deb hisoblaymiz
           const statusRaw = extractStatus(detail.status || detail.contract_status);
-          const status = trunc(detail.deleted_at && !statusRaw ? 'cancelled' : statusRaw, 128);
+          const status = trunc((detail.deleted_at || detail.is_trashed) && !statusRaw ? 'cancelled' : statusRaw, 128);
           // Obyekt nomi — CRM bir necha joyda saqlashi mumkin
           const extractObject = (d: any): string | null => {
             // XonSaroy v4 deep struktura: order_apartments[0].apartment.block.building.object.name

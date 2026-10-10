@@ -181,9 +181,16 @@ export class CrmService {
   async paymentsByContract(contract: string): Promise<any[]> {
     const c = (contract || '').trim();
     if (!c) return [];
-    const r: any = await this.callClientGet('/payment-history', { contract: c, limit: 500 }, 60_000);
-    const raw: any = r?.ok ? (r.data?.data ?? r.data) : null;
-    const rows: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+    // 10.10.2026: GET /payment-history yangi CRM xostida YO'Q (404 — scripts/crm-diag.mjs), shu
+    // sabab bu metod migratsiyadan beri jimgina [] qaytarardi. Avval ishlaydigan POST /excel;
+    // u bo'sh bo'lsa (eski xost) GET zaxira.
+    let rows: any[] = this.excelRows(
+      await this.callClient('/payment-history/excel', { page: 1, limit: 500, contract: c }, 60_000));
+    if (!rows.length) {
+      const r: any = await this.callClientGet('/payment-history', { contract: c, limit: 500 }, 60_000);
+      const raw: any = r?.ok ? (r.data?.data ?? r.data) : null;
+      rows = raw?.data ?? (Array.isArray(raw) ? raw : []);
+    }
     const norm = (s: any) => String(s || '').replace(/[\s\-_./]/g, '').toUpperCase();
     const target = norm(c);
     // Server LIKE qaytarishi mumkin — aniq (normalized) mos kelganlarini qoldiramiz
@@ -665,39 +672,73 @@ export class CrmService {
   /**
    * /index — shartnoma bo'yicha FAOL + O'CHIRILGAN ("Удалено") qidiruv.
    *
-   * 10.10.2026: yangi CRM'da (crm-api.xonapps.uz) `is_trashed=1` = FAQAT o'chirilganlar —
-   * CRM'ning o'z "Список договоров" sahifasi "Удалено" tabida aynan shuni yuboradi
-   * (crm.xonapps.uz JS: {name:"tab_status.deleted", status:"is_trashed"} → query[status]=1).
-   * `trashed_status` / `with_trashed` shartnoma ro'yxatiga ta'sir qilmaydi. Shuning uchun:
-   * 09.10 gacha is_trashed=1 har so'rovda edi → faqat o'chirilganlar qidirilib, faollar
-   * topilmasdi; 09.10 da olib tashlandi → endi o'chirilganlar topilmay qoldi
-   * (1689ZUR24NU — qaytarilgan pul "CRM da topilmadi"). To'g'risi: avval oddiy, topilmasa
-   * is_trashed=1 bilan. O'chirilgan natijalar `is_trashed: 1` belgisi bilan qaytadi.
+   * 10.10.2026 serverdagi diagnostika (scripts/crm-diag.mjs, crm-api.xonapps.uz):
+   *   - integratsiya API (/api/v4/client/order) o'chirilgan shartnomani HECH QAYSI parametr bilan
+   *     bermaydi: /index (oddiy, is_trashed=1, trashed_status=±1) → 0; /show → 404.
+   *     Filtrsiz is_trashed=1 / is_archive=1 → jami 0. trashed_status/with_trashed e'tiborsiz.
+   *     (CRM sahifasidagi "Удалено" tabi boshqa — admin API orqali ishlaydi.)
+   *   - /client/payment-history/excel esa o'chirilgan shartnoma to'lovlarini BERADI
+   *     (1689ZUR24NU → 25 ta) — raqam, mijoz, obyekt, order_id shu yerda.
+   * Shuning uchun: avval oddiy /index; bo'sh bo'lsa va contract berilgan bo'lsa — to'lovlar
+   * tarixidan tiklangan "o'chirilgan" element (_fromPayments, is_trashed). Grafik (schedules)
+   * unda YO'Q — show() bunday elementni to'liq tafsilot sifatida QAYTARMAYDI (bo'linish
+   * noto'g'ri grafik bilan hisoblanmasin); u faqat shartnomani aniqlash (XATO emas) uchun.
    */
   private async indexWithDeleted(params: Record<string, any>): Promise<any> {
     const r: any = await this.call('/index', { ...params, trashed_status: 1, with_trashed: 1 });
     const items: any[] = r?.ok ? (r.data?.data || []) : [];
-    if (items.length > 0) return r;
-    // Ikkinchi so'rovda faqat minimal filtr (cancelled kabi qo'shimchalar CRM query'sini buzgan)
-    const tp: Record<string, any> = { is_trashed: 1 };
-    for (const k of ['contract', 'per-page', 'page']) if (params[k] != null) tp[k] = params[k];
-    const t: any = await this.call('/index', tp);
-    const titems: any[] = t?.ok ? (t.data?.data || []) : [];
-    if (titems.length > 0) {
-      for (const it of titems) if (it && it.is_trashed == null) it.is_trashed = 1;
-      this.log.log(`CRM /index: ${params.contract || ''} o'chirilganlar ("Удалено") ichida topildi — ${titems.length} ta`);
-      return t;
+    if (items.length > 0 || !params.contract) return r;
+    const del = await this.deletedContractFromPayments(String(params.contract)).catch(() => null);
+    if (del) {
+      this.log.log(`CRM /index: ${params.contract} faol ro'yxatda yo'q — to'lovlar tarixidan o'chirilgan shartnoma sifatida topildi`);
+      return { ok: true, data: { data: [del], pagination: { totalItem: 1 } } };
     }
     return r;
   }
 
-  /** /show id bo'yicha — o'chirilgan shartnoma bo'lsa is_trashed=1 bilan qayta (indexWithDeleted kabi). */
+  /**
+   * O'chirilgan ("Удалено") shartnoma — integratsiya API ko'rmaydi, lekin uning to'lovlari
+   * /payment-history/excel da bor. To'lov qatorlaridan /index elementi shaklidagi yozuv
+   * tiklanadi. To'lov bo'lmasa null.
+   */
+  async deletedContractFromPayments(contract: string): Promise<any | null> {
+    const c = (contract || '').trim();
+    if (!c) return null;
+    const r: any = await this.callClient('/payment-history/excel', { page: 1, limit: 500, contract: c }, 60_000);
+    const norm = (s: any) => String(s || '').replace(/[\s\-_./]/g, '').toUpperCase();
+    const rows = this.excelRows(r).filter((p: any) => norm(p.contract) === norm(c));
+    if (!rows.length) return null;
+    const p0: any = rows.find((p: any) => p.full_name || p.client_full_name) || rows[0];
+    const obj = p0.object_name ?? p0.object ?? null;
+    const objectName = typeof obj === 'string' ? obj : (this.asText(obj?.name) || this.asText(obj) || null);
+    return {
+      id: p0.order_id ?? null,
+      order_id: p0.order_id ?? null,
+      contract: String(p0.contract || c).trim(),
+      client_full_name: p0.full_name || p0.client_full_name || null,
+      object: objectName,
+      number: p0.apartment_number ?? p0.number ?? null,
+      status: { type: 'deleted', name: { uz: "O'chirilgan (CRM)", ru: 'Удалено (CRM)' } },
+      is_trashed: 1,
+      _fromPayments: true,
+      payments_count: rows.length,
+    };
+  }
+
+  /** /payment-history/excel javobidan qatorlar ro'yxati (shakli: {data:[...]} yoki {data:{data:[...]}}). */
+  private excelRows(r: any): any[] {
+    if (!r?.ok) return [];
+    const raw: any = r.data?.data ?? r.data;
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.data)) return raw.data;
+    return [];
+  }
+
+  /** /show id bo'yicha (to'liq tafsilot). O'chirilgan shartnoma uchun 404 — null. */
   private async showByIdWithDeleted(id: any): Promise<any | null> {
+    if (id == null) return null;
     const full: any = await this.call('/show', { id, trashed_status: 1, with_trashed: 1 });
-    const fd = full?.ok ? (full.data?.data || null) : null;
-    if (fd) return fd;
-    const t: any = await this.call('/show', { id, is_trashed: 1 });
-    return t?.ok ? (t.data?.data || null) : null;
+    return full?.ok ? (full.data?.data || null) : null;
   }
 
   /**
@@ -1001,7 +1042,7 @@ export class CrmService {
     // nomzodlarni beradi va izohдаги ism-familyaga MOS kelganini tanlaymiz.
     if (contractInput && opts.payerHint) {
       const picked = await this.pickContractByName(contractInput, opts.payerHint);
-      if (picked) {
+      if (picked && !picked._fromPayments) {   // o'chirilgan (grafiksiz) — to'liq tafsilot emas
         let detail: any = picked;
         // To'liq, kanonik detail — id bo'yicha /show (id aniq, dublikatsiz)
         if (picked.id != null) {
@@ -1058,7 +1099,12 @@ export class CrmService {
           const target = norm(contractNo);
           const hit = items.find((it) => String(it.contract || '').toUpperCase() === contractNo.toUpperCase())
             || items.find((it) => norm(String(it.contract || '')) === target);
-          if (hit) {
+          if (hit && hit._fromPayments) {
+            // O'chirilgan shartnoma — to'lovlar tarixidan tiklangan, GRAFIKSIZ. To'liq tafsilot
+            // sifatida qaytarilmaydi (bo'linish bo'sh grafik bilan hammasini "oylik"ka yozardi);
+            // shartnomani aniqlash searchContracts / getContractMeta orqali bo'ladi.
+            this.log.log(`  → ${hit.contract}: CRM'da o'chirilgan (faqat to'lovlar tarixida) — grafik yo'q`);
+          } else if (hit) {
             detail = hit;
             // MUHIM: /index item CHALA — total.paid / schedules / payment_histories YO'Q
             // (ular faqat /show'da). id bo'yicha TO'LIQ detail'ni qayta olamiz (payerHint yo'li kabi),
@@ -1431,7 +1477,13 @@ export class CrmService {
     const c = (contract || '').trim();
     if (!c) return { ok: false, status: null, schedules: [] };
     const r = await this.call('/show', { contract: c });
-    const d: any = r.ok ? (r.data?.data || null) : null;
+    let d: any = r.ok ? (r.data?.data || null) : null;
+    if (!d) {
+      // O'chirilgan ("Удалено") shartnoma — /show contract bo'yicha 422 beradi; show() ichidagi
+      // indexWithDeleted + showByIdWithDeleted fallback bilan olamiz (10.10.2026)
+      const s: any = await this.show({ contract: c });
+      d = s?.ok ? (s.detail || null) : null;
+    }
     if (!d) return { ok: false, status: null, schedules: [] };
 
     const out: Array<{ scheduleId: string; dueDate: string; amount: number; amountPaid: number; remaining: number; kind: 'initial' | 'monthly' }> = [];
