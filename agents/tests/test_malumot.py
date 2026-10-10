@@ -101,6 +101,47 @@ class OqimTest(_Base):
         self.assertIn("fayl buzilgan", self.texts()[-1])
 
 
+class TizimBuyruqTest(_FlowBase):
+    """/tizim: tizim xaritasi faylini egasiga hujjat qilib yuboradi (faqat egasi, shaxsiy chat)."""
+
+    def _m(self, user_id: int = 42):
+        from types import SimpleNamespace
+        m = _msg(950, "/tizim")
+        m.chat, m.from_user, m.media_group_id = SimpleNamespace(type="private"), SimpleNamespace(id=user_id), None
+        return m
+
+    async def test_fayl_yuboriladi(self):
+        self._patch(LB, "_owner_id", lambda: 42)
+        hujjatlar: List[Any] = []
+
+        async def send_document(filename: str, data: bytes, *, caption: Any = None) -> int:
+            hujjatlar.append((filename, data, caption))
+            return 77
+
+        self._patch(self.outbox, "send_document", send_document)
+        await LB.cmd_tizim(self._m())
+        [(nom, data, izoh)] = hujjatlar
+        haqiqiy = (LB.config.REPO / C.TIZIM_FAYL_REL).read_bytes()
+        self.assertEqual((nom, data), ("tizim.md", haqiqiy))
+        self.assertIn("Tizim xaritasi: butun loyiha qanday ishlaydi (%d qator)" % haqiqiy.count(b"\n"), izoh)
+        self.assertTrue(haqiqiy.startswith("# Tizim xaritasi".encode("utf-8")))
+
+    async def test_begona_va_xato(self):
+        self._patch(LB, "_owner_id", lambda: 42)
+        chaqiruv: List[Any] = []
+
+        async def send_document(*a: Any, **k: Any) -> None:
+            chaqiruv.append(a)
+            return None
+
+        self._patch(self.outbox, "send_document", send_document)
+        await LB.cmd_tizim(self._m(user_id=7))                          # begona — jim
+        self.assertEqual(chaqiruv, [])
+        await LB.cmd_tizim(self._m())                                    # Telegram xatosi
+        self.assertEqual(len(chaqiruv), 1)
+        self.assertIn(C.MSG_TIZIM_YUBORILMADI, self.last().text)
+
+
 class LeaderOqimTest(_FlowBase):
     """Leader javobida HISOB / XATO_FAYL qatori -> malumot.handle (delegatsiyasiz)."""
 

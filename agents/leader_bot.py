@@ -1502,6 +1502,27 @@ async def cmd_hisob(msg: Message) -> None:
     await _cmd_malumot(msg, _HISOB_CMD_RE, "hisob", "HISOB: ")
 
 
+async def cmd_tizim(msg: Message) -> None:
+    """/tizim: butun tizim xaritasi faylini (agents/knowledge/tizim.md) egasiga hujjat qilib yuboradi."""
+    if not _is_owner_private(msg):
+        return
+    if _is_forwarded(msg):
+        await on_text(msg)
+        return
+    await _hist(C.ROLE_OWNER, "/tizim")
+    try:
+        data = await asyncio.to_thread((config.REPO / C.TIZIM_FAYL_REL).read_bytes)
+    except OSError:
+        await _say(C.MSG_TIZIM_YOQ, escape=True, reply_to=msg.message_id)
+        return
+    izoh = C.MSG_TIZIM_IZOH.format(qator=data.count(b"\n"))
+    mid = await _outbox().send_document("tizim.md", data, caption=izoh)
+    if mid is None:
+        await _say(C.MSG_TIZIM_YUBORILMADI, escape=True, reply_to=msg.message_id)
+        return
+    await _hist(C.ROLE_LEADER, "Fayl yuborildi: tizim.md")
+
+
 async def cmd_tarix(msg: Message) -> None:
     """/tarix <dan> [gacha] [bank|hisob]: eski tarixni bankdan yuklash (panel "Eski tarixni yuklash" bilan bir xil)."""
     if not _is_owner_private(msg):
@@ -1772,6 +1793,7 @@ def _register(dp: Dispatcher) -> None:
     dp.message.register(cmd_hisob, Command("hisob"), ~F.forward_origin)
     dp.message.register(cmd_xato, Command("xato"), ~F.forward_origin)
     dp.message.register(cmd_tarix, Command("tarix"), ~F.forward_origin)
+    dp.message.register(cmd_tizim, Command("tizim"), ~F.forward_origin)
     dp.message.register(cmd_reset, Command("reset"), ~F.forward_origin)
     dp.message.register(on_text)
     dp.callback_query.register(on_callback)

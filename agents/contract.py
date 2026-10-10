@@ -1100,6 +1100,12 @@ XATO_FAYL_KOPRIK = "/api/agent-bridge/xato-royxat"
 HISOB_MAX = 3
 HISOB_TIMEOUT_S = 90
 XATO_FAYL_TIMEOUT_S = 120
+# /tizim (2026-10-10): butun tizim xaritasi faylini egasiga hujjat qilib yuborish (Leader bilimi ham shu fayl)
+TIZIM_FAYL_REL = "agents/knowledge/tizim.md"
+MSG_TIZIM_IZOH = ("Tizim xaritasi: butun loyiha qanday ishlaydi ({qator} qator). Leader shu fayldan o'qiydi"
+                  " (agents/knowledge/tizim.md). Bo'limni boshidagi \"Qayerda nima\" jadvalidan toping.")
+MSG_TIZIM_YOQ = "Tizim xaritasi fayli serverda topilmadi (agents/knowledge/tizim.md)."
+MSG_TIZIM_YUBORILMADI = "Fayl Telegram'ga yuborilmadi. Qayta urinib ko'ring: /tizim"
 MSG_HISOB_FOYDALANISH = ("Foydalanish: /hisob <hisob raqam> (16-25 xona, bo'shliq bilan ham bo'ladi). Masalan:"
                          " /hisob 20208000904900960001")
 EKSPORT_RUN_YOL_TPL = "/api/agent-bridge/exports/{id}/run"
