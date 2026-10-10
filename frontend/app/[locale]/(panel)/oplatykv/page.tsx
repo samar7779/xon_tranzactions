@@ -1088,12 +1088,22 @@ export default function OplataKvPage() {
                       </td>
                     )}
                     <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800 dark:text-slate-200">
+                      {/* XATO — bu BAYROQ (CRM'da tasdiqlanmagan), shartnoma raqamining
+                          o'zi emas. Ilgari belgi raqamning O'RNIGA chiqardi va qaysi
+                          shartnoma ekanini ko'rib bo'lmasdi: ustun bo'yicha filtrlaganda
+                          "filtr ishlamadi" degan taassurot tug'ilardi. Endi ikkalasi
+                          birga ko'rinadi. */}
                       {it.crmXato ? (
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900"
-                          title={t('crmNotFoundFixTx')}
-                        >
-                          {t('badgeError')}
+                        <span className="inline-flex items-center gap-1.5 flex-wrap">
+                          <span className="text-rose-700 dark:text-rose-300">
+                            {it.contractNo || '—'}
+                          </span>
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900"
+                            title={t('crmNotFoundFixTx')}
+                          >
+                            {t('badgeError')}
+                          </span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5">
