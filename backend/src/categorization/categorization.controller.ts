@@ -258,6 +258,27 @@ export class CategorizationController {
   }
 
   // ─── Schotchik backfill: eski noto'g'ri tasniflangan tranzaksiyalarni qayta tasniflash ───
+  // ─── Soxta shartnoma raqamlarini qayta o'qish ("сонли" so'zi yutilgan holatlar) ───
+  @Post('reparse-junk-contracts')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({
+    summary: "Soxta shartnoma raqamlarini qayta o'qish (006AFSCOH, 020SLQSONLI kabi)",
+    description:
+      "Bank izohidagi «сонли/sonli» so'zi raqamga qo'shilib ketgan to'lovlarni topadi va " +
+      "izohdan qaytadan o'qiydi. CRM'da tasdiqlangan variant qo'yiladi, topilmasa XATO " +
+      "qilib bo'shatiladi. dryRun standart true — hech narsa yozilmaydi, faqat ro'yxat.",
+  })
+  reparseJunkContracts(
+    @Body() body: { dryRun?: boolean; limit?: number },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.svc.reparseJunkContracts({
+      dryRun: body?.dryRun !== false,
+      limit: body?.limit,
+      actorId: userId,
+    });
+  }
+
   @Post('backfill-schotchik')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({

@@ -23,6 +23,7 @@ import { TransactionsTabs } from '@/components/transactions-tabs';
 import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { TrSupportTab } from '@/components/tr-support-tab';
 import { KategoriyaAgentDialog } from '@/components/kategoriya-agent-dialog';
+import { ReparseContractsDialog } from '@/components/reparse-contracts-dialog';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
 import { TimeDiagnosticsDialog } from '@/components/time-diagnostics-dialog';
 import { PurposeInfoButton, PurposeModal } from '@/components/purpose-modal';
@@ -313,6 +314,7 @@ export default function TransactionsPage() {
   // Recategorize progress modal — live polling bilan ko'rsatadi
   const [recategorizeOpen, setRecategorizeOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
+  const [reparseOpen, setReparseOpen] = useState(false);
   const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
   const [addFromTxOpen, setAddFromTxOpen] = useState(false);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
@@ -899,6 +901,15 @@ export default function TransactionsPage() {
                       >
                         <AlertTriangle className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />
                         <span className="flex-1">Молия Вазирлиги — xatolarni tozalash</span>
+                      </DropdownMenuItem>
+                    )}
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setReparseOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <Wand2 className="h-4 w-4 mr-2 text-rose-600 dark:text-rose-400" />
+                        <span className="flex-1">Soxta shartnoma raqamlari</span>
                       </DropdownMenuItem>
                     )}
                     {canManageCategories && (
@@ -1618,6 +1629,7 @@ export default function TransactionsPage() {
       {/* ═══ KATEGORIYALASH JARAYONI (LIVE) ═══ */}
       <RecategorizeProgressDialog open={recategorizeOpen} onOpenChange={setRecategorizeOpen} />
       <KategoriyaAgentDialog open={agentOpen} onOpenChange={setAgentOpen} />
+      <ReparseContractsDialog open={reparseOpen} onOpenChange={setReparseOpen} />
       <SchotchikBackfillDialog open={schotchikBackfillOpen} onOpenChange={setSchotchikBackfillOpen} />
       <AddFromTxDialog open={addFromTxOpen} onOpenChange={setAddFromTxOpen} />
       <CategorizeDiagnoseDialog open={diagnoseOpen} onOpenChange={setDiagnoseOpen} />

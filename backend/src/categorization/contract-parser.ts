@@ -79,6 +79,41 @@ const CYR_TO_LAT: Record<string, string> = {
   'р': 'P', 'с': 'C', 'т': 'T', 'у': 'Y', 'х': 'X', 'ё': 'E',
 };
 
+/**
+ * To'ldiruvchi so'zlar — izohda shartnoma raqamidan KEYIN keladi va raqamga
+ * yopishib qolmasligi kerak.
+ *
+ * ⚠️ REAL XATO (10.10.2026): bank izohi "№006AFS сонли шартнома бўйича".
+ * Transliteratsiya KO'RINISH bo'yicha (С→C, О→O, Н→H), shuning uchun
+ * "сон" → "COH". Regexning dum qismi `[A-Z0-9]{2,6}` bo'shliqdan keyingi
+ * shu so'zni yutib yuborgan:
+ *     "006AFS сонли"  →  006 + AFS + COH    →  "006AFSCOH"
+ *     "020SLQ SONLI"   →  020 + SLQ + SONLI  →  "020SLQSONLI"
+ * Natijada MAVJUD BO'LMAGAN shartnoma yaratilib, to'lov o'shanga biriktirilgan
+ * va hech qachon split bo'lmagan (289 tadan 218 tasi shundan edi).
+ *
+ * Kirill uchun `` ishlamaydi (JS'da kirill "so'z belgisi" emas) — shuning uchun
+ * Unicode xossa chegaralari ishlatiladi.
+ */
+const FILLER_RE =
+  /(^|[^\p{L}\p{N}])(сонли|сонлик|сон|ракамли|рақамли|ракам|sonli|sonlik|son|raqamli|raqam)(?=[^\p{L}\p{N}]|$)/giu;
+
+/** Dum shu so'zlardan biri chiqsa — bu shartnoma raqami emas, to'ldiruvchi so'z. */
+export const JUNK_TAIL_LIST = [
+  'COH', 'COHLI', 'COHLIK', 'SON', 'SONLI', 'SONLIK', 'RAQAM', 'RAQAMLI', 'PAKAM', 'PAKAMLI',
+] as const;
+const JUNK_TAILS = new Set<string>(JUNK_TAIL_LIST);
+
+/** Izohdan to'ldiruvchi so'zlarni olib tashlaydi (transliteratsiyadan OLDIN). */
+export function stripFillers(s: string): string {
+  return String(s || '').replace(FILLER_RE, '$1 ');
+}
+
+/** Ajratilgan dum to'ldiruvchi so'zmi (soxta shartnoma yaratmaslik uchun oxirgi to'siq). */
+export function isJunkTail(tail: string): boolean {
+  return JUNK_TAILS.has(String(tail || '').toUpperCase());
+}
+
 function transliterate(s: string): string {
   let out = '';
   for (const ch of s) {
@@ -95,8 +130,10 @@ function transliterate(s: string): string {
 export function extractContractNumber(description: string | null | undefined): string | null {
   if (!description) return null;
 
-  // 1) Kirillni Lotinga, № belgilarini olib tashlash, upper case
-  const clean = transliterate(String(description))
+  // 1) To'ldiruvchi so'zlar ("сонли", "sonli") olib tashlanadi — TRANSLITERATSIYADAN
+  //    OLDIN, chunki keyin "сон" → "COH" bo'lib tanib bo'lmay qoladi.
+  //    Keyin kirill → lotin, № belgilari olib tashlanadi, upper case.
+  const clean = transliterate(stripFillers(String(description)))
     .replace(/№/g, '')
     .replace(/N°/g, '');
 
@@ -104,7 +141,10 @@ export function extractContractNumber(description: string | null | undefined): s
   const m = CONTRACT_RE.exec(clean);
   if (!m) return null;
 
-  // 3) Bo'shliqsiz birlashtiramiz
+  // 3) Dum to'ldiruvchi so'z bo'lsa — soxta shartnoma yaratmaymiz (oxirgi to'siq)
+  if (isJunkTail(m[3])) return null;
+
+  // 4) Bo'shliqsiz birlashtiramiz
   const normalized = (m[1] + m[2] + m[3]).replace(/\s+/g, '').toUpperCase();
 
   // 4) O/0 variantlarini ham birga qaytaramiz (kim chaqiruvchi qaror qiladi qaysi DB'ga mos)
@@ -128,7 +168,8 @@ export function extractContractNumber(description: string | null | undefined): s
 export function extractContractCandidates(description: string | null | undefined): string[] {
   if (!description) return [];
 
-  const clean = transliterate(String(description))
+  // Bu yerda ham to'ldiruvchi so'zlar avval olib tashlanadi (yuqoridagi izohga qarang).
+  const clean = transliterate(stripFillers(String(description)))
     .replace(/№/g, '')
     .replace(/N°/g, '');
 
@@ -138,6 +179,8 @@ export function extractContractCandidates(description: string | null | undefined
   const m = CONTRACT_RE.exec(clean);
   if (!m) return [];
 
+  // Dum to'ldiruvchi so'z bo'lsa — soxta shartnoma yaratmaymiz.
+  if (isJunkTail(m[3])) return [];
   const base = (m[1] + m[2] + m[3]).replace(/\s+/g, '').toUpperCase();
   candidates.push(base);
 

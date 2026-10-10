@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmContractCacheService } from './crm-contract-cache.service';
-import { extractContractNumber, extractContractCandidates } from './contract-parser';
+import { extractContractNumber, extractContractCandidates, JUNK_TAIL_LIST } from './contract-parser';
 import { tashkentKun } from '../common/tashkent';
 
 /**
@@ -2182,6 +2182,131 @@ export class CategorizationService {
    * @param opts.dateFrom  ixtiyoriy boshlanish sanasi (default: sync.minDate sozlamasi)
    * @param opts.dateTo    ixtiyoriy tugash sanasi (default: hozir)
    */
+  /**
+   * SOXTA shartnoma raqamlarini qayta o'qish.
+   *
+   * Muomo (10.10.2026): bank izohi "№006AFS сонли шартнома" bo'lganda
+   * ajratuvchi "сон" so'zini ham raqamga qo'shib olgan ("С→C, О→O, Н→H" → "COH"):
+   *   006AFS + COH   → "006AFSCOH"    (mavjud emas)
+   *   020SLQ + SONLI → "020SLQSONLI"  (mavjud emas)
+   * Natijada to'lov yo'q shartnomaga biriktirilgan, CRM'da topilmagan va
+   * hech qachon split bo'lmagan.
+   *
+   * Parser tuzatildi; bu metod ESKI qatorlarni tozalaydi. Izohdan qaytadan
+   * o'qiydi va CRM'da TASDIQLANGAN variantni qo'yadi. Tasdiqlanmasa — bo'shatadi
+   * (to'lov XATO ro'yxatiga tushadi, jim yolg'on raqam bilan qolmaydi).
+   *
+   * dryRun (standart true) — hech narsa yozilmaydi, faqat ro'yxat qaytadi.
+   */
+  async reparseJunkContracts(opts?: {
+    dryRun?: boolean;
+    limit?: number;
+    actorId?: string;
+  }): Promise<{
+    ok: true;
+    dryRun: boolean;
+    scanned: number;
+    fixed: number;
+    cleared: number;
+    unchanged: number;
+    rows: Array<{
+      txId: string; date: string; amount: string; party: string;
+      oldContract: string; newContract: string | null;
+      candidates: string[]; oplataRows: number; action: string;
+    }>;
+  }> {
+    const dryRun = opts?.dryRun !== false;
+    const limit = Math.min(opts?.limit || 500, 2000);
+
+    const txs = await this.prisma.transaction.findMany({
+      where: {
+        contractNumber: { not: null },
+        OR: JUNK_TAIL_LIST.map((suf) => ({
+          contractNumber: { endsWith: suf, mode: 'insensitive' as const },
+        })),
+      },
+      select: {
+        id: true, externalId: true, contractNumber: true, description: true,
+        txnDate: true, amount: true, direction: true, fromName: true, toName: true,
+      },
+      orderBy: { txnDate: 'desc' },
+      take: limit,
+    });
+
+    let fixed = 0, cleared = 0, unchanged = 0;
+    const rows: any[] = [];
+
+    for (const tx of txs) {
+      const eski = String(tx.contractNumber || '');
+      const nomzodlar = extractContractCandidates(tx.description);
+
+      // CRM'da tasdiqlangan birinchi nomzod
+      let yangi: string | null = null;
+      for (const c of nomzodlar.slice(0, 6)) {
+        if (c.toUpperCase() === eski.toUpperCase()) continue; // eski soxta variant
+        const bor = await this.prisma.crmContract.findFirst({
+          where: { contractNumber: c, found: true },
+          select: { contractNumber: true },
+        });
+        if (bor) { yangi = bor.contractNumber; break; }
+      }
+
+      // Keshda yo'q bo'lsa — CRM'dan jonli so'raymiz (birinchi nomzod bo'yicha)
+      if (!yangi && nomzodlar.length > 0) {
+        for (const c of nomzodlar.slice(0, 3)) {
+          if (c.toUpperCase() === eski.toUpperCase()) continue;
+          try {
+            const live = await this.crmCache.lookup(c, { forceRefresh: true });
+            if (live) { yangi = c; break; }
+          } catch { /* CRM javob bermadi — keyingisi */ }
+        }
+      }
+
+      const oplata = await this.prisma.oplataKv.count({
+        where: { OR: [{ sourceTxId: tx.id }, ...(tx.externalId ? [{ sourceTxId: tx.externalId }] : [])] },
+      });
+
+      const action = yangi ? 'tuzatildi' : "bo'shatildi";
+      if (yangi) fixed++; else cleared++;
+
+      if (!dryRun) {
+        await this.prisma.$transaction([
+          this.prisma.transaction.update({
+            where: { id: tx.id },
+            data: { contractNumber: yangi },
+          }),
+          this.prisma.oplataKv.updateMany({
+            where: { OR: [{ sourceTxId: tx.id }, ...(tx.externalId ? [{ sourceTxId: tx.externalId }] : [])] },
+            data: { contractNo: yangi || 'XATO' },
+          }),
+        ]).catch((e) => {
+          this.log.warn(`reparse yozish xato (${tx.id}): ${e?.message}`);
+        });
+      }
+
+      if (rows.length < 300) {
+        rows.push({
+          txId: tx.id,
+          date: tashkentKun(tx.txnDate),
+          amount: String(tx.amount),
+          party: ((tx.direction === 'IN' ? tx.fromName : tx.toName) || '').slice(0, 30),
+          oldContract: eski,
+          newContract: yangi,
+          candidates: nomzodlar.slice(0, 4),
+          oplataRows: oplata,
+          action,
+        });
+      }
+    }
+
+    this.log.log(
+      `reparseJunkContracts: ko'rildi ${txs.length}, tuzatildi ${fixed}, bo'shatildi ${cleared}` +
+      `${dryRun ? ' [DRY-RUN]' : ' [YOZILDI]'}`,
+    );
+
+    return { ok: true, dryRun, scanned: txs.length, fixed, cleared, unchanged, rows };
+  }
+
   async backfillSchotchik(opts?: {
     dryRun?: boolean;
     dateFrom?: string;

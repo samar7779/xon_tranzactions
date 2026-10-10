@@ -1,4 +1,4 @@
-import { extractContractCandidates, objectCodeOf, stripGluedOt } from './contract-parser';
+import { extractContractCandidates, extractContractNumber, objectCodeOf, stripGluedOt } from './contract-parser';
 
 describe('contract-parser', () => {
   describe('yopishgan "от/OT" (egasi qoidasi, 2026-10-05)', () => {
@@ -41,5 +41,34 @@ describe('contract-parser', () => {
     expect(objectCodeOf('217AFS24YL')).toBe('AFS');
     expect(objectCodeOf('XATO')).toBeNull();
     expect(objectCodeOf(null)).toBeNull();
+  });
+
+  // ── "сонли / sonli" to'ldiruvchi so'zi (10.10.2026 real xato) ──
+  // Bank izohi: "№006AFS сонли шартнома бўйича". Transliteratsiya ko'rinish
+  // bo'yicha (С→C, О→O, Н→H) ishlagani uchun "сон" → "COH" bo'lib, regexning
+  // dum qismi uni yutib yuborgan va "006AFSCOH" degan MAVJUD BO'LMAGAN
+  // shartnoma yaratilgan. 218 ta to'lov shunga biriktirilib qolgan edi.
+  describe("to'ldiruvchi so'z raqamga qo'shilmasin", () => {
+    it('kirillcha "сонли" dumga aylanmaydi', () => {
+      expect(extractContractNumber('№006AFS сонли шартнома бўйича')).not.toBe('006AFSCOH');
+      expect(extractContractCandidates('№006AFS сонли шартнома')).not.toContain('006AFSCOH');
+    });
+
+    it('lotincha "SONLI" dumga aylanmaydi', () => {
+      expect(extractContractNumber('020SLQ SONLI shartnoma')).not.toBe('020SLQSONLI');
+      expect(extractContractCandidates('020SLQ SONLI shartnoma')).not.toContain('020SLQSONLI');
+    });
+
+    it("to'ldiruvchidan KEYINGI haqiqiy dum topiladi", () => {
+      // "сонли" olib tashlangach "1689ZUR 24NU" qoladi
+      expect(extractContractNumber('№1689ZUR сонли 24NU шартнома')).toBe('1689ZUR24NU');
+    });
+
+    it("haqiqiy raqamlarga tegmaydi", () => {
+      expect(extractContractNumber('oplata 1689ZUR24NU uchun')).toBe('1689ZUR24NU');
+      expect(extractContractNumber('dogovor 2118MSO252P ot 10.05.2026')).toBe('2118MSO252P');
+      // "SON" so'z ichida bo'lsa kesilmaydi (masalan ism/so'z tarkibida)
+      expect(extractContractNumber('150VTN23CV SONIROV')).toBe('150VTN23CV');
+    });
   });
 });
