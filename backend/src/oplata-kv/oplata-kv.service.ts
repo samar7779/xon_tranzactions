@@ -4143,26 +4143,65 @@ export class OplataKvService {
       }
     }
 
+    const verifiedSet = new Set<string>();  // CRM'da found=true (shartnoma bor)
+    const notFoundSet = new Set<string>();  // CRM keshida ANIQ found=false (CRM'da yo'q)
     if (txContractNos.length > 0) {
       const CHUNK = 20000;
-      const verifiedSet = new Set<string>();
       for (let i = 0; i < txContractNos.length; i += CHUNK) {
         const part = txContractNos.slice(i, i + CHUNK);
         const verified = await this.prisma.crmContract.findMany({
           where: { contractNumber: { in: part } },
           select: { contractNumber: true, found: true },
         });
-        verified.forEach((c) => { if (c.found) verifiedSet.add(c.contractNumber); });
+        verified.forEach((c) => {
+          if (c.found) verifiedSet.add(c.contractNumber);
+          else notFoundSet.add(c.contractNumber);
+        });
       }
       xatoSet = new Set(txContractNos.filter((cn) => !verifiedSet.has(cn)));
     }
 
     const sourceOf = (it: { sourceTxId: string | null }) =>
       it.sourceTxId ? (sourceByTxId.get(it.sourceTxId) || null) : null;
-    const isXato = (it: { sourceTxId: string | null; contractNo: string }) =>
-      !!(it.sourceTxId && xatoSet.has(it.contractNo) && !sourceOf(it));
+
+    // QOIDA (egasi tasdiqlagan): CRM'da yo'q shartnoma XATO — MANBADAN QAT'I NAZAR.
+    //  - Avto qator: avvalgidek (CRM-tasdiqlanmagan → XATO).
+    //  - Qo'lda/ariza qator: faqat keshda ANIQ found=false bo'lsa XATO. Kesh qatori
+    //    YO'Q bo'lsa hali XATO emas (tekshirilmagan to'g'ri raqam noto'g'ri XATO
+    //    bo'lmasligi uchun) — pastda fonda crmCache.lookup bilan kesh to'ldiriladi,
+    //    keyingi klassifikatsiyada found=false bo'lib XATO bo'ladi.
+    const isXato = (it: { sourceTxId: string | null; contractNo: string }) => {
+      if (!it.sourceTxId || !xatoSet.has(it.contractNo)) return false;
+      return sourceOf(it) ? notFoundSet.has(it.contractNo) : true;
+    };
+
+    // Fon: qo'lda/ariza shartnoma keshda umuman yo'q bo'lsa — CRM'dan tekshirib
+    // keshni to'ldiramiz (javobni kutmaymiz; ketma-ket, max 20, bir vaqtda bitta).
+    const manualUnknown = new Set<string>();
+    for (const it of txSourceItems) {
+      if (sourceOf(it) && !verifiedSet.has(it.contractNo) && !notFoundSet.has(it.contractNo)) {
+        manualUnknown.add(it.contractNo);
+      }
+    }
+    if (manualUnknown.size > 0) void this.backfillManualCrmLookups(Array.from(manualUnknown));
 
     return { isXato, sourceOf };
+  }
+
+  // Fon ishi: qo'lda/ariza shartnomalarni CRM'da tekshirib keshni to'ldiradi.
+  // computeContractXato qoidasi uchun: CRM'da yo'q bo'lsa found=false bo'lib XATO
+  // bo'lsin. Ketma-ket, bir martada ko'pi bilan 20 ta, bir vaqtda faqat bitta ish.
+  private crmManualLookupBusy = false;
+  private async backfillManualCrmLookups(contractNos: string[]): Promise<void> {
+    if (this.crmManualLookupBusy || contractNos.length === 0) return;
+    this.crmManualLookupBusy = true;
+    try {
+      for (const cn of contractNos.slice(0, 20)) {
+        await this.crmCache.lookup(cn).catch(() => null);
+      }
+    } finally {
+      this.crmManualLookupBusy = false;
+    }
   }
 
   // ───────────────── DISTINCT (column filter popover) ─────────────────

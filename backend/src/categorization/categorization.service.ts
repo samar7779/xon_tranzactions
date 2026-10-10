@@ -1154,6 +1154,13 @@ export class CategorizationService {
       reason: 'setContractManual',
     });
 
+    // Yangi raqamni CRM keshiga FONDA yozamiz (javob kutilmaydi). CRM'da yo'q bo'lsa
+    // kesh found=false bo'ladi va computeContractXato uni XATO deb belgilaydi
+    // (qoida: CRM'da yo'q shartnoma XATO — qo'lda kiritilgan bo'lsa ham).
+    if (newContract) {
+      this.crmCache.lookup(newContract).catch(() => null);
+    }
+
     return { ok: true, contractNumber: newContract, oplataKvSync };
   }
 
