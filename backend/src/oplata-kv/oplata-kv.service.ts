@@ -421,12 +421,57 @@ export class OplataKvService {
    * + manual/ariza EMAS. List va export bir xil ishlatadi.
    * `notIn: verified` — verified bo'sh bo'lsa ham noto'g'ri "0 qator" qaytmaydi.
    */
+  /**
+   * ESKI (CRM'siz) HAQIQIY SHARTNOMALAR.
+   *
+   * Hamma shartnoma CRM'da bo'lavermaydi: 2019-2022 yillardagi eski formatdagilar
+   * (13X2020, 01A2020, 006ZUR/23, 55D-6, 001DPL ...) faqat ОплатыКв'da bor.
+   * Ular Excel orqali yoki qo'lda kiritilgan — ya'ni odam tasdiqlagan, HAQIQIY.
+   *
+   * Belgisi: `source_tx_id IS NULL` (bank tranzaksiyasidan kelmagan qator).
+   * Hozir 13 841 ta shunday shartnoma bor.
+   *
+   * ⚠️ Bularni XATO deb belgilash MUMKIN EMAS — ular haqiqiy shartnomalar,
+   * shunchaki CRM'ga ko'chirilmagan.
+   *
+   * Kesh: 5 daqiqa (ro'yxat sekin o'zgaradi, har so'rovda 14 000 qator tortmaymiz).
+   */
+  private eskiShartnomaKesh: { vaqt: number; toplam: Set<string> } | null = null;
+  private static readonly ESKI_KESH_MS = 5 * 60 * 1000;
+
+  private async eskiShartnomalar(): Promise<Set<string>> {
+    const hozir = Date.now();
+    if (this.eskiShartnomaKesh && hozir - this.eskiShartnomaKesh.vaqt < OplataKvService.ESKI_KESH_MS) {
+      return this.eskiShartnomaKesh.toplam;
+    }
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { sourceTxId: null },
+      select: { contractNo: true },
+      distinct: ['contractNo'],
+    }).catch(() => [] as Array<{ contractNo: string }>);
+    const toplam = new Set(rows.map((r) => r.contractNo).filter((c) => !!c && c !== 'XATO'));
+    this.eskiShartnomaKesh = { vaqt: hozir, toplam };
+    return toplam;
+  }
+
+  /**
+   * TASDIQLANGAN shartnomalar = CRM'da bor (found) ⊕ eski ro'yxat.
+   * XATO qarori shu to'plamga qarab chiqariladi.
+   */
+  private async tasdiqlanganShartnomalar(): Promise<Set<string>> {
+    const [crm, eski] = await Promise.all([
+      this.prisma.crmContract.findMany({ where: { found: true }, select: { contractNumber: true } }),
+      this.eskiShartnomalar(),
+    ]);
+    const toplam = new Set<string>(eski);
+    for (const c of crm) toplam.add(c.contractNumber);
+    return toplam;
+  }
+
   private async buildXatoFilter(): Promise<Prisma.OplataKvWhereInput> {
-    const verified = await this.prisma.crmContract.findMany({
-      where: { found: true },
-      select: { contractNumber: true },
-    });
-    const verifiedNos = verified.map((c) => c.contractNumber);
+    // CRM'da tasdiqlangan + eski (CRM'siz) haqiqiy shartnomalar.
+    // Birlashma hozir ~15 000 — Postgres bind chegarasidan (32 767) past.
+    const verifiedNos = Array.from(await this.tasdiqlanganShartnomalar());
 
     // FAQAT XATO ro'yxatidan YASHIRILGAN (xatoHidden) chiqmaydi.
     // Qo'lda shartnoma berilgan (isContractManual) bo'lsa ham — agar shartnoma CRM'da
@@ -2207,6 +2252,8 @@ export class OplataKvService {
       select: { contractNumber: true, customerName: true, objectName: true, found: true },
     });
     const crmByContract = new Map(crmContracts.map((c) => [c.contractNumber, c]));
+    // Eski (CRM'siz) haqiqiy shartnomalar — bir marta olinadi, keshlangan.
+    const eskiShartnomalar = await this.eskiShartnomalar();
 
     // Object mapping (CRM nomi -> OplatyKv nomi)
     const mappings = await this.prisma.oplataKvObjectMapping.findMany();
@@ -2281,7 +2328,10 @@ export class OplataKvService {
       // MUHIM: faqat kesh ANIQ "topilmadi" degandagina (found === false).
       // Shartnoma hali umuman tekshirilmagan bo'lsa (keshda yo'q) raqam
       // saqlanadi — keyinroq tasdiqlanishi mumkin, erta o'chirib yubormaymiz.
-      const crmTopilmadi = crm !== undefined && crm.found === false;
+      // Eski (CRM'siz) haqiqiy shartnomalar XATO qilinmaydi — ular Excel/qo'lda
+      // kiritilgan va CRM'ga hech qachon ko'chirilmagan (13X2020, 006ZUR/23 ...).
+      const crmTopilmadi = crm !== undefined && crm.found === false
+        && !eskiShartnomalar.has(tx.contractNumber!);
       const yoziladiganShartnoma = crmTopilmadi ? 'XATO' : tx.contractNumber!;
 
       const baseData = {
@@ -4233,6 +4283,10 @@ export class OplataKvService {
           else notFoundSet.add(c.contractNumber);
         });
       }
+      // Eski (CRM'siz) haqiqiy shartnomalar ham tasdiqlangan hisoblanadi —
+      // ular Excel/qo'lda kiritilgan, odam tasdiqlagan. XATO emas.
+      const eski = await this.eskiShartnomalar();
+      for (const cn of txContractNos) if (eski.has(cn)) verifiedSet.add(cn);
       xatoSet = new Set(txContractNos.filter((cn) => !verifiedSet.has(cn)));
     }
 
