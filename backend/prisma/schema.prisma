@@ -1626,3 +1626,30 @@ model KategoriyaAgentQaror {
   @@index([transactionId])
   @@map("kategoriya_agent_qarorlar")
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// FIRMA → OBYEKT (bank komissiyasiga obyekt qo'yish uchun)
+//
+// Ravshan aka qoidasi (10.10.2026): bank komissiyasi chiqimida obyekt
+// avtomat tursin.
+//   1) Firma zakazchik bo'lsa (bitta obyektga ishlaydi) — komissiya
+//      o'sha obyektga yoziladi. Kalit: bank_accounts.owner_name.
+//   2) Firma genpodryad bo'lsa (ko'p obyekt) — firma bo'yicha aniqlab
+//      bo'lmaydi; obyekt izohdagi «За документ №N S=summa» orqali asl
+//      to'lovdan olinadi. Bunday firma `genpodryad = true` bilan
+//      belgilanadi va 1-qoida o'tkazib yuboriladi.
+//
+// Ro'yxat mavjud ma'lumotdan tayyorlanadi (har firmaning to'lovlaridagi
+// hukmron obyekt), odam ko'rib tasdiqlaydi.
+// ─────────────────────────────────────────────────────────────────────
+model FirmaObyekt {
+  id         String   @id @default(cuid())
+  firma      String   @unique @db.VarChar(190) // bank_accounts.owner_name
+  obyekt     String?  @db.VarChar(255) // genpodryad bo'lsa null
+  genpodryad Boolean  @default(false)
+  izoh       String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("firma_obyekt")
+}

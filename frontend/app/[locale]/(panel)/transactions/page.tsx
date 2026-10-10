@@ -24,6 +24,7 @@ import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { TrSupportTab } from '@/components/tr-support-tab';
 import { KategoriyaAgentDialog } from '@/components/kategoriya-agent-dialog';
 import { ReparseContractsDialog } from '@/components/reparse-contracts-dialog';
+import { KomissiyaObyektDialog } from '@/components/komissiya-obyekt-dialog';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
 import { TimeDiagnosticsDialog } from '@/components/time-diagnostics-dialog';
 import { PurposeInfoButton, PurposeModal } from '@/components/purpose-modal';
@@ -315,6 +316,7 @@ export default function TransactionsPage() {
   const [recategorizeOpen, setRecategorizeOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
   const [reparseOpen, setReparseOpen] = useState(false);
+  const [komissiyaOpen, setKomissiyaOpen] = useState(false);
   const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
   const [addFromTxOpen, setAddFromTxOpen] = useState(false);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
@@ -901,6 +903,15 @@ export default function TransactionsPage() {
                       >
                         <AlertTriangle className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />
                         <span className="flex-1">Молия Вазирлиги — xatolarni tozalash</span>
+                      </DropdownMenuItem>
+                    )}
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setKomissiyaOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <Landmark className="h-4 w-4 mr-2 text-sky-600 dark:text-sky-400" />
+                        <span className="flex-1">Bank komissiyasiga obyekt</span>
                       </DropdownMenuItem>
                     )}
                     {canManageCategories && (
@@ -1630,6 +1641,7 @@ export default function TransactionsPage() {
       <RecategorizeProgressDialog open={recategorizeOpen} onOpenChange={setRecategorizeOpen} />
       <KategoriyaAgentDialog open={agentOpen} onOpenChange={setAgentOpen} />
       <ReparseContractsDialog open={reparseOpen} onOpenChange={setReparseOpen} />
+      <KomissiyaObyektDialog open={komissiyaOpen} onOpenChange={setKomissiyaOpen} />
       <SchotchikBackfillDialog open={schotchikBackfillOpen} onOpenChange={setSchotchikBackfillOpen} />
       <AddFromTxDialog open={addFromTxOpen} onOpenChange={setAddFromTxOpen} />
       <CategorizeDiagnoseDialog open={diagnoseOpen} onOpenChange={setDiagnoseOpen} />
