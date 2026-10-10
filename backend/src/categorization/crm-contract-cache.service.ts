@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -50,8 +50,14 @@ const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 soat
 const NOT_FOUND_RETRY_AFTER_MS = 4 * 60 * 60 * 1000; // 4 soat
 
 @Injectable()
-export class CrmContractCacheService {
+export class CrmContractCacheService implements OnApplicationBootstrap {
   private readonly log = new Logger(CrmContractCacheService.name);
+
+  /** Deploydan keyin darhol (fonda) — o'chirilgan-shartnoma fallback'i qoldirgan soxta qatorlarni tozalash.
+   *  Avval faqat shartnoma qidirilganda boshlanardi — 10.10 da soxta "667308ZUR23ES" XATO'ga qaytmay turdi. */
+  onApplicationBootstrap() {
+    setTimeout(() => { this.recheckDeletedFallbackOnce().catch(() => { /* log ichida */ }); }, 20_000);
+  }
 
   // Bir vaqtda bir xil shartnomaga ikkita parallel so'rov ketmasligi uchun in-flight map
   private inflight = new Map<string, Promise<CachedContract | null>>();
@@ -512,7 +518,7 @@ export class CrmContractCacheService {
    * tekshiramiz: haqiqiysi found=true qoladi, soxtasi found=false (XATO) bo'ladi.
    */
   private deletedRecheckStarted = false;
-  private static readonly DELETED_RECHECK_MARKER = '__DELETED_FALLBACK_RECHECK_V2__';
+  private static readonly DELETED_RECHECK_MARKER = '__DELETED_FALLBACK_RECHECK_V3__';
   private async recheckDeletedFallbackOnce(): Promise<void> {
     if (this.deletedRecheckStarted) return;
     this.deletedRecheckStarted = true;
@@ -522,17 +528,22 @@ export class CrmContractCacheService {
       });
       if (marker) return;
       const rows = await this.prisma.crmContract.findMany({
-        where: { found: true, status: "o'chirilgan (crm)" },
+        where: { found: true, status: { in: ["o'chirilgan (crm)", 'deleted'] } },
         select: { contractNumber: true },
         take: 1000,
       });
       let fixed = 0;
+      // Har biri BITTA qidiruv bilan: searchContracts (faol /index → qat'iy o'chirilgan fallback).
+      // Aniq mos topilmasa — CRM'da yo'q → found=false (XATO). Xato (tarmoq) bo'lsa tegilmaydi.
+      const norm = (s: any) => String(s || '').replace(/[\s\-_./]/g, '').toUpperCase();
       for (const r of rows) {
-        const res = await this.fetchFromCrmAndCache(r.contractNumber).catch(() => null);
-        if (!res?.found) {
+        const sc: any = await this.crm.searchContracts(r.contractNumber, 10).catch(() => null);
+        if (!sc?.ok) continue;
+        const hit = (sc.items || []).find((it: any) => norm(it.contract) === norm(r.contractNumber));
+        if (!hit) {
           await this.prisma.crmContract.updateMany({
             where: { contractNumber: r.contractNumber },
-            data: { found: false, lastError: "Topilmadi (to'lov bor, shartnoma belgilari yo'q)", lastVerifiedAt: new Date() },
+            data: { found: false, lastError: "CRM'da yo'q (to'lov bor, shartnoma belgilari yo'q)", lastVerifiedAt: new Date() },
           });
           fixed++;
         }
