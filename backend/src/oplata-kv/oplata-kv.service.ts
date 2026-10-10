@@ -4519,6 +4519,12 @@ export class OplataKvService {
     // contractNo uchun MAXSUS: 'XATO' tanlash imkoniyati (CRM da topilmaganlar)
     // Frontend buni xatoOnly=true ga aylantiradi
     if (column === 'contractNo') {
+      // Bazada literal 'XATO' / 'xato' qiymatlari ham bor. Ular pastdagi sun'iy
+      // variant bilan BIR XIL ma'noni bildiradi, lekin alohida ko'rinsa
+      // foydalanuvchi ikkalasini tanlaydi va so'rov o'zini inkor qiladi
+      // (xatoOnly=true + contractNo IN ('xato') → 0 qator). Shuning uchun
+      // literal variantlar ro'yxatdan olib tashlanadi.
+      values = values.filter((v) => v.id.toUpperCase() !== 'XATO');
       // Search bilan ham mos kelishi kerak ("xato" yozsa chiqsin)
       if (!search || 'XATO'.toLowerCase().includes(search.toLowerCase())) {
         values.unshift({ id: 'XATO', name: '⚠ XATO — CRM da topilmadi' });

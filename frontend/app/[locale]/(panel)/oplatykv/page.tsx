@@ -470,9 +470,13 @@ export default function OplataKvPage() {
   // (boshqa contractNo qiymatlar saqlanadi; faqat XATO qayta tarjima qilinadi)
   const applyXatoToParams = (p: URLSearchParams) => {
     const cnSet = columnFilters['contractNo'];
-    if (cnSet && cnSet.has('XATO')) {
+    // XATO tanlangan bo'lsa — bu HOLAT filtri (xatoOnly), shartnoma raqami emas.
+    // Bazadagi literal 'xato'/'XATO' qiymatlari ham shu holatni bildiradi, shuning
+    // uchun ular contractNos ro'yxatiga TUSHMAYDI. Aks holda so'rov o'zini inkor
+    // qilardi: xatoOnly=true + contractNo IN ('xato') → 0 qator.
+    if (cnSet && Array.from(cnSet).some((v) => v.toUpperCase() === 'XATO')) {
       p.set('xatoOnly', 'true');
-      const rest = Array.from(cnSet).filter((v) => v !== 'XATO');
+      const rest = Array.from(cnSet).filter((v) => v.toUpperCase() !== 'XATO');
       if (rest.length > 0) p.set('contractNos', rest.join(','));
       else p.delete('contractNos');
     }
