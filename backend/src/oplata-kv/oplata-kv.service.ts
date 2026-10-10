@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as ExcelJS from 'exceljs';
+import { tashkentKun } from '../common/tashkent';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
@@ -5529,6 +5530,86 @@ export class OplataKvService {
         qator: Number(g._count?._all || 0),
       })),
     };
+  }
+
+  /**
+   * XATO qilinadigan qatorlarni EXCEL qilib beradi — tasdiqlashdan OLDIN ko'rib chiqish uchun.
+   *
+   * Shart aynan `xatoShartnomalarniTozala()` bilan bir xil, ya'ni faylda
+   * ko'rgan qatorlaringiz aynan o'zgaradigan qatorlar.
+   */
+  async xatoNomzodlarXlsx(): Promise<{ buffer: Buffer; filename: string }> {
+    const xatoFilter = await this.buildXatoFilter();
+    const where: Prisma.OplataKvWhereInput = {
+      ...(xatoFilter as Prisma.OplataKvWhereInput),
+      NOT: { contractNo: 'XATO' },
+    };
+
+    const rows = await this.prisma.oplataKv.findMany({
+      where,
+      select: {
+        contractNo: true, date: true, paymentAmount: true, client: true,
+        object: true, txType: true, purpose: true, sourceTxId: true,
+      },
+      orderBy: [{ contractNo: 'asc' }, { date: 'asc' }],
+      take: 20000,
+    });
+
+    // Shartnoma kesimidagi jami — birinchi varaqda xulosa bo'lsin
+    const jamiMap = new Map<string, { qator: number; summa: number }>();
+    for (const r of rows) {
+      const k = r.contractNo;
+      const bor = jamiMap.get(k) || { qator: 0, summa: 0 };
+      bor.qator += 1;
+      bor.summa += Number(r.paymentAmount || 0);
+      jamiMap.set(k, bor);
+    }
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+
+    // ── 1-varaq: shartnomalar xulosasi ──
+    const xs = wb.addWorksheet('Shartnomalar');
+    xs.columns = [
+      { header: 'Shartnoma (bazada)', key: 'c', width: 22 },
+      { header: 'Qator', key: 'n', width: 9 },
+      { header: 'Jami summa', key: 's', width: 20 },
+    ];
+    xs.getRow(1).font = { bold: true };
+    for (const [c, v] of Array.from(jamiMap.entries()).sort((a, b) => b[1].qator - a[1].qator)) {
+      xs.addRow({ c, n: v.qator, s: v.summa });
+    }
+    xs.getColumn('s').numFmt = '#,##0';
+
+    // ── 2-varaq: har bir to'lov ──
+    const ws = wb.addWorksheet("To'lovlar");
+    ws.columns = [
+      { header: 'Shartnoma (bazada)', key: 'c', width: 22 },
+      { header: 'Sana', key: 'd', width: 12 },
+      { header: 'Summa', key: 's', width: 18 },
+      { header: 'Mijoz', key: 'k', width: 30 },
+      { header: 'Obyekt', key: 'o', width: 20 },
+      { header: 'Turi', key: 't', width: 22 },
+      { header: "To'lov izohi (bank)", key: 'p', width: 90 },
+    ];
+    ws.getRow(1).font = { bold: true };
+    for (const r of rows) {
+      ws.addRow({
+        c: r.contractNo,
+        d: r.date ? tashkentKun(r.date) : '',
+        s: Number(r.paymentAmount || 0),
+        k: r.client || '',
+        o: r.object || '',
+        t: r.txType || '',
+        p: (r.purpose || '').replace(/\s+/g, ' ').trim(),
+      });
+    }
+    ws.getColumn('s').numFmt = '#,##0';
+
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    const filename = `xato-nomzodlar-${tashkentKun(new Date())}.xlsx`;
+    return { buffer, filename };
   }
 
   async contractBalance(contractNo: string) {

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Search, Loader2, Wand2, AlertTriangle, Check, ArrowRight } from 'lucide-react';
+import { Search, Loader2, Wand2, AlertTriangle, Check, ArrowRight, Download } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -84,6 +84,37 @@ export function ReparseContractsDialog({
     },
     onError: (e: any) => toast.error(e?.message || 'Xatolik'),
   });
+
+  // Tasdiqdan OLDIN ko'rib chiqish uchun Excel. Fayl ichida aynan o'zgaradigan
+  // qatorlar: 1-varaq shartnomalar xulosasi, 2-varaq har bir to'lov izohi bilan.
+  const [yuklanmoqda, setYuklanmoqda] = useState(false);
+  async function excelYuklab() {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('xt_token') : null;
+    setYuklanmoqda(true);
+    try {
+      const r = await fetch(`${base}/oplata-kv/cleanup-xato-contracts/xlsx`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) throw new Error(`Status ${r.status}`);
+      const nomi = r.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1]
+        || 'xato-nomzodlar.xlsx';
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nomi;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Excel yuklab olindi');
+    } catch (e: any) {
+      toast.error(e?.message || "Yuklab bo'lmadi");
+    } finally {
+      setYuklanmoqda(false);
+    }
+  }
 
   const close = () => { setRes(null); setXatoRes(null); run.reset(); xato.reset(); onOpenChange(false); };
   const yozilsinmi = !!res?.dryRun && res.scanned > 0;
@@ -232,10 +263,19 @@ export function ReparseContractsDialog({
             shartnomalarga tegilmaydi. Raqam yo&apos;qolmaydi: tranzaksiyada va to&apos;lov
             izohida qoladi.
           </div>
+          <div className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            Tasdiqlashdan oldin <b>Excel</b> qilib yuklab oling va ko&apos;rib chiqing —
+            faylda aynan o&apos;zgaradigan qatorlar bo&apos;ladi: shartnomalar xulosasi
+            va har bir to&apos;lovning bank izohi.
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={() => xato.mutate(true)} disabled={xato.isPending} className="gap-2">
               {xato.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
               Sinov
+            </Button>
+            <Button variant="outline" size="sm" onClick={excelYuklab} disabled={yuklanmoqda} className="gap-2">
+              {yuklanmoqda ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Excel
             </Button>
             {xatoRes?.dryRun && xatoRes.jami > 0 && (
               <Button size="sm" onClick={() => xato.mutate(false)} disabled={xato.isPending}

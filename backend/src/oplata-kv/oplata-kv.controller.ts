@@ -643,6 +643,21 @@ export class OplataKvController {
     return this.svc.splitInstallments({ limit: body?.limit, contractNo: body?.contractNo, force: body?.force, actor: actorFrom(user) });
   }
 
+  @Get('cleanup-xato-contracts/xlsx')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({
+    summary: "XATO qilinadigan qatorlarni Excel qilib yuklash (tasdiqdan OLDIN ko'rish)",
+  })
+  async cleanupXatoContractsXlsx(@Res() res: Response) {
+    const { buffer, filename } = await this.svc.xatoNomzodlarXlsx();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
   @Post('cleanup-xato-contracts')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({
