@@ -3090,8 +3090,10 @@ export class OplataKvService {
     // Filter: agar contractNo berilsa — faqat shu shartnoma uchun
     // force=true bo'lsa firstInstallment/monthlyAmount bor bo'lsa ham qayta hisoblaydi
     // !force: faqat hech narsa qo'yilmaganlarni (foydalanuvchining qo'lda qo'yganlariga tegmaymiz)
+    // Bitta shartnoma yo'li: qo'lda kiritilgan qatorlar ham kiradi (Переброска).
+    // Bu yo'lga faqat CRM'da tasdiqlangan shartnoma bilan kelinadi (pastda
+    // tekshiriladi), shuning uchun grafik mavjudligi kafolatlangan.
     const where: Prisma.OplataKvWhereInput = {
-      sourceTxId: { not: null },
       paymentAmount: { not: null },
     };
     if (opts.contractNo) where.contractNo = opts.contractNo;
@@ -3104,7 +3106,9 @@ export class OplataKvService {
     // Agar contractNo bo'yicha force re-split bo'lsa, hozirgi qiymatlarni reset qilamiz
     if (opts.contractNo && opts.force) {
       await this.prisma.oplataKv.updateMany({
-        where: { contractNo: opts.contractNo, sourceTxId: { not: null } },
+        // Qo'lda kiritilgan qatorlar (Переброска) ham reset qilinadi —
+        // force re-split ularni ham qayta hisoblaydi.
+        where: { contractNo: opts.contractNo },
         data: { firstInstallment: null, monthlyAmount: null, paymentCategory: null },
       });
     }
@@ -3140,19 +3144,38 @@ export class OplataKvService {
       const rawRows: any[] = await this.prisma.$queryRawUnsafe(`
         SELECT id, contract_no AS "contractNo", date, payment_amount AS "paymentAmount", source_tx_id AS "sourceTxId"
           FROM oplata_kv
-         WHERE source_tx_id IS NOT NULL
-           AND payment_amount IS NOT NULL
+         WHERE payment_amount IS NOT NULL
            ${forceClause}
            AND (
-             EXISTS (
-               SELECT 1 FROM crm_contracts c
-               WHERE c.contract_number = oplata_kv.contract_no
-                 AND c.found = true
+             -- (a) Bank tranzaksiyasidan kelgan qator
+             (
+               source_tx_id IS NOT NULL
+               AND (
+                 EXISTS (
+                   SELECT 1 FROM crm_contracts c
+                   WHERE c.contract_number = oplata_kv.contract_no
+                     AND c.found = true
+                 )
+                 -- QAYTARIM: bekor qilingan (CRM'da yo'q) shartnomada ham
+                 -- taqsimlanadi. Grafik kerak emas — o'z yozuvimizdan
+                 -- yechiladi (avval oylik, keyin boshlang'ich).
+                 OR payment_amount < 0
+               )
              )
-             -- QAYTARIM: bekor qilingan (CRM'da yo'q) shartnomada ham taqsimlanadi.
-             -- Grafik kerak emas — o'z yozuvimizdan yechiladi (avval oylik, keyin
-             -- boshlang'ich). Ilgari bunday qatorlar navbatga umuman tushmasdi.
-             OR payment_amount < 0
+             -- (b) QO'LDA kiritilgan qator (asosan Переброска) — FAQAT
+             -- CRM'da shartnomasi bor bo'lsa. Ilgari bunday qatorlar split
+             -- jarayoniga UMUMAN kirmasdi (shart: source_tx_id IS NOT NULL),
+             -- shuning uchun o'tkazma qilinganda manba va maqsad qatorlari
+             -- bo'linmay qolardi. Eski Excel qatorlariga tegmaslik uchun
+             -- CRM sharti saqlanadi.
+             OR (
+               source_tx_id IS NULL
+               AND EXISTS (
+                 SELECT 1 FROM crm_contracts c
+                 WHERE c.contract_number = oplata_kv.contract_no
+                   AND c.found = true
+               )
+             )
            )
          ORDER BY date ASC
          LIMIT $1
