@@ -1,4 +1,4 @@
-import { extractContractCandidates, extractContractNumber, objectCodeOf, stripGluedOt } from './contract-parser';
+import { extractContractCandidates, extractContractNumber, objectCodeOf, stripGluedOt, lookalikeVariants } from './contract-parser';
 
 describe('contract-parser', () => {
   describe('yopishgan "от/OT" (egasi qoidasi, 2026-10-05)', () => {
@@ -69,6 +69,33 @@ describe('contract-parser', () => {
       expect(extractContractNumber('dogovor 2118MSO252P ot 10.05.2026')).toBe('2118MSO252P');
       // "SON" so'z ichida bo'lsa kesilmaydi (masalan ism/so'z tarkibida)
       expect(extractContractNumber('150VTN23CV SONIROV')).toBe('150VTN23CV');
+    });
+  });
+
+  // Kirill shakl/tovush adashuvi (10.10.2026 real xato):
+  // arizada "413VTN23НХ" (kirill Н), AI tovushga qarab "413VTN23NX" qaytargan.
+  describe('lookalikeVariants', () => {
+    it("N <-> H almashtiradi (413VTN23NX -> 413VTN23HX)", () => {
+      expect(lookalikeVariants('413VTN23NX')).toContain('413VTN23HX');
+    });
+
+    it('qolgan juftlar: R<->P, V<->B, S<->C', () => {
+      expect(lookalikeVariants('100ORZ23RA')).toContain('100OPZ23PA');
+      expect(lookalikeVariants('1VDY24VB')).toContain('1BDY24BV');
+      expect(lookalikeVariants('5SLQ22SC')).toContain('5CLQ22CS');
+    });
+
+    it("originalning o'zi qaytmaydi", () => {
+      expect(lookalikeVariants('413VTN23NX')).not.toContain('413VTN23NX');
+    });
+
+    it("almashtiriladigan harf bo'lmasa bo'sh", () => {
+      expect(lookalikeVariants('1234')).toEqual([]);
+      expect(lookalikeVariants('')).toEqual([]);
+    });
+
+    it("kombinatsiya portlamaydi (chegara)", () => {
+      expect(lookalikeVariants('NHRPVBSCNHRP').length).toBeLessThanOrEqual(64);
     });
   });
 });

@@ -300,3 +300,60 @@ export function contractVariants(normalized: string): string[] {
   }
   return res;
 }
+
+/**
+ * KIRILL↔LOTIN SHAKL/TOVUSH ADASHUVI — o'xshash harf variantlari.
+ *
+ * ⚠️ REAL XATO (10.10.2026): arizada shartnoma kirillcha yozilgan —
+ * `413VTN23НХ` (Н va Х kirill). Arizani o'qiydigan AI «Н» ni SHAKLIGA
+ * emas, TOVUSHIGA qarab o'girgan va `413VTN23NX` qaytargan. Bunday
+ * shartnoma yo'q — ariza rad etilgan. To'g'risi `413VTN23HX` edi.
+ *
+ * Oddiy kirill→lotin jadvali bu yerda yordam bermaydi: AI raqamni
+ * ALLAQACHON lotin qilib qaytaradi, kirill harfi qolmaydi. Shuning uchun
+ * tayyor lotin raqamda shakl↔tovush juftlarini almashtirib ko'ramiz:
+ *
+ *   Н  shakli H, tovushi N  →  N ↔ H
+ *   Р  shakli P, tovushi R  →  R ↔ P
+ *   В  shakli B, tovushi V  →  V ↔ B
+ *   С  shakli C, tovushi S  →  S ↔ C
+ *
+ * Variantlar ORIGINALSIZ qaytadi. Chaqiruvchi har birini CRM'da tekshirib,
+ * FAQAT BITTA aniq topilma bo'lsagina qabul qilishi kerak.
+ */
+const LOOKALIKE_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ['N', 'H'], ['R', 'P'], ['V', 'B'], ['S', 'C'],
+];
+const LOOKALIKE_MAP = new Map<string, string>();
+for (const [a, b] of LOOKALIKE_PAIRS) {
+  LOOKALIKE_MAP.set(a, b);
+  LOOKALIKE_MAP.set(b, a);
+}
+
+export function lookalikeVariants(contract: string, max = 64): string[] {
+  const asl = String(contract || '').trim().toUpperCase();
+  if (!asl) return [];
+
+  // Almashtirsa bo'ladigan pozitsiyalar
+  const joylar: number[] = [];
+  for (let i = 0; i < asl.length; i++) if (LOOKALIKE_MAP.has(asl[i])) joylar.push(i);
+  if (joylar.length === 0) return [];
+
+  // Kombinatsiya portlamasin: 6 ta joydan ko'pi olinmaydi (2^6 = 64)
+  const ishlatiladi = joylar.slice(0, 6);
+  const chiq = new Set<string>();
+  const jami = 1 << ishlatiladi.length;
+  for (let mask = 1; mask < jami; mask++) {
+    const belgilar = asl.split('');
+    for (let b = 0; b < ishlatiladi.length; b++) {
+      if (mask & (1 << b)) {
+        const i = ishlatiladi[b];
+        belgilar[i] = LOOKALIKE_MAP.get(belgilar[i])!;
+      }
+    }
+    const v = belgilar.join('');
+    if (v !== asl) chiq.add(v);
+    if (chiq.size >= max) break;
+  }
+  return Array.from(chiq);
+}

@@ -17,6 +17,7 @@ import { CategorizationService } from '../categorization/categorization.service'
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { decideTransferAmount, namesMatch } from './perereboska-amounts';
+import { lookalikeVariants } from '../categorization/contract-parser';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -6133,6 +6134,56 @@ export class OplataKvService {
    * ma'lumotlarini (manba/maqsad/summa) ajratadi va qoidalarni tekshiradi.
    * DB'ga YOZMAYDI — faqat tahlil. Xodim tasdiqlagach createPerereboska chaqiriladi.
    */
+  /**
+   * O'XSHASH HARF ZAXIRA QIDIRUVI (kirill shakl/tovush adashuvi).
+   *
+   * Shartnoma topilmasa, N↔H / R↔P / V↔B / S↔C juftlarini almashtirib
+   * CRM'da qayta qidiradi. Real xato: ariza'da "413VTN23НХ" (kirill),
+   * AI tovushga qarab "413VTN23NX" qaytargan; to'g'risi "413VTN23HX".
+   *
+   * QAT'IY: faqat BITTA aniq topilma qabul qilinadi. Bir nechta chiqsa
+   * avtomatik almashtirilmaydi — odam ko'rib hal qiladi.
+   *
+   * @param kutilganMijoz berilsa, topilgan shartnoma egasi shu bilan mos
+   *                      kelishi SHART (boshqa odamning shartnomasiga
+   *                      tasodifan tushib qolmaslik uchun).
+   */
+  private async oxshashHarfQidir(
+    contractNo: string,
+    kutilganMijoz?: string | null,
+  ): Promise<{ topildi: string | null; nomzodlar: string[]; sabab: string | null }> {
+    const variantlar = lookalikeVariants(contractNo);
+    if (variantlar.length === 0) return { topildi: null, nomzodlar: [], sabab: null };
+
+    const mos: Array<{ no: string; mijoz: string | null }> = [];
+    for (const v of variantlar) {
+      const bal = await this.contractBalance(v).catch(() => null);
+      if (bal?.foundInCrm) mos.push({ no: v, mijoz: bal.customerName || null });
+    }
+    if (mos.length === 0) return { topildi: null, nomzodlar: [], sabab: null };
+
+    // Mijoz tekshiruvi — manba shartnoma egasi bilan bir xil bo'lishi kerak
+    const tekshirilgan = kutilganMijoz
+      ? mos.filter((m) => m.mijoz && namesMatch(kutilganMijoz, m.mijoz))
+      : mos;
+
+    if (tekshirilgan.length === 1) {
+      return { topildi: tekshirilgan[0].no, nomzodlar: mos.map((m) => m.no), sabab: null };
+    }
+    if (tekshirilgan.length === 0 && mos.length > 0) {
+      return {
+        topildi: null,
+        nomzodlar: mos.map((m) => m.no),
+        sabab: `o'xshash shartnoma topildi (${mos.map((m) => m.no).join(', ')}), lekin mijozi boshqa — avtomatik almashtirilmadi`,
+      };
+    }
+    return {
+      topildi: null,
+      nomzodlar: tekshirilgan.map((m) => m.no),
+      sabab: `bir nechta o'xshash shartnoma topildi (${tekshirilgan.map((m) => m.no).join(', ')}) — qaysi biri ekani aniq emas, o'zingiz tanlang`,
+    };
+  }
+
   async analyzePerereboskaAriza(file: { buffer: Buffer; originalname: string; mimetype: string; size: number }) {
     if (!file?.buffer) throw new BadRequestException('Hujjat (file) majburiy');
     if (file.size > 25 * 1024 * 1024) throw new BadRequestException('Fayl 25 MB dan oshmasligi kerak');
@@ -6158,7 +6209,7 @@ export class OplataKvService {
     const ex = await this.claudeExtractPerereboska(apiKey, model, fileBlock, nameCheck);
 
     // Ajratilganni tozalash
-    const fromCn = String(ex?.fromContractNo || '').trim().toUpperCase();
+    let fromCn = String(ex?.fromContractNo || '').trim().toUpperCase();
     const dests = (Array.isArray(ex?.destinations) ? ex.destinations : [])
       .map((d: any) => ({ contractNo: String(d?.contractNo || '').trim().toUpperCase(), amount: Number(d?.amount) || 0 }))
       .filter((d: any) => d.contractNo);
@@ -6178,11 +6229,20 @@ export class OplataKvService {
     if (fromCn) {
       fromInfo = await this.contractBalance(fromCn).catch(() => null);
       if (!fromInfo?.foundInCrm) {
-        oxshashlar = await this.oxshashShartnoma(fromCn);
-        warnings.push(
-          `Manba shartnoma topilmadi (CRM/tarix): ${fromCn}`
-          + (oxshashlar.length ? ` — bazada o'xshashi bor: ${oxshashlar.join(', ')}` : ''),
-        );
+        // 1) Kirill shakl/tovush adashuvi (N↔H, R↔P, V↔B, S↔C)
+        const harf = await this.oxshashHarfQidir(fromCn);
+        if (harf.topildi) {
+          warnings.push(`Manba shartnoma raqami to'g'irlandi: ${fromCn} → ${harf.topildi} (kirill/lotin o'xshash harf)`);
+          fromCn = harf.topildi;
+          fromInfo = await this.contractBalance(fromCn).catch(() => null);
+        } else {
+          oxshashlar = await this.oxshashShartnoma(fromCn);
+          warnings.push(
+            `Manba shartnoma topilmadi (CRM/tarix): ${fromCn}`
+            + (harf.sabab ? ` — ${harf.sabab}` : '')
+            + (oxshashlar.length ? ` — bazada o'xshashi bor: ${oxshashlar.join(', ')}` : ''),
+          );
+        }
       }
       objectName = fromInfo?.objectName || null;
     }
@@ -6238,7 +6298,20 @@ export class OplataKvService {
     // Maqsadlar tekshiruvi
     const destResolved: any[] = [];
     for (const d of dests) {
-      const bal = await this.contractBalance(d.contractNo).catch(() => null);
+      let bal = await this.contractBalance(d.contractNo).catch(() => null);
+      // Kirill shakl/tovush adashuvi — topilmasa o'xshash harf bilan urinamiz.
+      // Mijoz manba shartnoma egasi bilan bir xil bo'lishi SHART, aks holda
+      // boshqa odamning shartnomasiga tushib qolish xavfi bor.
+      if (!bal?.foundInCrm) {
+        const harf = await this.oxshashHarfQidir(d.contractNo, fromInfo?.customerName || null);
+        if (harf.topildi) {
+          warnings.push(`Maqsadli shartnoma raqami to'g'irlandi: ${d.contractNo} → ${harf.topildi} (kirill/lotin o'xshash harf)`);
+          d.contractNo = harf.topildi;
+          bal = await this.contractBalance(d.contractNo).catch(() => null);
+        } else if (harf.sabab) {
+          warnings.push(`Maqsadli shartnoma ${d.contractNo}: ${harf.sabab}`);
+        }
+      }
       const found = !!bal?.foundInCrm;
       const dObj = bal?.objectName || null;
       if (!found) warnings.push(`Maqsadli shartnoma topilmadi: ${d.contractNo}`);
@@ -6430,6 +6503,13 @@ export class OplataKvService {
       "ARIZACHI ISMI QO'LDA yozilgan bo'lishi mumkin. Qo'lyozmani ISHONCH bilan o'qiy olmasang — TO'QIMA: applicantName=null qo'y, applicantNameReadable=false va applicantMatchesHolder ni UMUMAN qaytarma. Faqat ishonch bilan o'qilgan ismni solishtir.",
       "MUHIM: ism odatda ariza MATNIDA bosma harflar bilan ham bor (masalan 'yangi Shartnomamga №4105SRH26RL Ahmedova Anbar Farhodovna ...'). Shuni applicantNamePrinted'ga yoz — qo'lyozma o'qilmasa ham shu ishlatiladi.",
       "Blank/forma yorliqlarini (Кимдан, Аризачи, Имзо, Паспорт серия) ism deb qabul QILMA — ular hujjat yorliqlari.",
+      // Real xato (10.10.2026): arizada "413VTN23НХ" (kirill Н, Х) yozilgan edi.
+      // Model Н ni TOVUSHGA qarab "N" qilib, "413VTN23NX" qaytargan — bunday
+      // shartnoma yo'q, ariza rad etilgan. To'g'risi "413VTN23HX".
+      "SHARTNOMA RAQAMIDAGI KIRILL HARFNI SHAKLI BO'YICHA O'GIR, TOVUSHI BO'YICHA EMAS: " +
+      "Н→H (N EMAS), Р→P (R emas), В→B (V emas), С→C (S emas), Х→X, А→A, Е→E, К→K, М→M, О→O, Т→T. " +
+      "Masalan «413VTN23НХ» → 413VTN23HX (413VTN23NX EMAS). Shartnoma raqami — bu KOD, " +
+      "uni tarjima qilma yoki tovushga moslashtirma, harflar shaklini saqla.",
     ].filter(Boolean).join(' ');
     const userContent = [
       { type: 'text', text: "Ushbu arizani diqqat bilan o'qib, extract_perereboska tool orqali ma'lumotlarni qaytar." },
